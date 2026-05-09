@@ -1,0 +1,114 @@
+import Phaser from "phaser";
+import { options } from "../systems/GameOptions";
+
+export type BulletOwner = "player" | "enemy";
+
+export interface BulletOpts {
+  color?: number;
+  radius?: number;
+  lifetime?: number;
+  homing?: boolean;
+}
+
+export class Bullet extends Phaser.GameObjects.Graphics {
+  vx: number;
+  vy: number;
+  owner: BulletOwner;
+  damage: number;
+  pierce: number;
+  radius: number;
+  lifetime: number;
+  homing: boolean;
+  bulletColor: number;
+  alive = true;
+
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    angle: number,
+    speed: number,
+    owner: BulletOwner,
+    damage = 1,
+    pierce = 0,
+    opts?: BulletOpts,
+  ) {
+    super(scene, { x, y });
+    scene.add.existing(this);
+    this.setDepth(5);
+
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this.owner = owner;
+    this.damage = damage;
+    this.pierce = pierce;
+    this.radius = opts?.radius ?? 3;
+    this.lifetime = opts?.lifetime ?? 0;
+    this.homing = opts?.homing ?? false;
+
+    this.bulletColor = opts?.color ?? (owner === "player" ? 0xffff00 : 0xff4488);
+    const color = this.bulletColor;
+    const glowAlpha = owner === "player" ? 0.3 : 0.25;
+
+    if (options.bulletGlow) {
+      this.fillStyle(color, glowAlpha);
+      this.fillCircle(0, 0, this.radius * 2);
+    }
+    this.fillStyle(color, 1);
+    this.fillCircle(0, 0, this.radius);
+  }
+
+  update(_delta: number, timeScale: number) {
+    if (!this.alive) return;
+    const dt = _delta / 1000;
+
+    if (this.lifetime > 0) {
+      this.lifetime -= _delta * timeScale;
+      if (this.lifetime <= 0) {
+        this.kill();
+        return;
+      }
+    }
+
+    this.x += this.vx * timeScale * dt;
+    this.y += this.vy * timeScale * dt;
+
+    if (this.x < -20 || this.x > 1300 || this.y < -20 || this.y > 740) {
+      this.kill();
+    }
+  }
+
+  steerToward(tx: number, ty: number, strength: number) {
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1) return;
+
+    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    const desiredVx = (dx / dist) * speed;
+    const desiredVy = (dy / dist) * speed;
+
+    this.vx += (desiredVx - this.vx) * strength;
+    this.vy += (desiredVy - this.vy) * strength;
+
+    const newSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (newSpeed > 0) {
+      this.vx = (this.vx / newSpeed) * speed;
+      this.vy = (this.vy / newSpeed) * speed;
+    }
+  }
+
+  hit(): boolean {
+    if (this.pierce > 0) {
+      this.pierce--;
+      return false;
+    }
+    this.kill();
+    return true;
+  }
+
+  kill() {
+    this.alive = false;
+    this.destroy();
+  }
+}
