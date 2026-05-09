@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Still Beat</title>
+    <style>
+      * { margin: 0; padding: 0; }
+      body { background: #0a0806; overflow: hidden; }
+      canvas { display: block; }
+      #volume-control {
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        z-index: 1000;
+        opacity: 0.4;
+        transition: opacity 0.2s;
+      }
+      #volume-control:hover { opacity: 1; }
+      #volume-control label {
+        font-family: monospace;
+        font-size: 13px;
+        color: #e8d5b0;
+      }
+      #volume-slider {
+        -webkit-appearance: none;
+        width: 100px;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        outline: none;
+      }
+      #volume-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        background: #ffaa44;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+      #volume-slider::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        background: #ffaa44;
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+      }
+      #dev-panel {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.92);
+        border: 1px solid #ffaa44;
+        border-radius: 8px;
+        padding: 20px 24px;
+        z-index: 2000;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 480px;
+        max-height: 80vh;
+        overflow-y: auto;
+        font-family: monospace;
+        color: #ccc;
+      }
+      .dp-tab-bar {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid #333;
+        padding-bottom: 8px;
+      }
+      .dp-tab {
+        background: #111;
+        border: 1px solid #333;
+        color: #888;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 5px 14px;
+        border-radius: 4px 4px 0 0;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .dp-tab:hover { color: #e8d5b0; border-color: #555; }
+      .dp-tab-active {
+        color: #ffaa44;
+        border-color: #ffaa44;
+        border-bottom-color: transparent;
+        background: #1a1510;
+      }
+      .dp-tab-content {
+        display: none;
+        padding-top: 8px;
+      }
+      .dp-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 18px;
+        color: #e8d5b0;
+        border-bottom: 1px solid #333;
+        padding-bottom: 8px;
+      }
+      .dp-hint { font-size: 12px; color: #666; }
+      .dp-section { display: flex; flex-direction: column; gap: 6px; }
+      .dp-label { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+      .dp-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+      }
+      .dp-row label {
+        width: 60px;
+        font-size: 14px;
+        color: #fff;
+        cursor: pointer;
+      }
+      .dp-desc { font-size: 12px; color: #666; flex: 1; }
+      .dp-row input[type="radio"] {
+        accent-color: #0ff;
+        cursor: pointer;
+      }
+      .dp-row button, .dp-game-btn {
+        background: #111;
+        border: 1px solid #444;
+        color: #e8d5b0;
+        font-family: monospace;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+      .dp-row button:hover, .dp-game-btn:hover {
+        border-color: #ffaa44;
+        background: #1a1a1a;
+      }
+      .dp-game-sounds {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .dp-ctrl-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+        flex-wrap: wrap;
+      }
+      .dp-ctrl-label {
+        font-size: 14px;
+        color: #fff;
+        min-width: 70px;
+      }
+      .dp-number-input {
+        width: 50px;
+        background: #111;
+        border: 1px solid #444;
+        color: #e8d5b0;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-align: center;
+      }
+      .dp-number-input:focus {
+        outline: none;
+        border-color: #ffaa44;
+      }
+      .upgrade-overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        background: rgba(10, 8, 6, 0.92);
+        z-index: 3000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 32px;
+        font-family: monospace;
+      }
+      .upgrade-title {
+        font-size: 28px;
+        color: #e8d5b0;
+        letter-spacing: 4px;
+      }
+      .upgrade-cards {
+        display: flex;
+        gap: 20px;
+      }
+      .upgrade-card {
+        background: #111;
+        border: 2px solid #333;
+        border-radius: 8px;
+        padding: 24px 20px;
+        width: 180px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+      }
+      .upgrade-card:hover {
+        border-color: #ffaa44;
+        transform: translateY(-4px);
+        box-shadow: 0 0 20px rgba(255, 170, 68, 0.25);
+      }
+      .upgrade-icon {
+        font-size: 28px;
+        color: #ffaa44;
+        font-weight: bold;
+        letter-spacing: 2px;
+      }
+      .upgrade-name {
+        font-size: 16px;
+        color: #e8d5b0;
+        font-weight: bold;
+      }
+      .upgrade-desc {
+        font-size: 12px;
+        color: #888;
+        text-align: center;
+        line-height: 1.4;
+      }
+      .upgrade-level {
+        font-size: 14px;
+        color: #ffaa44;
+        letter-spacing: 3px;
+      }
+      .upgrade-card.weapon-card {
+        border-color: #88bbff;
+      }
+      .upgrade-card.weapon-card:hover {
+        border-color: #aaddff;
+        box-shadow: 0 0 20px rgba(136, 187, 255, 0.3);
+      }
+      .upgrade-card.weapon-card .upgrade-icon {
+        color: #88bbff;
+      }
+      .upgrade-weapon-tag {
+        font-size: 10px;
+        color: #88bbff;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+      }
+      #start-options-btn {
+        position: fixed;
+        bottom: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: transparent;
+        border: 1px solid #555;
+        color: #998877;
+        font-family: monospace;
+        font-size: 16px;
+        padding: 8px 32px;
+        border-radius: 4px;
+        cursor: pointer;
+        z-index: 1000;
+        letter-spacing: 3px;
+        transition: border-color 0.2s, color 0.2s;
+      }
+      #start-options-btn:hover {
+        border-color: #ffaa44;
+        color: #e8d5b0;
+      }
+      .options-overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        background: rgba(10, 8, 6, 0.95);
+        z-index: 5000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        font-family: monospace;
+      }
+      .options-title {
+        font-size: 28px;
+        color: #e8d5b0;
+        letter-spacing: 4px;
+      }
+      .options-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-width: 460px;
+      }
+      .options-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .options-row-label {
+        font-size: 14px;
+        color: #998877;
+        min-width: 140px;
+      }
+      .options-segment {
+        display: flex;
+        gap: 0;
+        border: 1px solid #333;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .options-seg-btn {
+        background: #111;
+        border: none;
+        border-right: 1px solid #333;
+        color: #666;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 6px 14px;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+      }
+      .options-seg-btn:last-child { border-right: none; }
+      .options-seg-btn:hover { color: #e8d5b0; background: #1a1510; }
+      .options-seg-btn.active {
+        background: #1a1510;
+        color: #ffaa44;
+      }
+      .options-toggle {
+        background: #111;
+        border: 1px solid #333;
+        color: #666;
+        font-family: monospace;
+        font-size: 13px;
+        padding: 6px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        min-width: 60px;
+        transition: all 0.15s;
+      }
+      .options-toggle:hover { color: #e8d5b0; border-color: #555; }
+      .options-toggle.active {
+        color: #ffaa44;
+        border-color: #ffaa44;
+        background: #1a1510;
+      }
+      .options-slider {
+        -webkit-appearance: none;
+        width: 140px;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        outline: none;
+      }
+      .options-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        background: #ffaa44;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+      .options-slider::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        background: #ffaa44;
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+      }
+      .options-slider-val {
+        font-size: 13px;
+        color: #e8d5b0;
+        min-width: 28px;
+        text-align: right;
+      }
+      .options-close-btn {
+        background: transparent;
+        border: 1px solid #555;
+        color: #998877;
+        font-family: monospace;
+        font-size: 14px;
+        padding: 8px 32px;
+        border-radius: 4px;
+        cursor: pointer;
+        letter-spacing: 2px;
+        margin-top: 8px;
+        transition: border-color 0.2s, color 0.2s;
+      }
+      .options-close-btn:hover {
+        border-color: #ffaa44;
+        color: #e8d5b0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="volume-control">
+      <label for="volume-slider">VOL</label>
+      <input type="range" id="volume-slider" min="0" max="100" value="70" />
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
