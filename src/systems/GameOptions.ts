@@ -16,7 +16,7 @@ const DEFAULTS: GameOptions = {
   masterVolume: 70,
 };
 
-const STORAGE_KEY = "stillbeat_options";
+const STORAGE_KEY = "beatstill_options";
 
 export function loadOptions(): GameOptions {
   try {

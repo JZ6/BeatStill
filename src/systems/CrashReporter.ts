@@ -70,7 +70,7 @@ function getEnvironment(): Record<string, unknown> {
 
 function formatReport(report: CrashReport): string {
   const lines: string[] = [
-    "=== STILL BEAT CRASH REPORT ===",
+    "=== BEAT STILL CRASH REPORT ===",
     "",
     `Time: ${report.timestamp}`,
     "",
@@ -172,7 +172,7 @@ function createOverlay(): HTMLDivElement {
     const blob = new Blob([text], { type: "text/plain" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `stillbeat-crash-${Date.now()}.txt`;
+    a.download = `beatstill-crash-${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   });

@@ -150,7 +150,7 @@ export function createDevPanel(
   resetTutorialBtn.textContent = "Reset Tutorial";
   resetTutorialBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    try { localStorage.removeItem("stillbeat_tutorial_done"); } catch {}
+    try { localStorage.removeItem("beatstill_tutorial_done"); } catch {}
     resetTutorialBtn.textContent = "Tutorial Reset!";
     setTimeout(() => (resetTutorialBtn.textContent = "Reset Tutorial"), 1500);
   });

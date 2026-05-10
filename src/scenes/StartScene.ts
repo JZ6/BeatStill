@@ -29,7 +29,7 @@ export class StartScene extends Phaser.Scene {
     const cy = 360;
 
     this.add
-      .text(cx, cy - 140, "STILL BEAT", {
+      .text(cx, cy - 140, "BEAT STILL", {
         fontFamily: "monospace",
         fontSize: "72px",
         color: "#e8d5b0",

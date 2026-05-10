@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
 import { Enemy } from "../objects/Enemy";
 
-const STORAGE_KEY = "stillbeat_tutorial_done";
+const STORAGE_KEY = "beatstill_tutorial_done";
 
 export function isTutorialDone(): boolean {
   try { return !!localStorage.getItem(STORAGE_KEY); } catch { return false; }
