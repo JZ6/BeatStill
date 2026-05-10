@@ -6,6 +6,10 @@ export interface GameOptions {
   bulletGlow: boolean;
   showFps: boolean;
   masterVolume: number;    // 0-100
+  resolution: number;      // 0=low(480), 1=medium(720), 2=high(1080), 3=ultra(1440)
+  controls: number;        // 0=auto, 1=keyboard+mouse, 2=touch
+  shipColor: number;       // hex color for ship outline
+  themeId: string;         // sound theme id
 }
 
 const DEFAULTS: GameOptions = {
@@ -14,6 +18,10 @@ const DEFAULTS: GameOptions = {
   bulletGlow: true,
   showFps: false,
   masterVolume: 70,
+  resolution: 1,
+  controls: 0,
+  shipColor: 0x00ffff,
+  themeId: "theremin",
 };
 
 const STORAGE_KEY = "beatstill_options";
