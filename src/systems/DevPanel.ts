@@ -23,51 +23,11 @@ function makeTab(label: string): { tab: HTMLButtonElement; content: HTMLDivEleme
   return { tab, content };
 }
 
-export function createDevPanel(
+function buildGameTab(
   getScene: () => GameScene | null,
   getAudioManager: () => AudioManager | null,
-) {
-  const panel = document.createElement("div");
-  panel.id = "dev-panel";
-  panel.style.display = "none";
-  document.body.appendChild(panel);
-
-  const header = document.createElement("div");
-  header.className = "dp-header";
-  header.innerHTML = `<span>DEV PANEL</span><span class="dp-hint">(\` to toggle)</span>`;
-  panel.appendChild(header);
-
-  const tabBar = document.createElement("div");
-  tabBar.className = "dp-tab-bar";
-  panel.appendChild(tabBar);
-
-  const tabContainer = document.createElement("div");
-  panel.appendChild(tabContainer);
-
-  const gameTab = makeTab("Game");
-  const audioTab = makeTab("Audio");
-  const soundsTab = makeTab("Sounds");
-  const crashTab = makeTab("Crashes");
-  const tabs = [gameTab, audioTab, soundsTab, crashTab];
-
-  for (const { tab, content } of tabs) {
-    tabBar.appendChild(tab);
-    tabContainer.appendChild(content);
-    tab.addEventListener("click", (e) => {
-      e.stopPropagation();
-      tabs.forEach((t) => {
-        t.tab.classList.remove("dp-tab-active");
-        t.content.style.display = "none";
-      });
-      tab.classList.add("dp-tab-active");
-      content.style.display = "flex";
-    });
-  }
-  gameTab.tab.classList.add("dp-tab-active");
-  gameTab.content.style.display = "flex";
-
-  // ===== GAME TAB =====
-  const gc = gameTab.content;
+): { tab: HTMLButtonElement; content: HTMLDivElement } {
+  const { tab, content: gc } = makeTab("Game");
   gc.style.flexDirection = "column";
   gc.style.gap = "8px";
 
@@ -186,14 +146,19 @@ export function createDevPanel(
   weaponBtns[0].style.borderColor = "#ffaa44";
   gc.appendChild(weaponRow);
 
-  const pollId = setInterval(() => {
-    if (!document.body.contains(panel)) { clearInterval(pollId); return; }
+  setInterval(() => {
+    if (!document.body.contains(gc)) return;
     const scene = getScene();
     if (scene) waveLabel.textContent = `Wave: ${scene.wave}`;
   }, 500);
 
-  // ===== AUDIO TAB =====
-  const ac = audioTab.content;
+  return { tab, content: gc };
+}
+
+function buildAudioTab(
+  getAudioManager: () => AudioManager | null,
+): { tab: HTMLButtonElement; content: HTMLDivElement } {
+  const { tab, content: ac } = makeTab("Audio");
   ac.style.flexDirection = "column";
   ac.style.gap = "10px";
 
@@ -266,8 +231,13 @@ export function createDevPanel(
     ac.appendChild(row);
   }
 
-  // ===== SOUNDS TAB =====
-  const sc = soundsTab.content;
+  return { tab, content: ac };
+}
+
+function buildSoundsTab(
+  getAudioManager: () => AudioManager | null,
+): { tab: HTMLButtonElement; content: HTMLDivElement } {
+  const { tab, content: sc } = makeTab("Sounds");
   sc.style.flexDirection = "column";
   sc.style.gap = "8px";
 
@@ -303,8 +273,11 @@ export function createDevPanel(
   }
   sc.appendChild(soundRow);
 
-  // ===== CRASHES TAB =====
-  const cc = crashTab.content;
+  return { tab, content: sc };
+}
+
+function buildCrashTab(): { tab: HTMLButtonElement; content: HTMLDivElement } {
+  const { tab, content: cc } = makeTab("Crashes");
   cc.style.flexDirection = "column";
   cc.style.gap = "8px";
 
@@ -352,7 +325,7 @@ export function createDevPanel(
     navigator.clipboard.writeText(getAllReportsText()).then(() => {
       copyAllBtn.textContent = "Copied!";
       setTimeout(() => (copyAllBtn.textContent = "Copy All"), 1500);
-    });
+    }).catch(() => {});
   });
 
   const testCrashBtn = document.createElement("button");
@@ -366,7 +339,53 @@ export function createDevPanel(
   crashBtnRow.append(refreshBtn, copyAllBtn, testCrashBtn);
   cc.appendChild(crashBtnRow);
 
-  // --- Toggle ---
+  return { tab, content: cc };
+}
+
+export function createDevPanel(
+  getScene: () => GameScene | null,
+  getAudioManager: () => AudioManager | null,
+) {
+  const panel = document.createElement("div");
+  panel.id = "dev-panel";
+  panel.style.display = "none";
+  document.body.appendChild(panel);
+
+  const header = document.createElement("div");
+  header.className = "dp-header";
+  header.innerHTML = `<span>DEV PANEL</span><span class="dp-hint">(\` to toggle)</span>`;
+  panel.appendChild(header);
+
+  const tabBar = document.createElement("div");
+  tabBar.className = "dp-tab-bar";
+  panel.appendChild(tabBar);
+
+  const tabContainer = document.createElement("div");
+  panel.appendChild(tabContainer);
+
+  const tabs = [
+    buildGameTab(getScene, getAudioManager),
+    buildAudioTab(getAudioManager),
+    buildSoundsTab(getAudioManager),
+    buildCrashTab(),
+  ];
+
+  for (const { tab, content } of tabs) {
+    tabBar.appendChild(tab);
+    tabContainer.appendChild(content);
+    tab.addEventListener("click", (e) => {
+      e.stopPropagation();
+      tabs.forEach((t) => {
+        t.tab.classList.remove("dp-tab-active");
+        t.content.style.display = "none";
+      });
+      tab.classList.add("dp-tab-active");
+      content.style.display = "flex";
+    });
+  }
+  tabs[0].tab.classList.add("dp-tab-active");
+  tabs[0].content.style.display = "flex";
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "`") {
       e.preventDefault();

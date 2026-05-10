@@ -1,32 +1,20 @@
 import Phaser from "phaser";
-import { options, saveOptions, applyFps } from "../systems/GameOptions";
-
-const FPS_OPTIONS = [
-  { label: "30",      value: 30 },
-  { label: "60",      value: 60 },
-  { label: "120",     value: 120 },
-  { label: "240",     value: 240 },
-  { label: "Uncapped", value: 0 },
-];
-
-const PARTICLE_OPTIONS = [
-  { label: "Off",   value: 0 },
-  { label: "Low",   value: 150 },
-  { label: "Medium", value: 300 },
-  { label: "High",  value: 500 },
-  { label: "Ultra", value: 800 },
-];
+import { GAME_W, GAME_H, isMobile } from "../systems/GameConfig";
+import { createOptionsOverlay } from "../ui/OptionsOverlay";
+import { createCollectionOverlay } from "../ui/CollectionOverlay";
 
 export class StartScene extends Phaser.Scene {
   private optionsOverlay: HTMLDivElement | null = null;
+  private collectionOverlay: HTMLDivElement | null = null;
 
   constructor() {
     super("StartScene");
   }
 
   create() {
-    const cx = 640;
-    const cy = 360;
+    const cx = GAME_W / 2;
+    const cy = GAME_H / 2;
+    const mobile = isMobile();
 
     this.add
       .text(cx, cy - 140, "BEAT STILL", {
@@ -44,12 +32,17 @@ export class StartScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const lines = [
-      "WASD — move            Move to speed up time",
-      "Mouse — aim            Stop to freeze time",
-      "Click — shoot",
-      "ESC — pause",
-    ];
+    const lines = mobile
+      ? [
+          "Left stick — move      Right stick — aim & shoot",
+          "Move to speed up time  Release to freeze time",
+        ]
+      : [
+          "WASD — move            Move to speed up time",
+          "Mouse — aim            Stop to freeze time",
+          "Click — shoot",
+          "ESC — pause",
+        ];
 
     this.add
       .text(cx, cy + 30, lines.join("\n"), {
@@ -62,24 +55,54 @@ export class StartScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const startText = this.add
-      .text(cx, cy + 180, "[ CLICK TO START ]", {
+    const endlessBtn = this.add
+      .text(cx - 100, cy + 150, "▶  ENDLESS", {
         fontFamily: "monospace",
-        fontSize: "28px",
+        fontSize: "24px",
         color: "#ffaa44",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => endlessBtn.setColor("#ffcc88"))
+      .on("pointerout", () => endlessBtn.setColor("#ffaa44"))
+      .on("pointerdown", () => this.startGame());
+
+    const levelsBtn = this.add
+      .text(cx + 100, cy + 150, "▶  LEVELS", {
+        fontFamily: "monospace",
+        fontSize: "24px",
+        color: "#ffaa44",
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => levelsBtn.setColor("#ffcc88"))
+      .on("pointerout", () => levelsBtn.setColor("#ffaa44"))
+      .on("pointerdown", () => {
+        if (!this.optionsOverlay && !this.collectionOverlay) {
+          this.scene.start("LevelSelectScene");
+        }
+      });
 
     this.tweens.add({
-      targets: startText,
-      alpha: 0.3,
-      duration: 800,
+      targets: [endlessBtn, levelsBtn],
+      alpha: 0.5,
+      duration: 1200,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
     });
 
-    // OPTIONS button (DOM)
+    // DOM buttons
+    const colBtn = document.createElement("button");
+    colBtn.id = "start-collection-btn";
+    colBtn.textContent = "COLLECTION";
+    document.body.appendChild(colBtn);
+
+    colBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.showCollectionOverlay();
+    });
+
     const optBtn = document.createElement("button");
     optBtn.id = "start-options-btn";
     optBtn.textContent = "OPTIONS";
@@ -90,207 +113,40 @@ export class StartScene extends Phaser.Scene {
       this.showOptionsOverlay();
     });
 
-    this.input.on("pointerdown", () => {
-      this.startGame();
-    });
-
-    this.input.keyboard?.on("keydown", () => {
-      this.startGame();
-    });
-
-    // clean up DOM button when scene shuts down
     this.events.once("shutdown", () => {
+      colBtn.remove();
       optBtn.remove();
       this.optionsOverlay?.remove();
       this.optionsOverlay = null;
+      this.collectionOverlay?.remove();
+      this.collectionOverlay = null;
     });
   }
 
   private startGame() {
-    if (this.optionsOverlay) return;
+    if (this.optionsOverlay || this.collectionOverlay) return;
     this.scene.start("GameScene");
   }
 
   private showOptionsOverlay() {
     if (this.optionsOverlay) return;
 
-    const overlay = document.createElement("div");
-    overlay.className = "options-overlay";
-    this.optionsOverlay = overlay;
-
-    overlay.innerHTML = `<div class="options-title">OPTIONS</div>`;
-
-    const body = document.createElement("div");
-    body.className = "options-body";
-    overlay.appendChild(body);
-
-    // FPS
-    body.appendChild(this.makeSegmentRow(
-      "Target FPS",
-      FPS_OPTIONS,
-      (o) => o.value === options.targetFps,
-      (o) => {
-        applyFps(o.value);
-        saveOptions(options);
-      },
-    ));
-
-    // Particles
-    body.appendChild(this.makeSegmentRow(
-      "Particles",
-      PARTICLE_OPTIONS,
-      (o) => o.value === options.particleQuality,
-      (o) => {
-        options.particleQuality = o.value;
-        saveOptions(options);
-      },
-    ));
-
-    // Bullet Glow
-    body.appendChild(this.makeToggleRow(
-      "Bullet Glow",
-      () => options.bulletGlow,
-      (v) => { options.bulletGlow = v; saveOptions(options); },
-    ));
-
-    // Show FPS
-    body.appendChild(this.makeToggleRow(
-      "Show FPS Counter",
-      () => options.showFps,
-      (v) => { options.showFps = v; saveOptions(options); },
-    ));
-
-    // Volume
-    body.appendChild(this.makeSliderRow(
-      "Master Volume",
-      options.masterVolume,
-      (v) => {
-        options.masterVolume = v;
-        saveOptions(options);
-        const slider = document.getElementById("volume-slider") as HTMLInputElement;
-        if (slider) slider.value = String(v);
-      },
-    ));
-
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "options-close-btn";
-    closeBtn.textContent = "CLOSE";
-    closeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
+    const overlay = createOptionsOverlay(() => {
       overlay.remove();
       this.optionsOverlay = null;
     });
-    overlay.appendChild(closeBtn);
-
-    for (const evt of ["pointerdown", "pointerup", "pointermove", "click", "keydown"] as const) {
-      overlay.addEventListener(evt, (e) => e.stopPropagation());
-    }
-
+    this.optionsOverlay = overlay;
     document.body.appendChild(overlay);
   }
 
-  private makeSegmentRow(
-    label: string,
-    opts: { label: string; value: number }[],
-    isActive: (o: { label: string; value: number }) => boolean,
-    onChange: (o: { label: string; value: number }) => void,
-  ): HTMLDivElement {
-    const row = document.createElement("div");
-    row.className = "options-row";
+  private showCollectionOverlay() {
+    if (this.collectionOverlay) return;
 
-    const lbl = document.createElement("div");
-    lbl.className = "options-row-label";
-    lbl.textContent = label;
-    row.appendChild(lbl);
-
-    const seg = document.createElement("div");
-    seg.className = "options-segment";
-
-    const btns: HTMLButtonElement[] = [];
-    for (const opt of opts) {
-      const btn = document.createElement("button");
-      btn.className = "options-seg-btn" + (isActive(opt) ? " active" : "");
-      btn.textContent = opt.label;
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onChange(opt);
-        btns.forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-      });
-      btns.push(btn);
-      seg.appendChild(btn);
-    }
-
-    row.appendChild(seg);
-    return row;
-  }
-
-  private makeToggleRow(
-    label: string,
-    getValue: () => boolean,
-    onChange: (v: boolean) => void,
-  ): HTMLDivElement {
-    const row = document.createElement("div");
-    row.className = "options-row";
-
-    const lbl = document.createElement("div");
-    lbl.className = "options-row-label";
-    lbl.textContent = label;
-    row.appendChild(lbl);
-
-    const btn = document.createElement("button");
-    btn.className = "options-toggle" + (getValue() ? " active" : "");
-    btn.textContent = getValue() ? "ON" : "OFF";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const next = !getValue();
-      onChange(next);
-      btn.textContent = next ? "ON" : "OFF";
-      btn.classList.toggle("active", next);
+    const overlay = createCollectionOverlay(() => {
+      overlay.remove();
+      this.collectionOverlay = null;
     });
-    row.appendChild(btn);
-    return row;
-  }
-
-  private makeSliderRow(
-    label: string,
-    initial: number,
-    onChange: (v: number) => void,
-  ): HTMLDivElement {
-    const row = document.createElement("div");
-    row.className = "options-row";
-
-    const lbl = document.createElement("div");
-    lbl.className = "options-row-label";
-    lbl.textContent = label;
-    row.appendChild(lbl);
-
-    const right = document.createElement("div");
-    right.style.display = "flex";
-    right.style.alignItems = "center";
-    right.style.gap = "10px";
-
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = "0";
-    input.max = "100";
-    input.value = String(initial);
-    input.className = "options-slider";
-
-    const val = document.createElement("span");
-    val.className = "options-slider-val";
-    val.textContent = String(initial);
-
-    input.addEventListener("input", (e) => {
-      e.stopPropagation();
-      const v = parseInt(input.value);
-      val.textContent = String(v);
-      onChange(v);
-    });
-
-    right.appendChild(input);
-    right.appendChild(val);
-    row.appendChild(right);
-    return row;
+    this.collectionOverlay = overlay;
+    document.body.appendChild(overlay);
   }
 }
