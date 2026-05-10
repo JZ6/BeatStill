@@ -1,4 +1,5 @@
 import { ALL_WEAPONS } from "./Weapons";
+import { isUnlocked } from "./Unlocks";
 
 export interface PlayerStats {
   bulletCount: number;
@@ -123,9 +124,17 @@ export const ALL_UPGRADES: UpgradeDef[] = [
   } satisfies UpgradeDef)),
 ];
 
+const ALWAYS_UNLOCKED_UPGRADES = new Set(["bulletCount", "bulletSpread", "maxHp", "bulletSpeed", "moveSpeed"]);
+
+function isUpgradeAvailable(u: UpgradeDef): boolean {
+  if (u.isWeapon) return isUnlocked(`weapon_${u.id.replace("weapon_", "")}`);
+  if (ALWAYS_UNLOCKED_UPGRADES.has(u.id)) return true;
+  return isUnlocked(`upgrade_${u.id}`);
+}
+
 export function rollUpgrades(stats: PlayerStats, count = 3): UpgradeDef[] {
-  const statUpgrades = ALL_UPGRADES.filter((u) => !u.isWeapon && u.level(stats) < u.maxLevel);
-  const weaponUpgrades = ALL_UPGRADES.filter((u) => u.isWeapon && u.level(stats) < u.maxLevel);
+  const statUpgrades = ALL_UPGRADES.filter((u) => !u.isWeapon && u.level(stats) < u.maxLevel && isUpgradeAvailable(u));
+  const weaponUpgrades = ALL_UPGRADES.filter((u) => u.isWeapon && u.level(stats) < u.maxLevel && isUpgradeAvailable(u));
 
   const picked: UpgradeDef[] = [];
   const statPool = [...statUpgrades];

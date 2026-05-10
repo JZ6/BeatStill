@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { options } from "../systems/GameOptions";
+import { GAME_W, GAME_H } from "../systems/GameConfig";
 
 export type BulletOwner = "player" | "enemy";
 
@@ -47,23 +48,22 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.homing = opts?.homing ?? false;
 
     this.bulletColor = opts?.color ?? (owner === "player" ? 0xffff00 : 0xff4488);
-    const color = this.bulletColor;
     const glowAlpha = owner === "player" ? 0.3 : 0.25;
 
     if (options.bulletGlow) {
-      this.fillStyle(color, glowAlpha);
+      this.fillStyle(this.bulletColor, glowAlpha);
       this.fillCircle(0, 0, this.radius * 2);
     }
-    this.fillStyle(color, 1);
+    this.fillStyle(this.bulletColor, 1);
     this.fillCircle(0, 0, this.radius);
   }
 
-  update(_delta: number, timeScale: number) {
+  update(delta: number, timeScale: number) {
     if (!this.alive) return;
-    const dt = _delta / 1000;
+    const dt = delta / 1000;
 
     if (this.lifetime > 0) {
-      this.lifetime -= _delta * timeScale;
+      this.lifetime -= delta * timeScale;
       if (this.lifetime <= 0) {
         this.kill();
         return;
@@ -73,7 +73,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.x += this.vx * timeScale * dt;
     this.y += this.vy * timeScale * dt;
 
-    if (this.x < -20 || this.x > 1300 || this.y < -20 || this.y > 740) {
+    if (this.x < -20 || this.x > GAME_W + 20 || this.y < -20 || this.y > GAME_H + 20) {
       this.kill();
     }
   }

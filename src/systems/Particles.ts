@@ -27,13 +27,14 @@ export class ParticleSystem {
     for (let i = 0; i < count && this.particles.length < maxParticles(); i++) {
       const angle = Math.random() * Math.PI * 2;
       const spd = speed * (0.3 + Math.random() * 0.7);
+      const life = 0.6 + Math.random() * 0.8;
       this.particles.push({
         x,
         y,
         vx: Math.cos(angle) * spd,
         vy: Math.sin(angle) * spd,
-        life: 0.6 + Math.random() * 0.8,
-        maxLife: 0.6 + Math.random() * 0.8,
+        life,
+        maxLife: life,
         size: size * (0.5 + Math.random() * 0.5),
         color,
       });
@@ -42,13 +43,14 @@ export class ParticleSystem {
 
   trail(x: number, y: number, color: number, count = 2) {
     for (let i = 0; i < count && this.particles.length < maxParticles(); i++) {
+      const life = 0.2 + Math.random() * 0.3;
       this.particles.push({
         x: x + (Math.random() - 0.5) * 6,
         y: y + (Math.random() - 0.5) * 6,
         vx: (Math.random() - 0.5) * 15,
         vy: (Math.random() - 0.5) * 15,
-        life: 0.2 + Math.random() * 0.3,
-        maxLife: 0.2 + Math.random() * 0.3,
+        life,
+        maxLife: life,
         size: 1.5 + Math.random(),
         color,
       });
@@ -62,7 +64,7 @@ export class ParticleSystem {
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.life -= delta / 1000 * timeScale;
+      p.life -= dt;
       if (p.life <= 0) {
         this.particles.splice(i, 1);
         continue;

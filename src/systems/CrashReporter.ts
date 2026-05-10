@@ -164,7 +164,7 @@ function createOverlay(): HTMLDivElement {
       const btn = overlay.querySelector("#crash-copy") as HTMLButtonElement;
       btn.textContent = "Copied!";
       setTimeout(() => (btn.textContent = "Copy to Clipboard"), 1500);
-    });
+    }).catch(() => {});
   });
 
   overlay.querySelector("#crash-download")!.addEventListener("click", () => {
@@ -200,17 +200,25 @@ export function initCrashReporter(sceneGetter: () => GameScene | null) {
   installed = true;
   getScene = sceneGetter;
 
+  const prevOnError = window.onerror;
   window.onerror = (_msg, _src, _line, _col, err) => {
     const message = err?.message ?? String(_msg);
     const stack = err?.stack ?? `${_src}:${_line}:${_col}`;
     recordCrash(message, stack);
+    if (typeof prevOnError === "function") {
+      return prevOnError.call(window, _msg, _src, _line, _col, err);
+    }
   };
 
+  const prevOnRejection = window.onunhandledrejection;
   window.onunhandledrejection = (event: PromiseRejectionEvent) => {
     const reason = event.reason;
     const message = reason instanceof Error ? reason.message : String(reason);
     const stack = reason instanceof Error ? (reason.stack ?? "") : "";
     recordCrash(`Unhandled Promise: ${message}`, stack);
+    if (typeof prevOnRejection === "function") {
+      prevOnRejection.call(window, event);
+    }
   };
 }
 

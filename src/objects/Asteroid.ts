@@ -1,17 +1,23 @@
 import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
+import { GAME_W, GAME_H } from "../systems/GameConfig";
 
 const SIZE_CONFIG = {
-  large: { radius: 40, hp: 1 },
-  medium: { radius: 24, hp: 1 },
-  small: { radius: 12, hp: 1 },
+  large: { radius: 40 },
+  medium: { radius: 24 },
+  small: { radius: 12 },
 } as const;
 
 type AsteroidSize = keyof typeof SIZE_CONFIG;
 
+const NEXT_SIZE: Record<AsteroidSize, AsteroidSize | null> = {
+  large: "medium",
+  medium: "small",
+  small: null,
+};
+
 export class Asteroid extends Phaser.GameObjects.Graphics {
   radius: number;
-  hp: number;
   size: AsteroidSize;
   vx: number;
   vy: number;
@@ -23,13 +29,11 @@ export class Asteroid extends Phaser.GameObjects.Graphics {
     scene.add.existing(this);
     this.setDepth(3);
 
-    const cfg = SIZE_CONFIG[size];
-    this.radius = cfg.radius;
-    this.hp = cfg.hp;
+    this.radius = SIZE_CONFIG[size].radius;
     this.size = size;
 
-    const centerX = 640;
-    const centerY = 360;
+    const centerX = GAME_W / 2;
+    const centerY = GAME_H / 2;
     const angle = Math.atan2(centerY - y, centerX - x);
     const speed = Phaser.Math.Between(30, 80);
     this.vx = Math.cos(angle + Phaser.Math.FloatBetween(-0.5, 0.5)) * speed;
@@ -47,24 +51,24 @@ export class Asteroid extends Phaser.GameObjects.Graphics {
     this.drawAsteroid();
   }
 
-  drawAsteroid() {
-    this.clear();
-    this.lineStyle(3, 0xff44ff, 0.2);
+  private tracePath() {
     this.beginPath();
     this.moveTo(this.vertices[0].x, this.vertices[0].y);
     for (let i = 1; i < this.vertices.length; i++) {
       this.lineTo(this.vertices[i].x, this.vertices[i].y);
     }
     this.closePath();
+  }
+
+  drawAsteroid() {
+    this.clear();
+
+    this.lineStyle(3, 0xff44ff, 0.2);
+    this.tracePath();
     this.strokePath();
 
     this.lineStyle(1.5, 0xff44ff, 0.8);
-    this.beginPath();
-    this.moveTo(this.vertices[0].x, this.vertices[0].y);
-    for (let i = 1; i < this.vertices.length; i++) {
-      this.lineTo(this.vertices[i].x, this.vertices[i].y);
-    }
-    this.closePath();
+    this.tracePath();
     this.strokePath();
   }
 
@@ -74,19 +78,13 @@ export class Asteroid extends Phaser.GameObjects.Graphics {
     this.y += this.vy * timeScale * dt;
     this.rotation += this.rotationSpeed * timeScale * dt;
 
-    if (this.x < -80 || this.x > 1360 || this.y < -80 || this.y > 800) {
+    if (this.x < -80 || this.x > GAME_W + 80 || this.y < -80 || this.y > GAME_H + 80) {
       this.destroy();
     }
   }
 
   split(gameScene: GameScene) {
-    const nextSize: Record<string, AsteroidSize | null> = {
-      large: "medium",
-      medium: "small",
-      small: null,
-    };
-
-    const next = nextSize[this.size];
+    const next = NEXT_SIZE[this.size];
     if (next) {
       for (let i = 0; i < 2; i++) {
         const a = new Asteroid(gameScene, this.x, this.y, next);
