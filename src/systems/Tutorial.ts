@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
 import { Enemy } from "../objects/Enemy";
+import { GAME_W, GAME_H, isMobile } from "./GameConfig";
 
 const STORAGE_KEY = "beatstill_tutorial_done";
 
@@ -19,60 +20,66 @@ interface TutorialStep {
   onEnter?: (scene: GameScene) => void;
 }
 
-const STEPS: TutorialStep[] = [
-  {
-    message: "WASD — move your ship",
-    condition: (scene, t) => {
-      const dx = scene.ship.x - t.startX;
-      const dy = scene.ship.y - t.startY;
-      return dx * dx + dy * dy > 100 * 100;
+function buildSteps(): TutorialStep[] {
+  const mobile = isMobile();
+  return [
+    {
+      message: mobile ? "Left stick — move your ship" : "WASD — move your ship",
+      condition: (scene, t) => {
+        const dx = scene.ship.x - t.startX;
+        const dy = scene.ship.y - t.startY;
+        return dx * dx + dy * dy > 100 * 100;
+      },
     },
-  },
-  {
-    message: "Move your mouse to aim",
-    condition: (scene, t) => Math.abs(scene.ship.rotation - t.startRotation) > 0.8,
-  },
-  {
-    message: "Click to shoot",
-    condition: (scene) => scene.playerBullets.getChildren().length > 0,
-  },
-  {
-    message: "Stop moving — time freezes",
-    hint: "stand still and watch the world slow down",
-    condition: (scene) => scene.timeManager.scale < 0.08,
-  },
-  {
-    message: "Move or shoot to speed time up",
-    condition: (scene) => scene.timeManager.scale > 0.5,
-  },
-  {
-    message: "Kill enemies — every hit plays a note",
-    onEnter: (scene) => {
-      for (let i = 0; i < 3; i++) {
-        const x = 320 + i * 320;
-        const enemy = new Enemy(scene, x, -30, "basic");
-        scene.enemies.add(enemy);
-      }
+    {
+      message: mobile ? "Right stick — aim" : "Move your mouse to aim",
+      condition: (scene, t) => Math.abs(scene.ship.rotation - t.startRotation) > 0.8,
     },
-    condition: (scene, t) => scene.score > t.scoreAtStep,
-  },
-  {
-    message: "Kill enemies close together for a chain bonus",
-    hint: "CHAIN x2 = extra score + ascending notes",
-    onEnter: (scene) => {
-      for (let i = 0; i < 3; i++) {
-        const enemy = new Enemy(scene, 580 + i * 60, 200, "basic");
-        scene.enemies.add(enemy);
-      }
+    {
+      message: mobile ? "Hold right stick to shoot" : "Click to shoot",
+      condition: (scene) => scene.playerBullets.getChildren().length > 0,
     },
-    condition: (scene) => scene.chainCount >= 2,
-  },
-];
+    {
+      message: mobile ? "Release sticks — time freezes" : "Stop moving — time freezes",
+      hint: "stand still and watch the world slow down",
+      condition: (scene) => scene.timeManager.scale < 0.08,
+    },
+    {
+      message: "Move or shoot to speed time up",
+      condition: (scene) => scene.timeManager.scale > 0.5,
+    },
+    {
+      message: "Kill enemies — every hit plays a note",
+      onEnter: (scene) => {
+        const spacing = GAME_W / 4;
+        for (let i = 0; i < 3; i++) {
+          const x = spacing + i * spacing;
+          const enemy = new Enemy(scene, x, -30, "basic");
+          scene.enemies.add(enemy);
+        }
+      },
+      condition: (scene, t) => scene.score > t.scoreAtStep,
+    },
+    {
+      message: "Kill enemies close together for a chain bonus",
+      hint: "CHAIN x2 = extra score + ascending notes",
+      onEnter: (scene) => {
+        const cx = GAME_W / 2 - 60;
+        for (let i = 0; i < 3; i++) {
+          const enemy = new Enemy(scene, cx + i * 60, 200, "basic");
+          scene.enemies.add(enemy);
+        }
+      },
+      condition: (scene) => scene.chainCount >= 2,
+    },
+  ];
+}
 
 const MIN_STEP_MS = 3000;
 
 export class TutorialManager {
   private scene: GameScene;
+  private steps: TutorialStep[];
   private step = 0;
   private done = false;
   private transitioning = false;
@@ -91,14 +98,15 @@ export class TutorialManager {
 
   constructor(scene: GameScene) {
     this.scene = scene;
+    this.steps = buildSteps();
     this.startX = scene.ship.x;
     this.startY = scene.ship.y;
     this.startRotation = scene.ship.rotation;
 
-    const cx = 640;
+    const cx = GAME_W / 2;
 
     this.msgText = scene.add
-      .text(cx, 630, "", {
+      .text(cx, GAME_H - 90, "", {
         fontFamily: "monospace",
         fontSize: "24px",
         color: "#ffaa44",
@@ -111,7 +119,7 @@ export class TutorialManager {
       .setAlpha(0);
 
     this.hintText = scene.add
-      .text(cx, 662, "", {
+      .text(cx, GAME_H - 58, "", {
         fontFamily: "monospace",
         fontSize: "13px",
         color: "#887766",
@@ -124,7 +132,7 @@ export class TutorialManager {
       .setAlpha(0);
 
     this.stepDots = scene.add
-      .text(cx, 695, "", {
+      .text(cx, GAME_H - 25, "", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#554433",
@@ -135,7 +143,7 @@ export class TutorialManager {
       .setAlpha(0);
 
     this.skipText = scene.add
-      .text(1248, 700, "SKIP TUTORIAL", {
+      .text(GAME_W - 32, GAME_H - 20, "SKIP TUTORIAL", {
         fontFamily: "monospace",
         fontSize: "13px",
         color: "#554433",
@@ -151,14 +159,14 @@ export class TutorialManager {
   }
 
   private showStep(index: number) {
-    if (index >= STEPS.length) { this.finish(); return; }
-    const step = STEPS[index];
+    if (index >= this.steps.length) { this.finish(); return; }
+    const step = this.steps[index];
 
     this.stepElapsed = 0;
     this.scoreAtStep = this.scene.score;
     if (step.onEnter) step.onEnter(this.scene);
 
-    const dots = STEPS.map((_, i) => i === index ? "●" : "○").join(" ");
+    const dots = this.steps.map((_, i) => i === index ? "●" : "○").join(" ");
     this.stepDots.setText(dots);
 
     if (this.pulseTween) { this.pulseTween.stop(); this.pulseTween = null; }
@@ -204,6 +212,7 @@ export class TutorialManager {
       alpha: 0,
       duration: 200,
       onComplete: () => {
+        if (this.done) return;
         this.step++;
         this.transitioning = false;
         this.showStep(this.step);
@@ -234,12 +243,12 @@ export class TutorialManager {
 
   update(delta: number) {
     if (this.done || this.transitioning) return;
-    if (this.step >= STEPS.length) return;
+    if (this.step >= this.steps.length) return;
 
     this.stepElapsed += delta;
     if (this.stepElapsed < MIN_STEP_MS) return;
 
-    if (STEPS[this.step].condition(this.scene, this)) {
+    if (this.steps[this.step].condition(this.scene, this)) {
       this.advance();
     }
   }

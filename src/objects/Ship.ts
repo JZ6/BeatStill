@@ -3,6 +3,9 @@ import { Bullet } from "./Bullet";
 import type { GameScene } from "../scenes/GameScene";
 import { defaultStats, type PlayerStats } from "../systems/Upgrades";
 import { getWeapon } from "../systems/Weapons";
+import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { options } from "../systems/GameOptions";
+import type { TouchControls } from "../systems/TouchControls";
 
 const BASE = defaultStats();
 
@@ -11,7 +14,7 @@ const HEALTHBAR_WIDTH = 40;
 const HEALTHBAR_HEIGHT = 4;
 
 export class Ship extends Phaser.GameObjects.Container {
-  keys!: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key };
+  keys: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key } | null = null;
   fireCooldown = 0;
   graphics: Phaser.GameObjects.Graphics;
   healthBar: Phaser.GameObjects.Graphics;
@@ -19,6 +22,8 @@ export class Ship extends Phaser.GameObjects.Container {
   maxHp = 5;
   invincibleTimer = 0;
   stats!: PlayerStats;
+  touchControls?: TouchControls;
+  shipColor: number;
   private inputMag = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -26,24 +31,29 @@ export class Ship extends Phaser.GameObjects.Container {
     scene.add.existing(this);
     this.setDepth(10);
 
-    this.graphics = scene.add.graphics();
-    this.healthBar = scene.add.graphics();
-    this.healthBar.setDepth(11);
+    this.shipColor = options.shipColor;
+    this.graphics = new Phaser.GameObjects.Graphics(scene);
+    this.healthBar = new Phaser.GameObjects.Graphics(scene);
+    this.add(this.graphics);
+    this.add(this.healthBar);
     this.drawShip();
     this.drawHealthBar();
 
-    const kb = scene.input.keyboard!;
-    this.keys = {
-      w: kb.addKey("W"),
-      a: kb.addKey("A"),
-      s: kb.addKey("S"),
-      d: kb.addKey("D"),
-    };
+    const kb = scene.input.keyboard;
+    if (kb) {
+      this.keys = {
+        w: kb.addKey("W"),
+        a: kb.addKey("A"),
+        s: kb.addKey("S"),
+        d: kb.addKey("D"),
+      };
+    }
   }
 
   drawShip() {
     this.graphics.clear();
-    this.graphics.lineStyle(3, 0x00ffff, 0.3);
+    const c = this.shipColor;
+    this.graphics.lineStyle(3, c, 0.3);
     this.graphics.beginPath();
     this.graphics.moveTo(0, -18);
     this.graphics.lineTo(-12, 14);
@@ -51,7 +61,7 @@ export class Ship extends Phaser.GameObjects.Container {
     this.graphics.closePath();
     this.graphics.strokePath();
 
-    this.graphics.lineStyle(1.5, 0x00ffff, 1);
+    this.graphics.lineStyle(1.5, c, 1);
     this.graphics.beginPath();
     this.graphics.moveTo(0, -18);
     this.graphics.lineTo(-12, 14);
@@ -97,42 +107,52 @@ export class Ship extends Phaser.GameObjects.Container {
   update(delta: number, timeScale: number, gameScene: GameScene) {
     let vx = 0;
     let vy = 0;
-    if (this.keys.a.isDown) vx -= 1;
-    if (this.keys.d.isDown) vx += 1;
-    if (this.keys.w.isDown) vy -= 1;
-    if (this.keys.s.isDown) vy += 1;
+    let aimAngle = this.rotation - Math.PI / 2;
+    let firing = false;
 
-    const mag = Math.sqrt(vx * vx + vy * vy);
-    if (mag > 0) {
-      vx /= mag;
-      vy /= mag;
+    const tc = this.touchControls;
+    if (tc && (tc.aimActive || tc.moveActive)) {
+      vx = tc.moveVector.x;
+      vy = tc.moveVector.y;
+      if (tc.aimActive) {
+        aimAngle = tc.aimAngle;
+        firing = true;
+      }
+      const moveMag = Math.sqrt(vx * vx + vy * vy);
+      this.inputMag = Math.max(moveMag, firing ? 0.5 : 0);
+    } else {
+      if (this.keys) {
+        if (this.keys.a.isDown) vx -= 1;
+        if (this.keys.d.isDown) vx += 1;
+        if (this.keys.w.isDown) vy -= 1;
+        if (this.keys.s.isDown) vy += 1;
+      }
+      const mag = Math.sqrt(vx * vx + vy * vy);
+      if (mag > 0) { vx /= mag; vy /= mag; }
+
+      const pointer = this.scene.input.activePointer;
+      const mouseDx = Math.abs(pointer.velocity.x) + Math.abs(pointer.velocity.y);
+      const mouseMag = Math.min(mouseDx / 500, 1);
+      const shootMag = pointer.isDown ? 0.5 : 0;
+      this.inputMag = Math.max(mag, mouseMag, shootMag);
+
+      aimAngle = Phaser.Math.Angle.Between(
+        this.x, this.y,
+        pointer.worldX, pointer.worldY,
+      );
+      firing = pointer.isDown;
     }
-
-    const pointer = this.scene.input.activePointer;
-    const mouseDx = Math.abs(pointer.velocity.x) + Math.abs(pointer.velocity.y);
-    const mouseMag = Math.min(mouseDx / 500, 1);
-
-    const shootMag = pointer.isDown ? 0.5 : 0;
-    this.inputMag = Math.max(mag, mouseMag, shootMag);
 
     const playerTimeScale = timeScale * 0.5 + 0.5;
     const moveSpeed = this.stats.moveSpeed * playerTimeScale * (delta / 1000);
     this.x += vx * moveSpeed;
     this.y += vy * moveSpeed;
 
-    this.x = Phaser.Math.Clamp(this.x, 16, 1264);
-    this.y = Phaser.Math.Clamp(this.y, 16, 704);
+    this.x = Phaser.Math.Clamp(this.x, 16, GAME_W - 16);
+    this.y = Phaser.Math.Clamp(this.y, 16, GAME_H - 16);
 
-    const angle = Phaser.Math.Angle.Between(
-      this.x, this.y,
-      pointer.worldX, pointer.worldY,
-    );
-    this.rotation = angle + Math.PI / 2;
-
-    this.graphics.setPosition(this.x, this.y);
-    this.graphics.setRotation(this.rotation);
-
-    this.healthBar.setPosition(this.x, this.y);
+    this.rotation = aimAngle + Math.PI / 2;
+    this.healthBar.setRotation(-this.rotation);
 
     if (this.invincibleTimer > 0) {
       this.invincibleTimer -= delta;
@@ -143,15 +163,12 @@ export class Ship extends Phaser.GameObjects.Container {
     }
 
     this.fireCooldown -= delta * timeScale;
-    if (pointer.isDown && this.fireCooldown <= 0) {
-      this.fire(angle, gameScene);
-      const weapon = getWeapon(this.stats.weaponId);
-      const cooldownReduction = BASE.fireCooldown - this.stats.fireCooldown;
-      this.fireCooldown = Math.max(weapon.baseCooldown - cooldownReduction, 30);
+    if (firing && this.fireCooldown <= 0) {
+      this.fireCooldown = this.fire(aimAngle, gameScene);
     }
   }
 
-  fire(angle: number, gameScene: GameScene) {
+  fire(angle: number, gameScene: GameScene): number {
     const weapon = getWeapon(this.stats.weaponId);
 
     const count = weapon.baseBulletCount + (this.stats.bulletCount - BASE.bulletCount);
@@ -184,11 +201,9 @@ export class Ship extends Phaser.GameObjects.Container {
       gameScene.playerBullets.add(bullet);
     }
     gameScene.audioManager.onShoot(weapon.shotSound);
+
+    const cooldownReduction = BASE.fireCooldown - this.stats.fireCooldown;
+    return Math.max(weapon.baseCooldown - cooldownReduction, 30);
   }
 
-  destroy() {
-    this.graphics.destroy();
-    this.healthBar.destroy();
-    super.destroy();
-  }
 }
