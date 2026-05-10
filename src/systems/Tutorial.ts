@@ -154,6 +154,7 @@ export class TutorialManager {
     if (index >= STEPS.length) { this.finish(); return; }
     const step = STEPS[index];
 
+    this.stepElapsed = 0;
     this.scoreAtStep = this.scene.score;
     if (step.onEnter) step.onEnter(this.scene);
 
@@ -231,9 +232,12 @@ export class TutorialManager {
     this.scene.spawnWave();
   }
 
-  update() {
+  update(delta: number) {
     if (this.done || this.transitioning) return;
     if (this.step >= STEPS.length) return;
+
+    this.stepElapsed += delta;
+    if (this.stepElapsed < MIN_STEP_MS) return;
 
     if (STEPS[this.step].condition(this.scene, this)) {
       this.advance();

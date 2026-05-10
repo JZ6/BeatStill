@@ -212,7 +212,7 @@ export class GameScene extends Phaser.Scene {
 
     this.ship.update(delta, ts, this);
 
-    if (this.tutorial?.isActive) this.tutorial.update();
+    if (this.tutorial?.isActive) this.tutorial.update(delta);
 
     const enemyArr = this.enemies.getChildren() as Enemy[];
     for (const enemy of enemyArr) enemy.update(delta, ts, this);
