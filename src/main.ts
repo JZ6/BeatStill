@@ -1,18 +1,22 @@
 import Phaser from "phaser";
 import { StartScene } from "./scenes/StartScene";
 import { GameScene } from "./scenes/GameScene";
+import { LevelSelectScene } from "./scenes/LevelSelectScene";
 import { createDevPanel } from "./systems/DevPanel";
 import { initCrashReporter } from "./systems/CrashReporter";
 import { options, registerGame } from "./systems/GameOptions";
+import { initDimensions, GAME_W, GAME_H } from "./systems/GameConfig";
+
+initDimensions(options.resolution);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
-  width: 1280,
-  height: 720,
+  width: GAME_W,
+  height: GAME_H,
   backgroundColor: "#0a0806",
   parent: document.body,
   physics: { default: "arcade", arcade: { debug: false } },
-  scene: [StartScene, GameScene],
+  scene: [StartScene, GameScene, LevelSelectScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -20,9 +24,17 @@ const game = new Phaser.Game({
   fps: {
     target: options.targetFps === 0 ? 9999 : options.targetFps,
   },
+  input: {
+    touch: true,
+  },
 });
 
 registerGame(game);
+
+const canvas = game.canvas;
+if (canvas) {
+  canvas.style.touchAction = "none";
+}
 
 const slider = document.getElementById("volume-slider") as HTMLInputElement;
 slider.value = String(options.masterVolume);
