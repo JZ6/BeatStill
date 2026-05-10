@@ -69,11 +69,14 @@ const STEPS: TutorialStep[] = [
   },
 ];
 
+const MIN_STEP_MS = 3000;
+
 export class TutorialManager {
   private scene: GameScene;
   private step = 0;
   private done = false;
   private transitioning = false;
+  private stepElapsed = 0;
 
   startX: number;
   startY: number;

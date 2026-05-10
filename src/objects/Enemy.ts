@@ -48,12 +48,31 @@ export class Enemy extends Phaser.GameObjects.Graphics {
 
   draw(color: number) {
     this.clear();
+    const sides = Math.min(this.maxHp + 2, 8);
+    const r = this.radius;
+
+    const drawPoly = (rad: number) => {
+      this.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const a = (Math.PI * 2 * i) / sides - Math.PI / 2;
+        const px = Math.cos(a) * rad;
+        const py = Math.sin(a) * rad;
+        if (i === 0) this.moveTo(px, py); else this.lineTo(px, py);
+      }
+      this.closePath();
+    };
+
     this.lineStyle(3, color, 0.3);
-    this.strokeCircle(0, 0, this.radius + 4);
+    drawPoly(r + 4);
+    this.strokePath();
+
     this.lineStyle(1.5, color, 1);
-    this.strokeCircle(0, 0, this.radius);
+    drawPoly(r);
+    this.strokePath();
+
     this.fillStyle(color, 0.15);
-    this.fillCircle(0, 0, this.radius);
+    drawPoly(r);
+    this.fillPath();
 
     if (this.maxHp > 1) {
       const barW = this.radius * 2;
@@ -82,6 +101,9 @@ export class Enemy extends Phaser.GameObjects.Graphics {
     if (dist > minDist) {
       this.x += (dx / dist) * this.speed * timeScale * dt;
       this.y += (dy / dist) * this.speed * timeScale * dt;
+    } else if (this.enemyType === "basic" || this.enemyType === "sniper") {
+      this.targetX = Phaser.Math.Between(100, 1180);
+      this.targetY = Phaser.Math.Between(80, 580);
     }
 
     if (this.enemyType === "spiral") {
@@ -104,7 +126,7 @@ export class Enemy extends Phaser.GameObjects.Graphics {
     let configs;
     switch (this.enemyType) {
       case "basic":
-        configs = radial(3 + Math.floor(gameScene.wave / 3), 120);
+        configs = radial(Math.min(3 + Math.floor(gameScene.wave / 3), 6), 120);
         break;
       case "tracker":
         configs = aimed(angleToPlayer, 2, 0.3, 170);
