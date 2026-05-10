@@ -91,6 +91,7 @@ export class AudioManager {
   }
 
   loadTheme(theme: SoundTheme) {
+    if (!this.started) return;
     if (this.bgSequence) { this.bgSequence.stop(); this.bgSequence.dispose(); }
     if (this.bassSequence) { this.bassSequence.stop(); this.bassSequence.dispose(); }
     if (this.leadSynth) this.leadSynth.dispose();
@@ -104,6 +105,9 @@ export class AudioManager {
     if (this.clashSynth) this.clashSynth.dispose();
 
     this.theme = theme;
+    this.lastRampedBpm = 0;
+    this.lastRampedReverb = 0;
+    this.lastRampedDelay = 0;
 
     this.leadEffects = theme.createLeadEffects(this.delay);
     this.leadSynth = theme.createLeadSynth(this.leadEffects);
@@ -148,7 +152,11 @@ export class AudioManager {
   }
 
   private safe(fn: () => void) {
-    try { fn(); } catch { /* swallow timing errors */ }
+    try { fn(); } catch (e) {
+      if (e instanceof Error && !e.message.includes("start")) {
+        console.warn("[AudioManager]", e.message);
+      }
+    }
   }
 
   private triggerShot(type: ShotSound, time: number) {
@@ -238,6 +246,31 @@ export class AudioManager {
     } else {
       this.master.volume.value = Tone.gainToDb(fraction);
     }
+  }
+
+  dispose() {
+    if (!this.started) return;
+    this.bgSequence?.stop();
+    this.bgSequence?.dispose();
+    this.bassSequence?.stop();
+    this.bassSequence?.dispose();
+    this.leadSynth?.dispose();
+    if (this.leadEffects && "dispose" in this.leadEffects) {
+      (this.leadEffects as Tone.ToneAudioNode).dispose();
+    }
+    this.padSynth?.dispose();
+    this.bassPulse?.dispose();
+    this.bassSynth?.dispose();
+    this.deathSynth?.dispose();
+    this.clashSynth?.dispose();
+    this.hitSynth?.dispose();
+    for (const synth of Object.values(this.shotSynths ?? {})) {
+      synth.dispose();
+    }
+    this.delay?.dispose();
+    this.warmReverb?.dispose();
+    this.master?.dispose();
+    this.started = false;
   }
 
   updateTimeScale(scale: number) {
