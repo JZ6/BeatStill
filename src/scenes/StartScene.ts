@@ -14,7 +14,8 @@ interface FloatingParticle {
   size: number;
   color: number;
   alpha: number;
-  shape: "diamond" | "dot" | "ring";
+  shape: "diamond" | "dot" | "ring" | "line";
+  angle: number;
 }
 
 export class StartScene extends Phaser.Scene {
@@ -27,11 +28,15 @@ export class StartScene extends Phaser.Scene {
   private particles: FloatingParticle[] = [];
   private titleText!: Phaser.GameObjects.Text;
   private titleGlow!: Phaser.GameObjects.Text;
+  private taglineText!: Phaser.GameObjects.Text;
+  private hintText!: Phaser.GameObjects.Text;
+  private separatorGraphics!: Phaser.GameObjects.Graphics;
   private titleBaseY = 0;
   private titleDriftAngle = 0;
   private timeScale = 0.1;
   private lastPointerX = 0;
   private lastPointerY = 0;
+  private elapsedTime = 0;
 
   constructor() {
     super("StartScene");
@@ -44,14 +49,18 @@ export class StartScene extends Phaser.Scene {
     this.bgGraphics = this.add.graphics();
     this.bgGraphics.setDepth(-1);
 
+    this.separatorGraphics = this.add.graphics();
+    this.separatorGraphics.setDepth(2);
+
     this.initParticles();
 
-    const titleY = cy - 100;
+    const titleY = cy - 110;
     this.titleBaseY = titleY;
     this.titleDriftAngle = 0;
     this.timeScale = 0.1;
     this.lastPointerX = cx;
     this.lastPointerY = cy;
+    this.elapsedTime = 0;
 
     this.titleGlow = this.add
       .text(cx, titleY, "BEAT STILL", {
@@ -81,32 +90,54 @@ export class StartScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
     });
 
+    this.taglineText = this.add
+      .text(cx, titleY + 48, "TIME BENDS TO YOUR WILL", {
+        fontFamily: "monospace",
+        fontSize: "13px",
+        color: "#554433",
+        letterSpacing: 6,
+      })
+      .setOrigin(0.5)
+      .setDepth(1)
+      .setAlpha(0);
+
+    this.tweens.add({
+      targets: this.taglineText,
+      alpha: 0.8,
+      duration: 1200,
+      delay: 600,
+      ease: "Power2",
+    });
+
     const menuItems = [
-      { label: "CAMPAIGN", action: () => this.startCampaign() },
-      { label: "ENDLESS", action: () => this.startGame() },
-      { label: "HOW TO PLAY", action: () => this.showHowToOverlay() },
-      { label: "COLLECTION", action: () => this.showCollectionOverlay() },
-      { label: "OPTIONS", action: () => this.showOptionsOverlay() },
+      { label: "CAMPAIGN", action: () => this.startCampaign(), primary: true },
+      { label: "ENDLESS", action: () => this.startGame(), primary: true },
+      { label: "HOW TO PLAY", action: () => this.showHowToOverlay(), primary: false },
+      { label: "COLLECTION", action: () => this.showCollectionOverlay(), primary: false },
+      { label: "OPTIONS", action: () => this.showOptionsOverlay(), primary: false },
     ];
 
     const startY = cy + 20;
-    const spacing = 38;
+    const spacing = 36;
 
     const buttons: Phaser.GameObjects.Text[] = [];
     for (let i = 0; i < menuItems.length; i++) {
       const item = menuItems[i];
+      const baseColor = item.primary ? "#887766" : "#554444";
+      const hoverColor = "#ffaa44";
       const btn = this.add
         .text(cx, startY + i * spacing, item.label, {
           fontFamily: "monospace",
-          fontSize: "22px",
-          color: "#887766",
+          fontSize: item.primary ? "22px" : "16px",
+          color: baseColor,
         })
         .setOrigin(0.5)
+        .setDepth(3)
         .setInteractive({ useHandCursor: true })
         .on("pointerover", () => {
-          if (!this.hasOverlay()) btn.setColor("#ffaa44");
+          if (!this.hasOverlay()) btn.setColor(hoverColor);
         })
-        .on("pointerout", () => btn.setColor("#887766"))
+        .on("pointerout", () => btn.setColor(baseColor))
         .on("pointerdown", () => {
           if (!this.hasOverlay()) {
             this.ensureAudio();
@@ -116,7 +147,7 @@ export class StartScene extends Phaser.Scene {
       buttons.push(btn);
     }
 
-    buttons[0].setColor("#ffaa44").setFontSize(24);
+    buttons[0].setColor("#ffaa44");
 
     for (let i = 0; i < buttons.length; i++) {
       const btn = buttons[i];
@@ -124,12 +155,28 @@ export class StartScene extends Phaser.Scene {
       this.tweens.add({
         targets: btn,
         alpha: 1,
-        y: btn.y,
         duration: 400,
-        delay: 200 + i * 80,
+        delay: 400 + i * 100,
         ease: "Power2",
       });
     }
+
+    this.hintText = this.add
+      .text(cx, GAME_H - 40, "— move mouse to flow time —", {
+        fontFamily: "monospace",
+        fontSize: "11px",
+        color: "#333",
+      })
+      .setOrigin(0.5)
+      .setDepth(1)
+      .setAlpha(0);
+
+    this.tweens.add({
+      targets: this.hintText,
+      alpha: 1,
+      duration: 2000,
+      delay: 2000,
+    });
 
     this.input.once("pointerdown", () => this.ensureAudio());
 
@@ -147,6 +194,8 @@ export class StartScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    this.elapsedTime += delta;
+
     const pointer = this.input.activePointer;
     const dx = pointer.x - this.lastPointerX;
     const dy = pointer.y - this.lastPointerY;
@@ -163,24 +212,26 @@ export class StartScene extends Phaser.Scene {
     const driftX = Math.cos(this.titleDriftAngle * 0.7) * 4;
     this.titleText.setPosition(GAME_W / 2 + driftX, this.titleBaseY + driftY);
     this.titleGlow.setPosition(GAME_W / 2 + driftX, this.titleBaseY + driftY);
+    this.taglineText.setPosition(GAME_W / 2 + driftX * 0.5, this.titleBaseY + 48 + driftY * 0.5);
 
     this.updateParticles(delta, ts);
-    this.drawBackground();
+    this.drawBackground(ts);
   }
 
   private initParticles() {
     const colors = [0xffaa44, 0xff6644, 0xff44aa, 0xaa44ff, 0x44ffff, 0xe8d5b0];
-    const shapes: FloatingParticle["shape"][] = ["diamond", "dot", "ring"];
-    for (let i = 0; i < 40; i++) {
+    const shapes: FloatingParticle["shape"][] = ["diamond", "dot", "ring", "line"];
+    for (let i = 0; i < 50; i++) {
       this.particles.push({
         x: Math.random() * GAME_W,
         y: Math.random() * GAME_H,
-        vx: (Math.random() - 0.5) * 20,
-        vy: (Math.random() - 0.5) * 15 - 5,
-        size: 2 + Math.random() * 4,
+        vx: (Math.random() - 0.5) * 25,
+        vy: (Math.random() - 0.5) * 15 - 8,
+        size: 2 + Math.random() * 5,
         color: colors[Math.floor(Math.random() * colors.length)],
-        alpha: 0.1 + Math.random() * 0.25,
+        alpha: 0.08 + Math.random() * 0.2,
         shape: shapes[Math.floor(Math.random() * shapes.length)],
+        angle: Math.random() * Math.PI * 2,
       });
     }
   }
@@ -190,28 +241,29 @@ export class StartScene extends Phaser.Scene {
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      if (p.x < -20) p.x = GAME_W + 20;
-      if (p.x > GAME_W + 20) p.x = -20;
-      if (p.y < -20) p.y = GAME_H + 20;
-      if (p.y > GAME_H + 20) p.y = -20;
+      p.angle += dt * 0.5;
+      if (p.x < -30) p.x = GAME_W + 30;
+      if (p.x > GAME_W + 30) p.x = -30;
+      if (p.y < -30) p.y = GAME_H + 30;
+      if (p.y > GAME_H + 30) p.y = -30;
     }
   }
 
-  private drawBackground() {
+  private drawBackground(ts: number) {
     const g = this.bgGraphics;
     g.clear();
 
     g.fillGradientStyle(0x0a0806, 0x0a0806, 0x12100c, 0x12100c, 1);
     g.fillRect(0, 0, GAME_W, GAME_H);
 
-    g.lineStyle(1, 0x1a1612, 0.15);
+    const gridAlpha = 0.08 + ts * 0.12;
+    g.lineStyle(1, 0x1a1612, gridAlpha);
     for (let x = 0; x <= GAME_W; x += 64) g.lineBetween(x, 0, x, GAME_H);
     for (let y = 0; y <= GAME_H; y += 64) g.lineBetween(0, y, GAME_W, y);
 
     for (const p of this.particles) {
       if (p.shape === "diamond") {
         g.fillStyle(p.color, p.alpha);
-        g.fillPoint(p.x, p.y - p.size, 1);
         g.fillTriangle(
           p.x, p.y - p.size,
           p.x + p.size * 0.6, p.y,
@@ -225,11 +277,26 @@ export class StartScene extends Phaser.Scene {
       } else if (p.shape === "dot") {
         g.fillStyle(p.color, p.alpha);
         g.fillCircle(p.x, p.y, p.size * 0.5);
-      } else {
+      } else if (p.shape === "ring") {
         g.lineStyle(1, p.color, p.alpha);
         g.strokeCircle(p.x, p.y, p.size);
+      } else {
+        g.lineStyle(1, p.color, p.alpha * 0.6);
+        const lx = Math.cos(p.angle) * p.size * 2;
+        const ly = Math.sin(p.angle) * p.size * 2;
+        g.lineBetween(p.x - lx, p.y - ly, p.x + lx, p.y + ly);
       }
     }
+
+    const sep = this.separatorGraphics;
+    sep.clear();
+    const sepY = this.titleBaseY + 70;
+    const sepW = 120;
+    const sepAlpha = 0.2 + ts * 0.15;
+    sep.lineStyle(1, 0xffaa44, sepAlpha);
+    sep.lineBetween(GAME_W / 2 - sepW, sepY, GAME_W / 2 + sepW, sepY);
+    sep.fillStyle(0xffaa44, sepAlpha + 0.1);
+    sep.fillCircle(GAME_W / 2, sepY, 2);
   }
 
   private hasOverlay(): boolean {

@@ -162,6 +162,7 @@ export class PhantomBoss extends Enemy {
       const configs = radial(8, 60);
       for (const cfg of configs) {
         const bullet = new Bullet(this.scene, this.teleportFromX, this.teleportFromY, cfg.angle, cfg.speed, "enemy");
+        bullet.sourceEnemy = this;
         gameScene.enemyBullets.add(bullet);
       }
     }

@@ -22,6 +22,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   homing: boolean;
   bulletColor: number;
   alive = true;
+  sourceEnemy: Phaser.GameObjects.GameObject | null = null;
 
   constructor(
     scene: Phaser.Scene,

@@ -104,6 +104,7 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
     const configs = this.getFirePattern(angleToPlayer, gameScene);
     for (const cfg of configs) {
       const bullet = new Bullet(this.scene, this.x, this.y, cfg.angle, cfg.speed, "enemy");
+      bullet.sourceEnemy = this;
       gameScene.enemyBullets.add(bullet);
     }
   }

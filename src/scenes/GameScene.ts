@@ -19,6 +19,7 @@ import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, type LevelDef } from ".
 import { Wall } from "../objects/Wall";
 import { checkAchievements, addKill, addBossDefeat, recordWeaponUsed, recordThemeUsed, type AchievementContext } from "../systems/Achievements";
 import type { EnemyType } from "../objects/enemies";
+import { createOptionsOverlay } from "../ui/OptionsOverlay";
 import { EndlessMode } from "../systems/EndlessMode";
 
 const CHAIN_WINDOW = 800;
@@ -94,7 +95,9 @@ export class GameScene extends Phaser.Scene {
   private pauseBtn: Phaser.GameObjects.Text | null = null;
   private menuBtn: Phaser.GameObjects.Text | null = null;
   private pauseResumeBtn!: Phaser.GameObjects.Text;
+  private pauseOptionsBtn!: Phaser.GameObjects.Text;
   private pauseMenuBtn!: Phaser.GameObjects.Text;
+  private pauseOptionsOverlay: HTMLDivElement | null = null;
   private confirmOverlay!: Phaser.GameObjects.Graphics;
   private confirmText!: Phaser.GameObjects.Text;
   private confirmYes!: Phaser.GameObjects.Text;
@@ -234,6 +237,8 @@ export class GameScene extends Phaser.Scene {
     this.events.once("shutdown", () => {
       this.toastQueue.length = 0;
       this.toastActive = false;
+      this.pauseOptionsOverlay?.remove();
+      this.pauseOptionsOverlay = null;
     });
 
     this.waveTimer = 0;
@@ -256,6 +261,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseOverlay.setVisible(this.paused);
     this.pauseText.setVisible(this.paused);
     this.pauseResumeBtn.setVisible(this.paused);
+    this.pauseOptionsBtn.setVisible(this.paused);
     this.pauseMenuBtn.setVisible(this.paused);
   }
 
@@ -265,6 +271,16 @@ export class GameScene extends Phaser.Scene {
     this.confirmText.setVisible(true);
     this.confirmYes.setVisible(true);
     this.confirmNo.setVisible(true);
+  }
+
+  private showPauseOptions() {
+    if (this.pauseOptionsOverlay) return;
+    const overlay = createOptionsOverlay(() => {
+      overlay.remove();
+      this.pauseOptionsOverlay = null;
+    });
+    this.pauseOptionsOverlay = overlay;
+    document.body.appendChild(overlay);
   }
 
   private hideConfirmMenu() {
@@ -355,8 +371,25 @@ export class GameScene extends Phaser.Scene {
         this.togglePause();
       });
 
+    this.pauseOptionsBtn = this.add
+      .text(GAME_W / 2, GAME_H / 2 + 60, "OPTIONS", {
+        fontFamily: "monospace",
+        fontSize: "22px",
+        color: "#887766",
+      })
+      .setOrigin(0.5)
+      .setDepth(201)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => this.pauseOptionsBtn.setColor("#e8d5b0"))
+      .on("pointerout", () => this.pauseOptionsBtn.setColor("#887766"))
+      .on("pointerdown", (p: Phaser.Input.Pointer) => {
+        p.event.stopPropagation();
+        this.showPauseOptions();
+      });
+
     this.pauseMenuBtn = this.add
-      .text(GAME_W / 2, GAME_H / 2 + 60, "MAIN MENU", {
+      .text(GAME_W / 2, GAME_H / 2 + 100, "MAIN MENU", {
         fontFamily: "monospace",
         fontSize: "22px",
         color: "#887766",
@@ -787,6 +820,7 @@ export class GameScene extends Phaser.Scene {
     const wallArr = [...this.walls.getChildren()] as Wall[];
 
     this.collideBulletsVsEnemies(playerBullets, enemyArr);
+    this.absorbEnemyBullets(enemyBullets, enemyArr);
     this.collideBulletsVsAsteroids(playerBullets, asteroidArr);
     this.collideBulletVsBullet(playerBullets, enemyBullets);
     this.collideWalls(wallArr, playerBullets, enemyBullets, enemyArr);
@@ -824,6 +858,19 @@ export class GameScene extends Phaser.Scene {
           this.particles.trail(b.x, b.y, b.bulletColor, 3);
           b.hit();
           if (!b.alive) break;
+        }
+      }
+    }
+  }
+
+  private absorbEnemyBullets(enemyBullets: Bullet[], enemyArr: Enemy[]) {
+    for (const b of enemyBullets) {
+      if (!b.alive) continue;
+      for (const e of enemyArr) {
+        if (!e.active || e === b.sourceEnemy) continue;
+        if (this.circleOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) {
+          b.kill();
+          break;
         }
       }
     }
