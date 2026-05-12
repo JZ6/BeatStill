@@ -13,7 +13,7 @@ export function createCollectionOverlay(onClose: () => void): HTMLDivElement {
 
   const shardCount = document.createElement("div");
   shardCount.style.cssText = "font-family:monospace;font-size:16px;color:#ffaa44;text-align:center;";
-  shardCount.textContent = `◆ ${state.shards} shards  |  Best: ${state.highScore} pts  |  Wave ${state.highWave}`;
+  shardCount.textContent = `◆ ${state.shards} shards  |  Best: ${state.highScore} pts  |  Wave ${state.highWave}  |  Chain ${state.bestChain}`;
   overlay.appendChild(shardCount);
 
   const categories = ["weapon", "theme", "upgrade", "cosmetic"] as const;

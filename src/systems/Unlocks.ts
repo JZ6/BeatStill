@@ -2,6 +2,7 @@ interface UnlockRequirement {
   shards?: number;
   highScore?: number;
   highWave?: number;
+  bestChain?: number;
 }
 
 export interface UnlockDef {
@@ -17,6 +18,7 @@ export interface UnlockState {
   shards: number;
   highScore: number;
   highWave: number;
+  bestChain: number;
   unlockedIds: string[];
 }
 
@@ -26,6 +28,7 @@ const DEFAULT_STATE: UnlockState = {
   shards: 0,
   highScore: 0,
   highWave: 0,
+  bestChain: 0,
   unlockedIds: [],
 };
 
@@ -53,6 +56,11 @@ export const ALL_UNLOCKS: UnlockDef[] = [
   { id: "color_purple", name: "Purple", icon: "●", description: "Violet ship", category: "cosmetic", requirement: { shards: 50, highWave: 7 } },
   { id: "color_green", name: "Green", icon: "●", description: "Emerald ship", category: "cosmetic", requirement: { shards: 70, highWave: 12 } },
   { id: "color_white", name: "White", icon: "●", description: "Pure white ship", category: "cosmetic", requirement: { shards: 100, highScore: 50000 } },
+
+  // Chain-gated
+  { id: "color_chain", name: "Chain Gold", icon: "●", description: "Golden aura", category: "cosmetic", requirement: { bestChain: 15, shards: 30 } },
+  { id: "upgrade_chainWindow", name: "Chain Sustain", icon: "◎→", description: "Extend chain timer", category: "upgrade", requirement: { bestChain: 5, shards: 10 } },
+  { id: "upgrade_chainRadius", name: "Chain Reach", icon: "<◎>", description: "Chain across distance", category: "upgrade", requirement: { bestChain: 8, shards: 15 } },
 ];
 
 export const SHIP_COLORS: Record<string, number> = {
@@ -62,6 +70,7 @@ export const SHIP_COLORS: Record<string, number> = {
   color_purple: 0xaa44ff,
   color_green: 0x44ff88,
   color_white: 0xffffff,
+  color_chain: 0xffdd44,
 };
 
 let state: UnlockState;
@@ -94,6 +103,7 @@ function meetsRequirement(req: UnlockRequirement): boolean {
   if (req.shards != null && state.shards < req.shards) return false;
   if (req.highScore != null && state.highScore < req.highScore) return false;
   if (req.highWave != null && state.highWave < req.highWave) return false;
+  if (req.bestChain != null && state.bestChain < req.bestChain) return false;
   return true;
 }
 
@@ -129,10 +139,18 @@ export function updateHighWave(wave: number) {
   }
 }
 
+export function updateBestChain(chain: number) {
+  if (chain > state.bestChain) {
+    state.bestChain = chain;
+    saveState();
+  }
+}
+
 export function requirementText(req: UnlockRequirement): string {
   const parts: string[] = [];
   if (req.shards != null) parts.push(`${req.shards} ◆`);
   if (req.highScore != null) parts.push(`${(req.highScore / 1000).toFixed(0)}k score`);
   if (req.highWave != null) parts.push(`Wave ${req.highWave}`);
+  if (req.bestChain != null) parts.push(`Chain ${req.bestChain}`);
   return parts.join(" + ");
 }

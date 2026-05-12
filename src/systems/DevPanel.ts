@@ -253,7 +253,7 @@ function buildSoundsTab(
   const gameSounds: { label: string; fn: (am: AudioManager) => void }[] = [
     { label: "Enemy Hit", fn: (am) => am.onEnemyHit() },
     { label: "Enemy Kill", fn: (am) => am.onEnemyKill() },
-    { label: "Chain Kill", fn: (am) => am.onChainKill(3) },
+    { label: "Chain Kill", fn: (am) => am.onChainKill(3, 2) },
     { label: "Asteroid", fn: (am) => am.onAsteroidBreak() },
     { label: "Bullet Clash", fn: (am) => am.onBulletClash() },
     { label: "Player Hit", fn: (am) => am.onPlayerHit() },

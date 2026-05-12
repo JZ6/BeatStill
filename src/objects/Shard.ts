@@ -7,6 +7,8 @@ const SIZE = 8;
 export class Shard extends Phaser.GameObjects.Graphics {
   elapsed = 0;
   alive = true;
+  magnetTarget: { x: number; y: number } | null = null;
+  magnetSpeed = 0;
   private startY: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -46,7 +48,19 @@ export class Shard extends Phaser.GameObjects.Graphics {
     if (!this.alive) return;
     this.elapsed += delta * timeScale;
 
-    this.y = this.startY + Math.sin(this.elapsed * 0.003) * 4;
+    if (this.magnetTarget && this.magnetSpeed > 0) {
+      const dx = this.magnetTarget.x - this.x;
+      const dy = this.magnetTarget.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 1) {
+        const step = this.magnetSpeed * timeScale * (delta / 1000);
+        this.x += (dx / dist) * step;
+        this.y += (dy / dist) * step;
+        this.startY = this.y;
+      }
+    } else {
+      this.y = this.startY + Math.sin(this.elapsed * 0.003) * 4;
+    }
     this.rotation += 1.2 * timeScale * (delta / 1000);
 
     if (this.elapsed > FADE_START) {

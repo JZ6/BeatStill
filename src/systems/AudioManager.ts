@@ -200,14 +200,43 @@ export class AudioManager {
     this.safe(() => this.leadSynth.triggerAttackRelease([note1, note2], "4n", time));
   }
 
-  onChainKill(chainLength: number) {
+  onChainKill(chainLength: number, tier: number) {
     if (!this.started) return;
     const scale = this.theme.scale;
     const baseIdx = this.noteIndex % scale.length;
     const scaleIdx = Math.min(baseIdx + chainLength, scale.length - 1);
-    const note = scale[scaleIdx];
+    this.noteIndex++;
     const time = this.quantize();
-    this.safe(() => this.leadSynth.triggerAttackRelease(note, "4n", time));
+
+    if (tier <= 1) {
+      const note = scale[scaleIdx];
+      this.safe(() => this.leadSynth.triggerAttackRelease(note, "4n", time));
+    } else if (tier === 2) {
+      const n1 = scale[scaleIdx];
+      const n2 = scale[Math.min(scaleIdx + 2, scale.length - 1)];
+      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2], "4n", time));
+    } else if (tier === 3) {
+      const n1 = scale[scaleIdx];
+      const n2 = scale[Math.min(scaleIdx + 2, scale.length - 1)];
+      const n3 = scale[Math.min(scaleIdx + 4, scale.length - 1)];
+      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2, n3], "4n", time));
+    } else {
+      const n1 = scale[scaleIdx];
+      const n2 = scale[Math.min(scaleIdx + 2, scale.length - 1)];
+      const n3 = scale[Math.min(scaleIdx + 4, scale.length - 1)];
+      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2, n3], "2n", time));
+      const bass = this.theme.bassNotes;
+      const bassNote = bass[Math.min(scaleIdx % bass.length, bass.length - 1)];
+      this.safe(() => this.bassSynth.triggerAttackRelease(bassNote, "4n", time));
+    }
+  }
+
+  onChainBreak(tier: number) {
+    if (!this.started || tier < 2) return;
+    const scale = this.theme.scale;
+    const idx = this.noteIndex % scale.length;
+    const dissonant = scale[Math.min(idx + 1, scale.length - 1)];
+    this.safe(() => this.clashSynth.triggerAttackRelease(dissonant, "16n", Tone.now()));
   }
 
   onAsteroidBreak() {

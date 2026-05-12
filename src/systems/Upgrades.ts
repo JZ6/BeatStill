@@ -11,6 +11,8 @@ export interface PlayerStats {
   damage: number;
   moveSpeed: number;
   weaponId: string;
+  chainWindow: number;
+  chainRadius: number;
 }
 
 export function defaultStats(): PlayerStats {
@@ -24,6 +26,8 @@ export function defaultStats(): PlayerStats {
     damage: 1,
     moveSpeed: 300,
     weaponId: "standard",
+    chainWindow: 0,
+    chainRadius: 0,
   };
 }
 
@@ -110,6 +114,24 @@ export const ALL_UPGRADES: UpgradeDef[] = [
     maxLevel: 4,
     level: (s) => Math.round((s.moveSpeed - 300) / 40),
     apply: (s) => { s.moveSpeed = Math.min(s.moveSpeed + 40, 460); },
+  },
+  {
+    id: "chainWindow",
+    name: "Chain Sustain",
+    icon: "◎→",
+    description: "Chain timer lasts longer",
+    maxLevel: 3,
+    level: (s) => s.chainWindow / 200,
+    apply: (s) => { s.chainWindow = Math.min(s.chainWindow + 200, 600); },
+  },
+  {
+    id: "chainRadius",
+    name: "Chain Reach",
+    icon: "<◎>",
+    description: "Chain connects across greater distance",
+    maxLevel: 3,
+    level: (s) => s.chainRadius / 30,
+    apply: (s) => { s.chainRadius = Math.min(s.chainRadius + 30, 90); },
   },
   // Weapon upgrades — one per non-standard weapon
   ...ALL_WEAPONS.filter((w) => w.id !== "standard").map((w) => ({

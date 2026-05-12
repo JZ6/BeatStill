@@ -14,7 +14,7 @@ import { TutorialManager, isTutorialDone } from "../systems/Tutorial";
 import { GAME_W, GAME_H, isMobile } from "../systems/GameConfig";
 import { TouchControls } from "../systems/TouchControls";
 import { Shard } from "../objects/Shard";
-import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, getState, type UnlockDef } from "../systems/Unlocks";
+import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, updateBestChain, getState, type UnlockDef } from "../systems/Unlocks";
 import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, type LevelDef } from "../systems/Levels";
 import { createUpgradeOverlay } from "../ui/UpgradeOverlay";
 import { Wall } from "../objects/Wall";
@@ -22,6 +22,24 @@ import type { EnemyType } from "../objects/enemies";
 
 const CHAIN_WINDOW = 800;
 const CHAIN_RADIUS = 120;
+
+const CHAIN_TIERS = [
+  { min: 0,  name: "",          color: 0xffffff, textColor: "#ffffff", mult: 1 },
+  { min: 2,  name: "BEAT",      color: 0xffaa44, textColor: "#ffaa44", mult: 1.5 },
+  { min: 5,  name: "RHYTHM",    color: 0xff6644, textColor: "#ff6644", mult: 2 },
+  { min: 10, name: "MELODY",    color: 0xff44aa, textColor: "#ff44aa", mult: 3 },
+  { min: 15, name: "HARMONY",   color: 0xaa44ff, textColor: "#aa44ff", mult: 4 },
+  { min: 25, name: "CRESCENDO", color: 0x44ffff, textColor: "#44ffff", mult: 6 },
+];
+const SHARD_DROP_RATES = [0.15, 0.20, 0.30, 0.40, 0.55, 0.75];
+const MAGNET_SPEEDS = [0, 0, 80, 120, 160, 200];
+
+function getChainTier(count: number): number {
+  for (let i = CHAIN_TIERS.length - 1; i >= 0; i--) {
+    if (count >= CHAIN_TIERS[i].min) return i;
+  }
+  return 0;
+}
 
 export class GameScene extends Phaser.Scene {
   ship!: Ship;
@@ -48,8 +66,14 @@ export class GameScene extends Phaser.Scene {
 
   chainTimer = 0;
   chainCount = 0;
+  chainTier = 0;
+  bestChain = 0;
   lastKillX = 0;
   lastKillY = 0;
+  private graceTimer = 0;
+  private graceTier = 0;
+  private chainArcGraphics!: Phaser.GameObjects.Graphics;
+  private scorePopups: { text: Phaser.GameObjects.Text; timer: number }[] = [];
 
   scoreText!: Phaser.GameObjects.Text;
   waveText!: Phaser.GameObjects.Text;
@@ -93,6 +117,10 @@ export class GameScene extends Phaser.Scene {
     this.upgradePending = false;
     this.chainCount = 0;
     this.chainTimer = 0;
+    this.chainTier = 0;
+    this.bestChain = 0;
+    this.graceTimer = 0;
+    this.graceTier = 0;
     this.toastQueue = [];
     this.toastActive = false;
     this.fpsTimer = 0;
@@ -101,6 +129,16 @@ export class GameScene extends Phaser.Scene {
     this.bgGraphics = this.add.graphics();
     this.bgGraphics.setDepth(-1);
     this.drawBackground();
+
+    this.chainArcGraphics = this.add.graphics();
+    this.chainArcGraphics.setDepth(95);
+
+    this.scorePopups = [];
+    for (let i = 0; i < 8; i++) {
+      const t = this.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "16px", color: "#ffffff" })
+        .setOrigin(0.5).setDepth(100).setAlpha(0);
+      this.scorePopups.push({ text: t, timer: 0 });
+    }
 
     this.playerBullets = this.add.group();
     this.enemyBullets = this.add.group();
@@ -224,13 +262,11 @@ export class GameScene extends Phaser.Scene {
       .setDepth(100);
 
     this.chainText = this.add
-      .text(GAME_W / 2, 80, "", {
+      .text(16, 60, "", {
         fontFamily: "monospace",
-        fontSize: "28px",
+        fontSize: "18px",
         color: "#ffaa44",
-        align: "center",
       })
-      .setOrigin(0.5)
       .setDepth(100)
       .setAlpha(0);
 
@@ -352,8 +388,18 @@ export class GameScene extends Phaser.Scene {
     this.collectShards();
 
     const shardArr = [...this.shards.getChildren()] as Shard[];
+    const magnetSpd = MAGNET_SPEEDS[this.chainTier] ?? 0;
     for (const s of shardArr) {
-      if (s.alive) s.update(delta, ts);
+      if (s.alive) {
+        if (magnetSpd > 0 && this.chainTimer > 0) {
+          s.magnetTarget = this.ship;
+          s.magnetSpeed = magnetSpd;
+        } else {
+          s.magnetTarget = null;
+          s.magnetSpeed = 0;
+        }
+        s.update(delta, ts);
+      }
     }
 
     this.particles.update(delta, ts);
@@ -361,14 +407,28 @@ export class GameScene extends Phaser.Scene {
     if (this.chainTimer > 0) {
       this.chainTimer -= delta * ts;
       if (this.chainTimer <= 0) {
+        const prevTier = this.chainTier;
+        if (prevTier >= 2) {
+          this.graceTimer = 400;
+          this.graceTier = prevTier - 1;
+        }
+        this.audioManager.onChainBreak(prevTier);
+        if (prevTier >= 2) {
+          const tier = CHAIN_TIERS[prevTier];
+          this.particles.burst(this.lastKillX, this.lastKillY, tier.color, 15, 60, 2);
+        }
         this.chainCount = 0;
-        this.tweens.add({
-          targets: this.chainText,
-          alpha: 0,
-          duration: 300,
-        });
+        this.chainTier = 0;
+        this.tweens.add({ targets: this.chainText, alpha: 0, duration: 300 });
       }
     }
+
+    if (this.graceTimer > 0) {
+      this.graceTimer -= delta * ts;
+    }
+
+    this.updateChainArc(ts);
+    this.updateScorePopups(delta, ts);
 
     this.waveTimer += delta * ts;
     if (enemyArr.length === 0 && this.waveTimer > this.waveDelay && !this.upgradePending && !this.levelComplete) {
@@ -403,26 +463,107 @@ export class GameScene extends Phaser.Scene {
     const dx = x - this.lastKillX;
     const dy = y - this.lastKillY;
     const dist = Math.sqrt(dx * dx + dy * dy);
+    const effectiveRadius = CHAIN_RADIUS + this.stats.chainRadius;
+    const effectiveWindow = CHAIN_WINDOW + this.stats.chainWindow;
 
-    if (this.chainTimer > 0 && dist < CHAIN_RADIUS) {
+    const prevTier = this.chainTier;
+
+    if (this.chainTimer > 0 && dist < effectiveRadius) {
       this.chainCount++;
-      this.audioManager.onChainKill(this.chainCount);
-      const bonus = this.chainCount * 50;
-      this.score += bonus;
-      this.chainText.setText(`CHAIN x${this.chainCount}  +${bonus}`);
-      this.chainText.setAlpha(1);
+    } else if (this.graceTimer > 0 && dist < effectiveRadius) {
+      this.chainCount = CHAIN_TIERS[this.graceTier].min;
+      this.graceTimer = 0;
     } else {
       this.chainCount = 1;
+    }
+
+    if (this.chainCount > this.bestChain) this.bestChain = this.chainCount;
+    this.chainTier = getChainTier(this.chainCount);
+    const tier = CHAIN_TIERS[this.chainTier];
+
+    const points = Math.floor(100 * tier.mult);
+    this.score += points;
+    this.scoreText.setText(`SCORE: ${this.score}`);
+
+    if (this.chainTier > 0) {
+      this.audioManager.onChainKill(this.chainCount, this.chainTier);
+      this.chainText.setText(`${tier.name} x${this.chainCount}`);
+      this.chainText.setColor(tier.textColor);
+      this.chainText.setAlpha(1);
+      this.spawnScorePopup(x, y, `+${points}`, tier.textColor);
+
+      if (this.chainTier > prevTier && tier.name) {
+        this.spawnScorePopup(x, y - 20, tier.name, tier.textColor, 24);
+        this.tweens.add({
+          targets: this.chainText,
+          scaleX: { from: 1.4, to: 1 },
+          scaleY: { from: 1.4, to: 1 },
+          duration: 200,
+          ease: "Back.easeOut",
+        });
+      }
+
+      const shakeIntensity = [0, 0.003, 0.005, 0.008, 0.012, 0.012][this.chainTier];
+      const shakeDuration = [0, 80, 100, 120, 150, 150][this.chainTier];
+      if (shakeIntensity > 0) this.cameras.main.shake(shakeDuration, shakeIntensity);
+    } else {
       this.audioManager.onEnemyKill();
     }
 
-    this.chainTimer = CHAIN_WINDOW;
+    this.chainTimer = effectiveWindow;
     this.lastKillX = x;
     this.lastKillY = y;
 
-    if (Math.random() < 0.15) {
+    const dropRate = SHARD_DROP_RATES[this.chainTier] ?? 0.15;
+    if (Math.random() < dropRate) {
       const shard = new Shard(this, x, y);
       this.shards.add(shard);
+    }
+  }
+
+  private updateChainArc(ts: number) {
+    this.chainArcGraphics.clear();
+    if (this.chainTimer <= 0) return;
+    const tier = CHAIN_TIERS[this.chainTier] ?? CHAIN_TIERS[0];
+    const effectiveWindow = CHAIN_WINDOW + this.stats.chainWindow;
+    const progress = this.chainTimer / effectiveWindow;
+    const arcAngle = progress * Math.PI * 2;
+    let alpha = 0.6;
+    if (ts < 0.1) alpha = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
+    this.chainArcGraphics.lineStyle(2, tier.color, alpha);
+    this.chainArcGraphics.beginPath();
+    this.chainArcGraphics.arc(this.lastKillX, this.lastKillY, 25, -Math.PI / 2, -Math.PI / 2 + arcAngle, false);
+    this.chainArcGraphics.strokePath();
+  }
+
+  private spawnScorePopup(x: number, y: number, text: string, color: string, size = 16) {
+    let oldest = this.scorePopups[0];
+    for (const p of this.scorePopups) {
+      if (p.timer <= 0) { oldest = p; break; }
+      if (p.timer < oldest.timer) oldest = p;
+    }
+    oldest.text.setText(text).setPosition(x, y).setAlpha(1).setColor(color)
+      .setFontSize(size).setScale(1);
+    oldest.timer = 600;
+    if (size > 16) {
+      this.tweens.add({
+        targets: oldest.text,
+        scaleX: { from: 0, to: 1.3 },
+        scaleY: { from: 0, to: 1.3 },
+        duration: 150,
+        yoyo: true,
+        hold: 50,
+      });
+    }
+  }
+
+  private updateScorePopups(delta: number, ts: number) {
+    for (const p of this.scorePopups) {
+      if (p.timer <= 0) continue;
+      p.timer -= delta * Math.max(ts, 0.3);
+      p.text.y -= 40 * (delta / 600) * Math.max(ts, 0.3);
+      p.text.setAlpha(Math.max(p.timer / 600, 0));
+      if (p.timer <= 0) p.text.setAlpha(0);
     }
   }
 
@@ -492,10 +633,12 @@ export class GameScene extends Phaser.Scene {
         if (this.circleOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) {
           const killed = e.takeDamage(b.damage);
           if (killed) {
-            this.score += 100;
-            this.scoreText.setText(`SCORE: ${this.score}`);
-            this.particles.burst(e.x, e.y, b.bulletColor, 20, 100, 3);
-            this.particles.burst(e.x, e.y, 0xffcc66, 10, 60, 2);
+            const pCount = [20, 25, 30, 35, 35, 35][this.chainTier];
+            const pCount2 = [10, 12, 15, 18, 18, 18][this.chainTier];
+            const pSize = [3, 3, 4, 5, 5, 5][this.chainTier];
+            const tierColor = CHAIN_TIERS[this.chainTier]?.color ?? 0xffcc66;
+            this.particles.burst(e.x, e.y, b.bulletColor, pCount, 100, pSize);
+            this.particles.burst(e.x, e.y, this.chainTier > 0 ? tierColor : 0xffcc66, pCount2, 60, pSize - 1);
             this.registerKill(e.x, e.y);
           } else {
             this.particles.burst(b.x, b.y, b.bulletColor, 6, 40, 2);
@@ -802,6 +945,7 @@ export class GameScene extends Phaser.Scene {
 
     updateHighScore(this.score);
     updateHighWave(this.wave);
+    updateBestChain(this.bestChain);
     this.processUnlocks();
 
     const mobile = isMobile();

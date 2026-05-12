@@ -32,6 +32,7 @@ function snapshotGameState(): Record<string, unknown> | null {
     paused: scene.paused,
     godMode: scene.godMode,
     chainCount: scene.chainCount,
+    chainTier: scene.chainTier,
     chainTimer: scene.chainTimer,
     player: scene.ship
       ? {
