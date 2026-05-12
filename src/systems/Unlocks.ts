@@ -14,12 +14,18 @@ export interface UnlockDef {
   requirement: UnlockRequirement;
 }
 
+export interface WeaponMasteryEntry {
+  pickups: number;
+  kills: number;
+}
+
 export interface UnlockState {
   shards: number;
   highScore: number;
   highWave: number;
   bestChain: number;
   unlockedIds: string[];
+  weaponMastery: Record<string, WeaponMasteryEntry>;
 }
 
 const STORAGE_KEY = "beatstill_unlocks";
@@ -30,15 +36,10 @@ const DEFAULT_STATE: UnlockState = {
   highWave: 0,
   bestChain: 0,
   unlockedIds: [],
+  weaponMastery: {},
 };
 
 export const ALL_UNLOCKS: UnlockDef[] = [
-  // Weapons
-  { id: "weapon_shotgun", name: "Shotgun", icon: "|||", description: "Wide burst, deadly up close", category: "weapon", requirement: { shards: 5, highWave: 3 } },
-  { id: "weapon_laser", name: "Laser", icon: "===", description: "Rapid needles that pierce", category: "weapon", requirement: { shards: 15, highWave: 5 } },
-  { id: "weapon_cannon", name: "Cannon", icon: "(O)", description: "Slow heavy slugs", category: "weapon", requirement: { shards: 30, highScore: 20000 } },
-  { id: "weapon_homing", name: "Homing", icon: "@>@", description: "Bullets seek enemies", category: "weapon", requirement: { shards: 50, highWave: 8 } },
-
   // Themes
   { id: "theme_guitar", name: "Guitar", icon: "♫", description: "Warm picked strings", category: "theme", requirement: { shards: 10 } },
   { id: "theme_bell", name: "Bell", icon: "♪", description: "Crystalline bell tones", category: "theme", requirement: { shards: 25, highWave: 4 } },
@@ -153,4 +154,31 @@ export function requirementText(req: UnlockRequirement): string {
   if (req.highWave != null) parts.push(`Wave ${req.highWave}`);
   if (req.bestChain != null) parts.push(`Chain ${req.bestChain}`);
   return parts.join(" + ");
+}
+
+const MASTERY_THRESHOLD = 10;
+
+export function getWeaponMastery(weaponId: string): WeaponMasteryEntry {
+  return state.weaponMastery[weaponId] ?? { pickups: 0, kills: 0 };
+}
+
+export function isWeaponMastered(weaponId: string): boolean {
+  const m = getWeaponMastery(weaponId);
+  return m.pickups >= MASTERY_THRESHOLD || m.kills >= MASTERY_THRESHOLD;
+}
+
+export function addWeaponPickup(weaponId: string) {
+  if (!state.weaponMastery[weaponId]) {
+    state.weaponMastery[weaponId] = { pickups: 0, kills: 0 };
+  }
+  state.weaponMastery[weaponId].pickups++;
+  saveState();
+}
+
+export function addWeaponKill(weaponId: string) {
+  if (!state.weaponMastery[weaponId]) {
+    state.weaponMastery[weaponId] = { pickups: 0, kills: 0 };
+  }
+  state.weaponMastery[weaponId].kills++;
+  saveState();
 }

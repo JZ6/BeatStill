@@ -7,18 +7,19 @@ import { TimeManager } from "../systems/TimeManager";
 import { AudioManager } from "../systems/AudioManager";
 import { ParticleSystem } from "../systems/Particles";
 import { theremin, allThemes } from "../sounds";
-import { defaultStats, rollUpgrades, type PlayerStats, type UpgradeDef } from "../systems/Upgrades";
+import { defaultStats, ALL_UPGRADES, UPGRADE_COLORS, type PlayerStats, type UpgradeDef } from "../systems/Upgrades";
 import { options } from "../systems/GameOptions";
-import { getWeapon } from "../systems/Weapons";
+import { getWeapon, ALL_WEAPONS } from "../systems/Weapons";
 import { TutorialManager, isTutorialDone } from "../systems/Tutorial";
 import { GAME_W, GAME_H, isMobile } from "../systems/GameConfig";
 import { TouchControls } from "../systems/TouchControls";
-import { Shard } from "../objects/Shard";
-import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, updateBestChain, getState, type UnlockDef } from "../systems/Unlocks";
+import { UpgradePickup } from "../objects/Shard";
+import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, updateBestChain, addWeaponPickup, addWeaponKill, getState, type UnlockDef } from "../systems/Unlocks";
 import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, type LevelDef } from "../systems/Levels";
-import { createUpgradeOverlay } from "../ui/UpgradeOverlay";
 import { Wall } from "../objects/Wall";
+import { checkAchievements, addKill, addBossDefeat, recordWeaponUsed, recordThemeUsed, type AchievementContext } from "../systems/Achievements";
 import type { EnemyType } from "../objects/enemies";
+import { EndlessMode } from "../systems/EndlessMode";
 
 const CHAIN_WINDOW = 800;
 const CHAIN_RADIUS = 120;
@@ -31,7 +32,7 @@ const CHAIN_TIERS = [
   { min: 15, name: "HARMONY",   color: 0xaa44ff, textColor: "#aa44ff", mult: 4 },
   { min: 25, name: "CRESCENDO", color: 0x44ffff, textColor: "#44ffff", mult: 6 },
 ];
-const SHARD_DROP_RATES = [0.15, 0.20, 0.30, 0.40, 0.55, 0.75];
+const DROP_RATES = [0.12, 0.16, 0.22, 0.28, 0.35, 0.45];
 const MAGNET_SPEEDS = [0, 0, 80, 120, 160, 200];
 
 function getChainTier(count: number): number {
@@ -52,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   enemies!: Phaser.GameObjects.Group;
   asteroids!: Phaser.GameObjects.Group;
   walls!: Phaser.GameObjects.Group;
+  private endlessMode!: EndlessMode;
 
   stats!: PlayerStats;
   score = 0;
@@ -61,9 +63,7 @@ export class GameScene extends Phaser.Scene {
   gameOver = false;
   paused = false;
   godMode = false;
-  upgradePending = false;
   bossActive = false;
-  private upgradeOverlay: HTMLDivElement | null = null;
 
   chainTimer = 0;
   chainCount = 0;
@@ -93,14 +93,26 @@ export class GameScene extends Phaser.Scene {
   private touchControls: TouchControls | null = null;
   private pauseBtn: Phaser.GameObjects.Text | null = null;
   private menuBtn: Phaser.GameObjects.Text | null = null;
+  private pauseResumeBtn!: Phaser.GameObjects.Text;
+  private pauseMenuBtn!: Phaser.GameObjects.Text;
+  private confirmOverlay!: Phaser.GameObjects.Graphics;
+  private confirmText!: Phaser.GameObjects.Text;
+  private confirmYes!: Phaser.GameObjects.Text;
+  private confirmNo!: Phaser.GameObjects.Text;
+  private confirmVisible = false;
   shards!: Phaser.GameObjects.Group;
   private shardText!: Phaser.GameObjects.Text;
   private toastText!: Phaser.GameObjects.Text;
-  private toastQueue: UnlockDef[] = [];
+  private toastQueue: string[] = [];
   private toastActive = false;
   private levelDef: LevelDef | null = null;
   private levelWaveIndex = 0;
   private levelComplete = false;
+  private runKills = 0;
+  private runDamageTaken = 0;
+  bossFightDamageTaken = 0;
+  private freezeTime = 0;
+  private levelDamageTaken = 0;
 
   constructor() {
     super("GameScene");
@@ -115,7 +127,6 @@ export class GameScene extends Phaser.Scene {
     this.wave = 0;
     this.gameOver = false;
     this.paused = false;
-    this.upgradePending = false;
     this.chainCount = 0;
     this.chainTimer = 0;
     this.chainTier = 0;
@@ -126,6 +137,12 @@ export class GameScene extends Phaser.Scene {
     this.toastActive = false;
     this.fpsTimer = 0;
     this.tutorial = null;
+    this.confirmVisible = false;
+    this.runKills = 0;
+    this.runDamageTaken = 0;
+    this.bossFightDamageTaken = 0;
+    this.freezeTime = 0;
+    this.levelDamageTaken = 0;
 
     this.bgGraphics = this.add.graphics();
     this.bgGraphics.setDepth(-1);
@@ -147,11 +164,13 @@ export class GameScene extends Phaser.Scene {
     this.asteroids = this.add.group();
     this.shards = this.add.group();
     this.walls = this.add.group();
+    this.endlessMode = new EndlessMode(this);
 
     const shipX = this.levelDef?.shipRx != null ? GAME_W * this.levelDef.shipRx : GAME_W / 2;
     const shipY = this.levelDef?.shipRy != null ? GAME_H * this.levelDef.shipRy : GAME_H / 2;
 
     this.stats = defaultStats();
+    this.stats.weaponId = options.starterWeapon;
     this.particles = new ParticleSystem(this);
     this.ship = new Ship(this, shipX, shipY);
     this.ship.stats = this.stats;
@@ -159,6 +178,7 @@ export class GameScene extends Phaser.Scene {
     this.ship.maxHp = this.stats.maxHp;
     this.timeManager = new TimeManager();
     const selectedTheme = allThemes.find((t) => t.name.toLowerCase() === options.themeId) ?? theremin;
+    recordThemeUsed(selectedTheme.name.toLowerCase());
     if (!this.audioManager) {
       this.audioManager = new AudioManager();
     } else {
@@ -212,8 +232,6 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.events.once("shutdown", () => {
-      this.upgradeOverlay?.remove();
-      this.upgradeOverlay = null;
       this.toastQueue.length = 0;
       this.toastActive = false;
     });
@@ -230,9 +248,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   private togglePause() {
+    if (this.confirmVisible) {
+      this.hideConfirmMenu();
+      return;
+    }
     this.paused = !this.paused;
     this.pauseOverlay.setVisible(this.paused);
     this.pauseText.setVisible(this.paused);
+    this.pauseResumeBtn.setVisible(this.paused);
+    this.pauseMenuBtn.setVisible(this.paused);
+  }
+
+  private showConfirmMenu() {
+    this.confirmVisible = true;
+    this.confirmOverlay.setVisible(true);
+    this.confirmText.setVisible(true);
+    this.confirmYes.setVisible(true);
+    this.confirmNo.setVisible(true);
+  }
+
+  private hideConfirmMenu() {
+    this.confirmVisible = false;
+    this.confirmOverlay.setVisible(false);
+    this.confirmText.setVisible(false);
+    this.confirmYes.setVisible(false);
+    this.confirmNo.setVisible(false);
   }
 
   private createHUD() {
@@ -288,7 +328,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseOverlay.setVisible(false);
 
     this.pauseText = this.add
-      .text(GAME_W / 2, GAME_H / 2 - 40, "PAUSED", {
+      .text(GAME_W / 2, GAME_H / 2 - 60, "PAUSED", {
         fontFamily: "monospace",
         fontSize: "64px",
         color: "#e8d5b0",
@@ -297,6 +337,95 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(201)
       .setVisible(false);
+
+    this.pauseResumeBtn = this.add
+      .text(GAME_W / 2, GAME_H / 2 + 20, "RESUME", {
+        fontFamily: "monospace",
+        fontSize: "22px",
+        color: "#ffaa44",
+      })
+      .setOrigin(0.5)
+      .setDepth(201)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => this.pauseResumeBtn.setColor("#ffcc88"))
+      .on("pointerout", () => this.pauseResumeBtn.setColor("#ffaa44"))
+      .on("pointerdown", (p: Phaser.Input.Pointer) => {
+        p.event.stopPropagation();
+        this.togglePause();
+      });
+
+    this.pauseMenuBtn = this.add
+      .text(GAME_W / 2, GAME_H / 2 + 60, "MAIN MENU", {
+        fontFamily: "monospace",
+        fontSize: "22px",
+        color: "#887766",
+      })
+      .setOrigin(0.5)
+      .setDepth(201)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => this.pauseMenuBtn.setColor("#e8d5b0"))
+      .on("pointerout", () => this.pauseMenuBtn.setColor("#887766"))
+      .on("pointerdown", (p: Phaser.Input.Pointer) => {
+        p.event.stopPropagation();
+        this.showConfirmMenu();
+      });
+
+    this.confirmOverlay = this.add.graphics();
+    this.confirmOverlay.fillStyle(0x000000, 0.7);
+    this.confirmOverlay.fillRect(0, 0, GAME_W, GAME_H);
+    this.confirmOverlay.setDepth(300);
+    this.confirmOverlay.setVisible(false);
+    this.confirmOverlay.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, GAME_W, GAME_H),
+      Phaser.Geom.Rectangle.Contains,
+    );
+
+    this.confirmText = this.add
+      .text(GAME_W / 2, GAME_H / 2 - 30, "QUIT TO MENU?\nProgress will be lost.", {
+        fontFamily: "monospace",
+        fontSize: "20px",
+        color: "#e8d5b0",
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setDepth(301)
+      .setVisible(false);
+
+    this.confirmYes = this.add
+      .text(GAME_W / 2 - 60, GAME_H / 2 + 30, "YES", {
+        fontFamily: "monospace",
+        fontSize: "22px",
+        color: "#ff6644",
+      })
+      .setOrigin(0.5)
+      .setDepth(301)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => this.confirmYes.setColor("#ff9977"))
+      .on("pointerout", () => this.confirmYes.setColor("#ff6644"))
+      .on("pointerdown", (p: Phaser.Input.Pointer) => {
+        p.event.stopPropagation();
+        this.goToMenu();
+      });
+
+    this.confirmNo = this.add
+      .text(GAME_W / 2 + 60, GAME_H / 2 + 30, "NO", {
+        fontFamily: "monospace",
+        fontSize: "22px",
+        color: "#ffaa44",
+      })
+      .setOrigin(0.5)
+      .setDepth(301)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => this.confirmNo.setColor("#ffcc88"))
+      .on("pointerout", () => this.confirmNo.setColor("#ffaa44"))
+      .on("pointerdown", (p: Phaser.Input.Pointer) => {
+        p.event.stopPropagation();
+        this.hideConfirmMenu();
+      });
 
     this.fpsText = this.add
       .text(GAME_W - 16, 40, "", {
@@ -357,6 +486,7 @@ export class GameScene extends Phaser.Scene {
     const inputMagnitude = this.ship.getInputMagnitude();
     this.timeManager.update(inputMagnitude, delta);
     const ts = this.timeManager.scale;
+    if (ts < 0.15) this.freezeTime += delta / 1000;
 
     this.ship.update(delta, ts, this);
 
@@ -386,20 +516,20 @@ export class GameScene extends Phaser.Scene {
     for (const b of [...this.enemyBullets.getChildren()] as Bullet[]) b.update(delta, ts);
 
     this.checkCollisions();
-    this.collectShards();
+    this.collectPickups();
 
-    const shardArr = [...this.shards.getChildren()] as Shard[];
+    const pickupArr = [...this.shards.getChildren()] as UpgradePickup[];
     const magnetSpd = MAGNET_SPEEDS[this.chainTier] ?? 0;
-    for (const s of shardArr) {
-      if (s.alive) {
+    for (const p of pickupArr) {
+      if (p.alive) {
         if (magnetSpd > 0 && this.chainTimer > 0) {
-          s.magnetTarget = this.ship;
-          s.magnetSpeed = magnetSpd;
+          p.magnetTarget = this.ship;
+          p.magnetSpeed = magnetSpd;
         } else {
-          s.magnetTarget = null;
-          s.magnetSpeed = 0;
+          p.magnetTarget = null;
+          p.magnetSpeed = 0;
         }
-        s.update(delta, ts);
+        p.update(delta, ts);
       }
     }
 
@@ -432,12 +562,9 @@ export class GameScene extends Phaser.Scene {
     this.updateScorePopups(delta, ts);
 
     this.waveTimer += delta * ts;
-    if (enemyArr.length === 0 && this.waveTimer > this.waveDelay && !this.upgradePending && !this.levelComplete) {
+    if (enemyArr.length === 0 && this.waveTimer > this.waveDelay && !this.levelComplete) {
       if (this.levelDef) {
         this.advanceLevelWave();
-      } else if (this.wave > 0) {
-        this.upgradePending = true;
-        this.showUpgradeSelection();
       } else {
         this.spawnWave();
       }
@@ -516,11 +643,23 @@ export class GameScene extends Phaser.Scene {
     this.lastKillX = x;
     this.lastKillY = y;
 
-    const dropRate = SHARD_DROP_RATES[this.chainTier] ?? 0.15;
-    if (Math.random() < dropRate) {
-      const shard = new Shard(this, x, y);
-      this.shards.add(shard);
+    if (this.stats.weaponId !== "standard") {
+      addWeaponKill(this.stats.weaponId);
     }
+
+    this.runKills++;
+    addKill();
+
+    const dropRate = DROP_RATES[this.chainTier] ?? 0.12;
+    if (Math.random() < dropRate) {
+      const upgrade = this.rollDrop();
+      if (upgrade) {
+        const pickup = new UpgradePickup(this, x, y, upgrade);
+        this.shards.add(pickup);
+      }
+    }
+
+    this.processAchievements(false, false);
   }
 
   private updateChainArc(ts: number) {
@@ -569,17 +708,24 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private collectShards() {
-    const shardArr = [...this.shards.getChildren()] as Shard[];
-    for (const s of shardArr) {
-      if (!s.alive) continue;
-      const dx = s.x - this.ship.x;
-      const dy = s.y - this.ship.y;
+  private collectPickups() {
+    const pickupArr = [...this.shards.getChildren()] as UpgradePickup[];
+    for (const p of pickupArr) {
+      if (!p.alive) continue;
+      const dx = p.x - this.ship.x;
+      const dy = p.y - this.ship.y;
       if (dx * dx + dy * dy < 40 * 40) {
+        this.applyUpgrade(p.upgrade);
+        if (p.upgrade.isWeapon) {
+          const wId = p.upgrade.id.replace("weapon_", "");
+          addWeaponPickup(wId);
+          recordWeaponUsed(wId);
+        }
         addShards(1);
-        this.particles.burst(s.x, s.y, 0xffaa44, 8, 50, 2);
-        s.kill();
+        this.particles.burst(p.x, p.y, p.pickupColor, 10, 50, 2);
+        p.kill();
         this.shardText.setText(`◆ ${getState().shards}`);
+        this.spawnScorePopup(p.x, p.y, p.upgrade.name, `#${p.pickupColor.toString(16).padStart(6, "0")}`);
         this.processUnlocks();
       }
     }
@@ -588,7 +734,30 @@ export class GameScene extends Phaser.Scene {
   private processUnlocks() {
     const newUnlocks = checkNewUnlocks();
     for (const u of newUnlocks) {
-      this.toastQueue.push(u);
+      this.toastQueue.push(`UNLOCKED: ${u.name}`);
+    }
+    if (!this.toastActive && this.toastQueue.length > 0) {
+      this.showNextToast();
+    }
+  }
+
+  private processAchievements(bossJustKilled: boolean, levelJustCompleted: boolean) {
+    const ctx: AchievementContext = {
+      runKills: this.runKills,
+      wave: this.wave,
+      score: this.score,
+      bestChain: this.bestChain,
+      hp: this.ship.hp,
+      maxHp: this.ship.maxHp,
+      freezeTime: this.freezeTime,
+      bossFightDamageTaken: this.bossFightDamageTaken,
+      levelDamageTaken: this.levelDamageTaken,
+      bossJustKilled,
+      levelJustCompleted,
+    };
+    const newAchievements = checkAchievements(ctx);
+    for (const a of newAchievements) {
+      this.toastQueue.push(`★ ${a.name}`);
     }
     if (!this.toastActive && this.toastQueue.length > 0) {
       this.showNextToast();
@@ -598,8 +767,8 @@ export class GameScene extends Phaser.Scene {
   private showNextToast() {
     if (this.toastQueue.length === 0 || !this.toastText?.active) { this.toastActive = false; return; }
     this.toastActive = true;
-    const u = this.toastQueue.shift()!;
-    this.toastText.setText(`UNLOCKED: ${u.name}`);
+    const msg = this.toastQueue.shift()!;
+    this.toastText.setText(msg);
     this.tweens.add({
       targets: this.toastText,
       alpha: { from: 0, to: 1 },
@@ -621,7 +790,7 @@ export class GameScene extends Phaser.Scene {
     this.collideBulletsVsAsteroids(playerBullets, asteroidArr);
     this.collideBulletVsBullet(playerBullets, enemyBullets);
     this.collideWalls(wallArr, playerBullets, enemyBullets, enemyArr);
-    if (!this.ship.isInvincible() && !this.godMode && !this.levelComplete && !this.upgradePending) {
+    if (!this.ship.isInvincible() && !this.godMode && !this.levelComplete) {
       if (this.collideShipVsBullets(enemyBullets)) return;
       this.collideShipVsAsteroids(asteroidArr);
     }
@@ -699,6 +868,9 @@ export class GameScene extends Phaser.Scene {
       if (!b.alive) continue;
       if (this.circleOverlap(b.x, b.y, b.radius, this.ship.x, this.ship.y, 4)) {
         b.kill();
+        this.runDamageTaken++;
+        this.bossFightDamageTaken++;
+        this.levelDamageTaken++;
         this.particles.burst(this.ship.x, this.ship.y, 0xff4422, 15, 80, 3);
         if (this.ship.takeDamage(1)) {
           this.triggerGameOver();
@@ -715,6 +887,9 @@ export class GameScene extends Phaser.Scene {
     for (const a of asteroidArr) {
       if (!a.active) continue;
       if (this.circleOverlap(a.x, a.y, a.radius, this.ship.x, this.ship.y, 4)) {
+        this.runDamageTaken++;
+        this.bossFightDamageTaken++;
+        this.levelDamageTaken++;
         this.particles.burst(this.ship.x, this.ship.y, 0xff4422, 15, 80, 3);
         if (this.ship.takeDamage(1)) {
           this.triggerGameOver();
@@ -767,55 +942,14 @@ export class GameScene extends Phaser.Scene {
     this.waveText.setText(`WAVE ${this.wave}`);
     updateHighWave(this.wave);
     this.processUnlocks();
-
-    if (this.wave >= 5 && this.wave % 5 === 0) {
-      this.spawnBossWave();
-      return;
-    }
-
-    const enemyCount = 8 + this.wave * 3;
-    const pool = this.buildEnemyPool(this.wave);
-
-    for (let i = 0; i < enemyCount; i++) {
-      const { x, y } = this.randomEdgePosition();
-      const type = pool[Math.floor(Math.random() * pool.length)];
-      this.enemies.add(createEnemy(this, x, y, type));
-    }
-
-    const asteroidCount = 1 + Math.floor(this.wave / 2);
-    for (let i = 0; i < asteroidCount; i++) {
-      const ax = Math.random() < 0.5 ? -40 : GAME_W + 40;
-      const ay = Phaser.Math.Between(80, GAME_H - 80);
-      this.asteroids.add(new Asteroid(this, ax, ay, "large"));
-    }
-  }
-
-  private spawnBossWave() {
-    this.bossActive = true;
-    this.waveText.setText(`WAVE ${this.wave} — BOSS`);
-
-    const warningText = this.add.text(GAME_W / 2, GAME_H / 2, "WARNING", {
-      fontFamily: "monospace", fontSize: "42px", color: "#ff4444", align: "center",
-    }).setOrigin(0.5).setDepth(100).setAlpha(0);
-
-    this.tweens.add({
-      targets: warningText,
-      alpha: { from: 0, to: 1 },
-      duration: 400,
-      yoyo: true,
-      repeat: 2,
-      onComplete: () => {
-        warningText.destroy();
-        const bossType = (this.wave % 10 === 0 && this.wave >= 10) ? "phantom" as const : "sentinel" as const;
-        this.enemies.add(createEnemy(this, GAME_W / 2, -40, bossType));
-      },
-    });
-
-    if (this.audioStarted) this.audioManager.onBossWarning();
+    this.processAchievements(false, false);
+    this.endlessMode.spawnWave();
   }
 
   private onBossKill(x: number, y: number) {
     this.bossActive = false;
+    addBossDefeat();
+    this.processAchievements(true, false);
 
     this.particles.burst(x, y, 0xffaa22, 40, 150, 5);
     this.particles.burst(x, y, 0xffcc66, 40, 120, 4);
@@ -829,8 +963,13 @@ export class GameScene extends Phaser.Scene {
     });
 
     for (let i = 0; i < 4; i++) {
-      const shard = new Shard(this, x + Phaser.Math.Between(-30, 30), y + Phaser.Math.Between(-30, 30));
-      this.shards.add(shard);
+      const upgrade = this.rollDrop();
+      if (upgrade) {
+        const ox = (i - 1.5) * 40;
+        const oy = -20 + Math.random() * 40;
+        const pickup = new UpgradePickup(this, x + ox, y + oy, upgrade);
+        this.shards.add(pickup);
+      }
     }
 
     const defeatedText = this.add.text(GAME_W / 2, GAME_H / 2, "BOSS DEFEATED", {
@@ -843,30 +982,8 @@ export class GameScene extends Phaser.Scene {
       duration: 500,
       yoyo: true,
       hold: 1500,
-      onComplete: () => {
-        defeatedText.destroy();
-        this.upgradePending = true;
-        this.showBossUpgradeSelection();
-      },
+      onComplete: () => defeatedText.destroy(),
     });
-  }
-
-  private showBossUpgradeSelection() {
-    const upgrades = rollUpgrades(this.stats, 4);
-    if (upgrades.length === 0) {
-      this.upgradePending = false;
-      this.spawnWave();
-      return;
-    }
-    const overlay = createUpgradeOverlay(upgrades, this.stats, (upg) => {
-      this.applyUpgrade(upg);
-      overlay.remove();
-      this.upgradeOverlay = null;
-      this.upgradePending = false;
-      this.spawnWave();
-    });
-    this.upgradeOverlay = overlay;
-    document.body.appendChild(overlay);
   }
 
   private spawnLevelWave(index: number) {
@@ -918,16 +1035,18 @@ export class GameScene extends Phaser.Scene {
     this.levelComplete = true;
     markLevelComplete(this.levelDef!.id);
 
-    for (const s of [...this.shards.getChildren()] as Shard[]) {
-      if (s.alive) {
+    for (const p of [...this.shards.getChildren()] as UpgradePickup[]) {
+      if (p.alive) {
+        this.applyUpgrade(p.upgrade);
         addShards(1);
-        this.particles.burst(s.x, s.y, 0xffaa44, 8, 50, 2);
-        s.kill();
+        this.particles.burst(p.x, p.y, p.pickupColor, 8, 50, 2);
+        p.kill();
       }
     }
     this.shardText.setText(`◆ ${getState().shards}`);
 
     this.processUnlocks();
+    this.processAchievements(false, true);
 
     this.gameOverText.setColor("#ffaa44");
     this.gameOverText.setText("LEVEL COMPLETE");
@@ -953,7 +1072,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const levelsBtn = this.add
-      .text(GAME_W / 2, btnY + 40, "LEVELS", {
+      .text(GAME_W / 2, btnY + 40, "CAMPAIGN", {
         fontFamily: "monospace", fontSize: "18px", color: "#887766",
       })
       .setOrigin(0.5)
@@ -967,13 +1086,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   buildEnemyPool(wave: number): EnemyType[] {
-    const pool: EnemyType[] = ["basic", "tracker"];
-    if (wave >= 2) pool.push("sniper");
-    if (wave >= 3) pool.push("swarm", "swarm", "snake");
-    if (wave >= 4) pool.push("spiral");
-    if (wave >= 5) pool.push("circler");
-    if (wave >= 6) pool.push("tank");
-    return pool;
+    return this.endlessMode.buildEnemyPool(wave);
   }
 
   clearEnemies() {
@@ -1000,25 +1113,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  showUpgradeSelection() {
-    const upgrades = rollUpgrades(this.stats, 3);
-    if (upgrades.length === 0) {
-      this.upgradePending = false;
-      this.spawnWave();
-      return;
-    }
-
-    const overlay = createUpgradeOverlay(upgrades, this.stats, (upg) => {
-      this.applyUpgrade(upg);
-      overlay.remove();
-      this.upgradeOverlay = null;
-      this.upgradePending = false;
-      this.spawnWave();
-    });
-    this.upgradeOverlay = overlay;
-    document.body.appendChild(overlay);
-  }
-
   applyUpgrade(upg: UpgradeDef) {
     const wasMaxHp = this.stats.maxHp;
     upg.apply(this.stats);
@@ -1027,6 +1121,19 @@ export class GameScene extends Phaser.Scene {
       this.ship.hp = Math.min(this.ship.hp + 1, this.ship.maxHp);
       this.ship.drawHealthBar();
     }
+  }
+
+  private rollDrop(): UpgradeDef | null {
+    const isWeaponDrop = Math.random() < 0.2;
+    if (isWeaponDrop) {
+      const weapons = ALL_UPGRADES.filter((u) => u.isWeapon && u.id !== "weapon_standard");
+      if (weapons.length > 0) {
+        return weapons[Math.floor(Math.random() * weapons.length)];
+      }
+    }
+    const eligible = ALL_UPGRADES.filter((u) => !u.isWeapon && u.level(this.stats) < u.maxLevel);
+    if (eligible.length === 0) return null;
+    return eligible[Math.floor(Math.random() * eligible.length)];
   }
 
   triggerGameOver() {
@@ -1039,13 +1146,14 @@ export class GameScene extends Phaser.Scene {
     updateHighWave(this.wave);
     updateBestChain(this.bestChain);
     this.processUnlocks();
+    this.processAchievements(false, false);
 
     const mobile = isMobile();
     const isLevel = !!this.levelDef;
 
     let controls: string;
     if (isLevel) {
-      controls = mobile ? "TAP TO RETRY" : "R — retry   ESC — levels";
+      controls = mobile ? "TAP TO RETRY" : "R — retry   ESC — campaign";
     } else {
       controls = mobile ? "TAP TO RESTART" : "R — restart   ESC — menu";
     }
@@ -1062,7 +1170,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createMobileGameOverUI(isLevel: boolean) {
-    const menuLabel = isLevel ? "LEVELS" : "MENU";
+    const menuLabel = isLevel ? "CAMPAIGN" : "MENU";
     this.menuBtn = this.add
       .text(GAME_W / 2, GAME_H / 2 + 120, menuLabel, {
         fontFamily: "monospace",
@@ -1085,10 +1193,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private goToMenu() {
-    if (this.upgradeOverlay) {
-      this.upgradeOverlay.remove();
-      this.upgradeOverlay = null;
-    }
     if (this.levelDef) {
       this.scene.start("LevelSelectScene");
     } else {

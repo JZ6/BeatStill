@@ -1,6 +1,67 @@
 import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
 
+import { level01 } from "../levels/level01";
+import { level02 } from "../levels/level02";
+import { level03 } from "../levels/level03";
+import { level04 } from "../levels/level04";
+import { level05 } from "../levels/level05";
+import { level06 } from "../levels/level06";
+import { level07 } from "../levels/level07";
+import { level08 } from "../levels/level08";
+import { level09 } from "../levels/level09";
+import { level10 } from "../levels/level10";
+import { level11 } from "../levels/level11";
+import { level12 } from "../levels/level12";
+import { level13 } from "../levels/level13";
+import { level14 } from "../levels/level14";
+import { level15 } from "../levels/level15";
+import { level16 } from "../levels/level16";
+import { level17 } from "../levels/level17";
+import { level18 } from "../levels/level18";
+import { level19 } from "../levels/level19";
+import { level20 } from "../levels/level20";
+import { level21 } from "../levels/level21";
+import { level22 } from "../levels/level22";
+import { level23 } from "../levels/level23";
+import { level24 } from "../levels/level24";
+import { level25 } from "../levels/level25";
+import { level26 } from "../levels/level26";
+import { level27 } from "../levels/level27";
+import { level28 } from "../levels/level28";
+import { level29 } from "../levels/level29";
+import { level30 } from "../levels/level30";
+import { level31 } from "../levels/level31";
+import { level32 } from "../levels/level32";
+import { level33 } from "../levels/level33";
+import { level34 } from "../levels/level34";
+import { level35 } from "../levels/level35";
+import { level36 } from "../levels/level36";
+import { level37 } from "../levels/level37";
+import { level38 } from "../levels/level38";
+import { level39 } from "../levels/level39";
+import { level40 } from "../levels/level40";
+import { level41 } from "../levels/level41";
+import { level42 } from "../levels/level42";
+import { level43 } from "../levels/level43";
+import { level44 } from "../levels/level44";
+import { level45 } from "../levels/level45";
+import { level46 } from "../levels/level46";
+import { level47 } from "../levels/level47";
+import { level48 } from "../levels/level48";
+import { level49 } from "../levels/level49";
+import { level50 } from "../levels/level50";
+import { level51 } from "../levels/level51";
+import { level52 } from "../levels/level52";
+import { level53 } from "../levels/level53";
+import { level54 } from "../levels/level54";
+import { level55 } from "../levels/level55";
+import { level56 } from "../levels/level56";
+import { level57 } from "../levels/level57";
+import { level58 } from "../levels/level58";
+import { level59 } from "../levels/level59";
+import { level60 } from "../levels/level60";
+
 type AsteroidSize = "large" | "medium" | "small";
 
 export interface LevelEnemy {
@@ -46,242 +107,18 @@ export interface LevelDef {
 }
 
 export const ALL_LEVELS: LevelDef[] = [
-  {
-    id: 1,
-    name: "The Hallway",
-    description: "Two tanks guard the far end",
-    shipRx: 0.5, shipRy: 0.85,
-    waves: [{
-      enemies: [
-        { type: "tank", rx: 0.35, ry: 0.1 },
-        { type: "tank", rx: 0.65, ry: 0.1 },
-      ],
-      walls: [
-        { rx: 0, ry: 0, rw: 0.3, rh: 1, type: "solid" },
-        { rx: 0.7, ry: 0, rw: 0.3, rh: 1, type: "solid" },
-      ],
-      initialBullets: [
-        ...Array.from({ length: 6 }, (_, i) => ({
-          rx: 0.35, ry: 0.15, angle: Math.PI / 2 + (i - 2.5) * 0.12, speed: 100,
-        })),
-        ...Array.from({ length: 6 }, (_, i) => ({
-          rx: 0.65, ry: 0.15, angle: Math.PI / 2 + (i - 2.5) * 0.12, speed: 100,
-        })),
-      ],
-    }],
-  },
-  {
-    id: 2,
-    name: "Spiral Galaxy",
-    description: "Surrounded by spinning death",
-    waves: [{
-      enemies: [
-        { type: "spiral", rx: 0.2, ry: 0.2 },
-        { type: "spiral", rx: 0.8, ry: 0.2 },
-        { type: "spiral", rx: 0.2, ry: 0.8 },
-        { type: "spiral", rx: 0.8, ry: 0.8 },
-      ],
-    }],
-  },
-  {
-    id: 3,
-    name: "Sniper Alley",
-    description: "Six snipers line the walls",
-    waves: [{
-      enemies: [
-        { type: "sniper", rx: 0.05, ry: 0.2 },
-        { type: "sniper", rx: 0.05, ry: 0.5 },
-        { type: "sniper", rx: 0.05, ry: 0.8 },
-        { type: "sniper", rx: 0.95, ry: 0.2 },
-        { type: "sniper", rx: 0.95, ry: 0.5 },
-        { type: "sniper", rx: 0.95, ry: 0.8 },
-      ],
-      walls: [
-        { rx: 0.38, ry: 0.25, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-        { rx: 0.56, ry: 0.25, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-        { rx: 0.38, ry: 0.6, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-        { rx: 0.56, ry: 0.6, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-        { rx: 0.12, ry: 0, rw: 0.03, rh: 1, type: "bounce" },
-        { rx: 0.85, ry: 0, rw: 0.03, rh: 1, type: "bounce" },
-      ],
-    }],
-  },
-  {
-    id: 4,
-    name: "The Swarm",
-    description: "They come from everywhere",
-    waves: [{
-      enemies: Array.from({ length: 30 }, (_, i) => {
-        const edge = i % 4;
-        const t = (i / 30) + Math.random() * 0.05;
-        if (edge === 0) return { type: "swarm" as EnemyType, rx: t, ry: -0.04 };
-        if (edge === 1) return { type: "swarm" as EnemyType, rx: 1.04, ry: t };
-        if (edge === 2) return { type: "swarm" as EnemyType, rx: t, ry: 1.04 };
-        return { type: "swarm" as EnemyType, rx: -0.04, ry: t };
-      }),
-    }],
-  },
-  {
-    id: 5,
-    name: "Crossfire",
-    description: "Tanks on all sides",
-    waves: [{
-      enemies: [
-        { type: "tank", rx: 0.5, ry: 0.05 },
-        { type: "tank", rx: 0.95, ry: 0.5 },
-        { type: "tank", rx: 0.5, ry: 0.95 },
-        { type: "tank", rx: 0.05, ry: 0.5 },
-      ],
-    }],
-  },
-  {
-    id: 6,
-    name: "Asteroid Field",
-    description: "Navigate the debris",
-    shipRx: 0.15, shipRy: 0.5,
-    waves: [{
-      enemies: [
-        { type: "sniper", rx: 0.85, ry: 0.3 },
-        { type: "sniper", rx: 0.85, ry: 0.7 },
-      ],
-      asteroids: [
-        { rx: 0.3, ry: 0.2, size: "large" },
-        { rx: 0.45, ry: 0.45, size: "large" },
-        { rx: 0.55, ry: 0.7, size: "large" },
-        { rx: 0.65, ry: 0.25, size: "large" },
-        { rx: 0.4, ry: 0.8, size: "medium" },
-        { rx: 0.7, ry: 0.55, size: "medium" },
-        { rx: 0.35, ry: 0.55, size: "medium" },
-        { rx: 0.6, ry: 0.9, size: "medium" },
-      ],
-    }],
-  },
-  {
-    id: 7,
-    name: "Boss Rush",
-    description: "Everything at once",
-    waves: [{
-      enemies: [
-        { type: "tank", rx: 0.2, ry: 0.1 },
-        { type: "tank", rx: 0.5, ry: 0.05 },
-        { type: "tank", rx: 0.8, ry: 0.1 },
-        { type: "spiral", rx: 0.1, ry: 0.5 },
-        { type: "spiral", rx: 0.9, ry: 0.5 },
-        { type: "tracker", rx: 0.15, ry: 0.85 },
-        { type: "tracker", rx: 0.4, ry: 0.9 },
-        { type: "tracker", rx: 0.6, ry: 0.9 },
-        { type: "tracker", rx: 0.85, ry: 0.85 },
-      ],
-    }],
-  },
-  {
-    id: 8,
-    name: "The Gauntlet",
-    description: "Three waves, no rest",
-    waves: [
-      {
-        enemies: Array.from({ length: 15 }, (_, i) => {
-          const edge = i % 4;
-          const t = 0.1 + (i / 15) * 0.8;
-          if (edge === 0) return { type: "swarm" as EnemyType, rx: t, ry: -0.04 };
-          if (edge === 1) return { type: "swarm" as EnemyType, rx: 1.04, ry: t };
-          if (edge === 2) return { type: "swarm" as EnemyType, rx: t, ry: 1.04 };
-          return { type: "swarm" as EnemyType, rx: -0.04, ry: t };
-        }),
-      },
-      {
-        enemies: [
-          { type: "sniper", rx: 0.05, ry: 0.15 },
-          { type: "sniper", rx: 0.05, ry: 0.5 },
-          { type: "sniper", rx: 0.05, ry: 0.85 },
-          { type: "sniper", rx: 0.95, ry: 0.15 },
-          { type: "sniper", rx: 0.95, ry: 0.5 },
-          { type: "sniper", rx: 0.95, ry: 0.85 },
-        ],
-      },
-      {
-        enemies: [
-          { type: "tank", rx: 0.3, ry: 0.1 },
-          { type: "tank", rx: 0.7, ry: 0.1 },
-          { type: "spiral", rx: 0.15, ry: 0.5 },
-          { type: "spiral", rx: 0.85, ry: 0.5 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 9,
-    name: "Bullet Spiral",
-    description: "Navigate the spiral path",
-    shipRx: 0.9, shipRy: 0.5,
-    waves: [{
-      enemies: [
-        { type: "sniper", rx: 0.5, ry: 0.45 },
-        { type: "sniper", rx: 0.5, ry: 0.55 },
-      ],
-      initialBullets: (() => {
-        const bullets: { rx: number; ry: number; angle: number; speed: number }[] = [];
-        const cx = 0.5, cy = 0.5;
-        const step = 0.04;
-        for (let gx = 0.05; gx <= 0.95; gx += step) {
-          for (let gy = 0.05; gy <= 0.95; gy += step) {
-            const dx = gx - cx;
-            const dy = gy - cy;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const angle = Math.atan2(dy, dx);
-            const spiralR = 0.06 + (((angle + Math.PI) / (Math.PI * 2)) * 0.35 + dist * 0.3) % 0.4;
-            if (Math.abs(dist - spiralR) > 0.035) {
-              bullets.push({ rx: gx, ry: gy, angle: 0, speed: 0 });
-            }
-          }
-        }
-        return bullets;
-      })(),
-    }],
-  },
-
-  // Boss Levels
-  {
-    id: 10,
-    name: "The Sentinel",
-    description: "Face the fortress",
-    waves: [
-      {
-        enemies: [
-          { type: "swarm", rx: 0.2, ry: -0.04 },
-          { type: "swarm", rx: 0.5, ry: -0.04 },
-          { type: "swarm", rx: 0.8, ry: -0.04 },
-          { type: "tracker", rx: 0.3, ry: -0.04 },
-          { type: "tracker", rx: 0.7, ry: -0.04 },
-        ],
-      },
-      {
-        enemies: [
-          { type: "sentinel", rx: 0.5, ry: 0.15 },
-        ],
-      },
-    ],
-  },
-  {
-    id: 11,
-    name: "The Phantom",
-    description: "Hunt the time thief",
-    waves: [
-      {
-        enemies: [
-          { type: "sniper", rx: 0.2, ry: 0.15 },
-          { type: "sniper", rx: 0.8, ry: 0.15 },
-          { type: "basic", rx: 0.4, ry: 0.2 },
-          { type: "basic", rx: 0.6, ry: 0.2 },
-        ],
-      },
-      {
-        enemies: [
-          { type: "phantom", rx: 0.5, ry: 0.2 },
-        ],
-      },
-    ],
-  },
+  level01, level02, level03, level04, level05,
+  level06, level07, level08, level09, level10,
+  level11, level12, level13, level14, level15,
+  level16, level17, level18, level19, level20,
+  level21, level22, level23, level24, level25,
+  level26, level27, level28, level29, level30,
+  level31, level32, level33, level34, level35,
+  level36, level37, level38, level39, level40,
+  level41, level42, level43, level44, level45,
+  level46, level47, level48, level49, level50,
+  level51, level52, level53, level54, level55,
+  level56, level57, level58, level59, level60,
 ];
 
 interface LevelProgress {

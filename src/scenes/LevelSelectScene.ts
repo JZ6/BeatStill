@@ -19,7 +19,7 @@ export class LevelSelectScene extends Phaser.Scene {
     bg.setDepth(-1);
 
     this.add
-      .text(GAME_W / 2, 50, "SELECT LEVEL", {
+      .text(GAME_W / 2, 50, "CAMPAIGN", {
         fontFamily: "monospace",
         fontSize: "36px",
         color: "#e8d5b0",

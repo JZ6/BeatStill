@@ -1,5 +1,4 @@
 import { ALL_WEAPONS } from "./Weapons";
-import { isUnlocked } from "./Unlocks";
 
 export interface PlayerStats {
   bulletCount: number;
@@ -146,39 +145,15 @@ export const ALL_UPGRADES: UpgradeDef[] = [
   } satisfies UpgradeDef)),
 ];
 
-const ALWAYS_UNLOCKED_UPGRADES = new Set(["bulletCount", "bulletSpread", "maxHp", "bulletSpeed", "moveSpeed"]);
-
-function isUpgradeAvailable(u: UpgradeDef): boolean {
-  if (u.isWeapon) return isUnlocked(`weapon_${u.id.replace("weapon_", "")}`);
-  if (ALWAYS_UNLOCKED_UPGRADES.has(u.id)) return true;
-  return isUnlocked(`upgrade_${u.id}`);
-}
-
-export function rollUpgrades(stats: PlayerStats, count = 3): UpgradeDef[] {
-  const statUpgrades = ALL_UPGRADES.filter((u) => !u.isWeapon && u.level(stats) < u.maxLevel && isUpgradeAvailable(u));
-  const weaponUpgrades = ALL_UPGRADES.filter((u) => u.isWeapon && u.level(stats) < u.maxLevel && isUpgradeAvailable(u));
-
-  const picked: UpgradeDef[] = [];
-  const statPool = [...statUpgrades];
-  const weapPool = [...weaponUpgrades];
-
-  // guarantee at most 1 weapon offer per roll
-  if (weapPool.length > 0 && Math.random() < 0.45) {
-    const i = Math.floor(Math.random() * weapPool.length);
-    picked.push(weapPool.splice(i, 1)[0]);
-  }
-
-  const remaining = [...statPool];
-  while (picked.length < count && remaining.length > 0) {
-    const i = Math.floor(Math.random() * remaining.length);
-    picked.push(remaining.splice(i, 1)[0]);
-  }
-
-  // shuffle so weapon card isn't always first
-  for (let i = picked.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [picked[i], picked[j]] = [picked[j], picked[i]];
-  }
-
-  return picked;
-}
+export const UPGRADE_COLORS: Record<string, number> = {
+  bulletCount: 0xff8844,
+  bulletSpread: 0xffcc44,
+  pierce: 0x44ffaa,
+  maxHp: 0xff4444,
+  fireCooldown: 0xffff44,
+  bulletSpeed: 0x44ccff,
+  damage: 0xff6644,
+  moveSpeed: 0x88ff88,
+  chainWindow: 0xffaa88,
+  chainRadius: 0xffcc88,
+};

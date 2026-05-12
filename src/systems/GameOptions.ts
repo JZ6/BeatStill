@@ -10,6 +10,7 @@ export interface GameOptions {
   controls: number;        // 0=auto, 1=keyboard+mouse, 2=touch
   shipColor: number;       // hex color for ship outline
   themeId: string;         // sound theme id
+  starterWeapon: string;   // weapon id for run start
 }
 
 const DEFAULTS: GameOptions = {
@@ -22,6 +23,7 @@ const DEFAULTS: GameOptions = {
   controls: 0,
   shipColor: 0x00ffff,
   themeId: "theremin",
+  starterWeapon: "standard",
 };
 
 const STORAGE_KEY = "beatstill_options";

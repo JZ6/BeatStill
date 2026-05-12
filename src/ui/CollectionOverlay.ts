@@ -1,5 +1,7 @@
 import { options, saveOptions } from "../systems/GameOptions";
-import { ALL_UNLOCKS, getState, isUnlocked, requirementText, SHIP_COLORS } from "../systems/Unlocks";
+import { ALL_UNLOCKS, getState, isUnlocked, requirementText, SHIP_COLORS, getWeaponMastery, isWeaponMastered } from "../systems/Unlocks";
+import { ALL_WEAPONS } from "../systems/Weapons";
+import { ALL_ACHIEVEMENTS, isAchievementUnlocked, getAchievementState } from "../systems/Achievements";
 
 export function createCollectionOverlay(onClose: () => void): HTMLDivElement {
   const state = getState();
@@ -16,8 +18,8 @@ export function createCollectionOverlay(onClose: () => void): HTMLDivElement {
   shardCount.textContent = `◆ ${state.shards} shards  |  Best: ${state.highScore} pts  |  Wave ${state.highWave}  |  Chain ${state.bestChain}`;
   overlay.appendChild(shardCount);
 
-  const categories = ["weapon", "theme", "upgrade", "cosmetic"] as const;
-  const categoryLabels: Record<string, string> = { weapon: "Weapons", theme: "Themes", upgrade: "Upgrades", cosmetic: "Ship" };
+  const categories = ["weapon", "theme", "upgrade", "cosmetic", "achieve"] as const;
+  const categoryLabels: Record<string, string> = { weapon: "Weapons", theme: "Themes", upgrade: "Upgrades", cosmetic: "Ship", achieve: "Feats" };
 
   const tabBar = document.createElement("div");
   tabBar.style.cssText = "display:flex;gap:4px;justify-content:center;margin:8px 0;";
@@ -33,7 +35,44 @@ export function createCollectionOverlay(onClose: () => void): HTMLDivElement {
     });
 
     if (cat === "weapon") {
-      addCollectionCard(contentArea, "Standard", "---", "Always available", true, false, false);
+      const stdEquipped = options.starterWeapon === "standard";
+      addCollectionCard(contentArea, "Standard", "---", "Always available", true, stdEquipped, true,
+        () => { options.starterWeapon = "standard"; saveOptions(options); showCategory(cat); });
+
+      for (const w of ALL_WEAPONS.filter((wp) => wp.id !== "standard")) {
+        const mastery = getWeaponMastery(w.id);
+        const mastered = isWeaponMastered(w.id);
+        const equipped = options.starterWeapon === w.id;
+        const best = Math.max(mastery.pickups, mastery.kills);
+        const subtext = mastered ? w.description : `${best}/10 mastery`;
+        addCollectionCard(contentArea, w.name, w.icon, subtext, mastered, equipped, mastered,
+          mastered ? () => { options.starterWeapon = w.id; saveOptions(options); showCategory(cat); } : undefined);
+      }
+      return;
+    }
+    if (cat === "achieve") {
+      const achState = getAchievementState();
+      const unlocked = achState.unlockedIds.length;
+      const total = ALL_ACHIEVEMENTS.length;
+      const counter = document.createElement("div");
+      counter.style.cssText = "font-family:monospace;font-size:13px;color:#887766;text-align:center;width:100%;margin-bottom:4px;";
+      counter.textContent = `${unlocked}/${total} unlocked`;
+      contentArea.appendChild(counter);
+
+      const catOrder = ["milestone", "mastery", "discovery"] as const;
+      const catLabels: Record<string, string> = { milestone: "MILESTONES", mastery: "MASTERY", discovery: "DISCOVERY" };
+      for (const ac of catOrder) {
+        const group = ALL_ACHIEVEMENTS.filter((a) => a.category === ac);
+        const label = document.createElement("div");
+        label.style.cssText = "font-family:monospace;font-size:11px;color:#666;letter-spacing:2px;width:100%;text-align:center;margin-top:8px;";
+        label.textContent = catLabels[ac];
+        contentArea.appendChild(label);
+        for (const a of group) {
+          const done = isAchievementUnlocked(a.id);
+          addCollectionCard(contentArea, a.name, done ? a.icon : "?", done ? a.description : "???", done, false, false);
+        }
+      }
+      return;
     }
     if (cat === "theme") {
       addCollectionCard(contentArea, "Theremin", "♫", "Default theme", true, options.themeId === "theremin", true,
