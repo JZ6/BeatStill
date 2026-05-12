@@ -2,31 +2,25 @@ import type { LevelDef } from "../systems/Levels";
 
 export const level09: LevelDef = {
   id: 9,
-  name: "Bullet Spiral",
-  description: "Navigate the spiral path",
-  shipRx: 0.9, shipRy: 0.5,
-  waves: [{
-    enemies: [
-      { type: "sniper", rx: 0.5, ry: 0.45 },
-      { type: "sniper", rx: 0.5, ry: 0.55 },
-    ],
-    initialBullets: (() => {
-      const bullets: { rx: number; ry: number; angle: number; speed: number }[] = [];
-      const cx = 0.5, cy = 0.5;
-      const step = 0.04;
-      for (let gx = 0.05; gx <= 0.95; gx += step) {
-        for (let gy = 0.05; gy <= 0.95; gy += step) {
-          const dx = gx - cx;
-          const dy = gy - cy;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const angle = Math.atan2(dy, dx);
-          const spiralR = 0.06 + (((angle + Math.PI) / (Math.PI * 2)) * 0.35 + dist * 0.3) % 0.4;
-          if (Math.abs(dist - spiralR) > 0.035) {
-            bullets.push({ rx: gx, ry: gy, angle: 0, speed: 0 });
-          }
-        }
-      }
-      return bullets;
-    })(),
-  }],
+  name: "One Way In",
+  description: "Bullets rain in, find the exit",
+  shipRx: 0.5, shipRy: 0.5,
+  waves: [
+    {
+      enemies: [
+        { type: "sniper", rx: 0.15, ry: 0.15 },
+        { type: "sniper", rx: 0.85, ry: 0.15 },
+        { type: "sniper", rx: 0.15, ry: 0.85 },
+        { type: "tank", rx: 0.5, ry: 0.08 },
+      ],
+      walls: [
+        { rx: 0.3, ry: 0.3, rw: 0.4, rh: 0.02, type: "solid", oneWay: "down" },
+        { rx: 0.3, ry: 0.68, rw: 0.4, rh: 0.02, type: "solid", oneWay: "up" },
+        { rx: 0.3, ry: 0.3, rw: 0.02, rh: 0.4, type: "solid", oneWay: "right" },
+        { rx: 0.68, ry: 0.3, rw: 0.02, rh: 0.18, type: "solid", oneWay: "left" },
+        { rx: 0.68, ry: 0.55, rw: 0.02, rh: 0.15, type: "solid", oneWay: "left" },
+        { rx: 0.68, ry: 0.48, rw: 0.02, rh: 0.07, type: "glass", hp: 2 },
+      ],
+    },
+  ],
 };

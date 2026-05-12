@@ -2,24 +2,23 @@ import type { LevelDef } from "../systems/Levels";
 
 export const level03: LevelDef = {
   id: 3,
-  name: "Sniper Alley",
-  description: "Six snipers line the walls",
-  waves: [{
-    enemies: [
-      { type: "sniper", rx: 0.05, ry: 0.2 },
-      { type: "sniper", rx: 0.05, ry: 0.5 },
-      { type: "sniper", rx: 0.05, ry: 0.8 },
-      { type: "sniper", rx: 0.95, ry: 0.2 },
-      { type: "sniper", rx: 0.95, ry: 0.5 },
-      { type: "sniper", rx: 0.95, ry: 0.8 },
-    ],
-    walls: [
-      { rx: 0.38, ry: 0.25, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-      { rx: 0.56, ry: 0.25, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-      { rx: 0.38, ry: 0.6, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-      { rx: 0.56, ry: 0.6, rw: 0.06, rh: 0.15, type: "glass", hp: 3 },
-      { rx: 0.12, ry: 0, rw: 0.03, rh: 1, type: "bounce" },
-      { rx: 0.85, ry: 0, rw: 0.03, rh: 1, type: "bounce" },
-    ],
-  }],
+  name: "Crossfire",
+  description: "Snipers on all sides, glass cover in the center",
+  shipRx: 0.5, shipRy: 0.5,
+  waves: [
+    {
+      enemies: [
+        { type: "sniper", rx: 0.5, ry: 0.08 },
+        { type: "sniper", rx: 0.92, ry: 0.5 },
+        { type: "sniper", rx: 0.5, ry: 0.92 },
+        { type: "sniper", rx: 0.08, ry: 0.5 },
+      ],
+      walls: [
+        { rx: 0.42, ry: 0.45, rw: 0.16, rh: 0.02, type: "glass", hp: 3 },
+        { rx: 0.42, ry: 0.55, rw: 0.16, rh: 0.02, type: "glass", hp: 3 },
+        { rx: 0.45, ry: 0.42, rw: 0.02, rh: 0.18, type: "glass", hp: 3 },
+        { rx: 0.55, ry: 0.42, rw: 0.02, rh: 0.18, type: "glass", hp: 3 },
+      ],
+    },
+  ],
 };

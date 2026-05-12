@@ -31,36 +31,6 @@ import { level27 } from "../levels/level27";
 import { level28 } from "../levels/level28";
 import { level29 } from "../levels/level29";
 import { level30 } from "../levels/level30";
-import { level31 } from "../levels/level31";
-import { level32 } from "../levels/level32";
-import { level33 } from "../levels/level33";
-import { level34 } from "../levels/level34";
-import { level35 } from "../levels/level35";
-import { level36 } from "../levels/level36";
-import { level37 } from "../levels/level37";
-import { level38 } from "../levels/level38";
-import { level39 } from "../levels/level39";
-import { level40 } from "../levels/level40";
-import { level41 } from "../levels/level41";
-import { level42 } from "../levels/level42";
-import { level43 } from "../levels/level43";
-import { level44 } from "../levels/level44";
-import { level45 } from "../levels/level45";
-import { level46 } from "../levels/level46";
-import { level47 } from "../levels/level47";
-import { level48 } from "../levels/level48";
-import { level49 } from "../levels/level49";
-import { level50 } from "../levels/level50";
-import { level51 } from "../levels/level51";
-import { level52 } from "../levels/level52";
-import { level53 } from "../levels/level53";
-import { level54 } from "../levels/level54";
-import { level55 } from "../levels/level55";
-import { level56 } from "../levels/level56";
-import { level57 } from "../levels/level57";
-import { level58 } from "../levels/level58";
-import { level59 } from "../levels/level59";
-import { level60 } from "../levels/level60";
 
 type AsteroidSize = "large" | "medium" | "small";
 
@@ -113,12 +83,6 @@ export const ALL_LEVELS: LevelDef[] = [
   level16, level17, level18, level19, level20,
   level21, level22, level23, level24, level25,
   level26, level27, level28, level29, level30,
-  level31, level32, level33, level34, level35,
-  level36, level37, level38, level39, level40,
-  level41, level42, level43, level44, level45,
-  level46, level47, level48, level49, level50,
-  level51, level52, level53, level54, level55,
-  level56, level57, level58, level59, level60,
 ];
 
 interface LevelProgress {

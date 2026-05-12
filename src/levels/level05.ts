@@ -1,21 +1,29 @@
+import type { EnemyType } from "../objects/enemies";
 import type { LevelDef } from "../systems/Levels";
 
 export const level05: LevelDef = {
   id: 5,
-  name: "Crossfire",
-  description: "Tanks on all sides, bullets bounce",
-  waves: [{
-    enemies: [
-      { type: "tank", rx: 0.5, ry: 0.05 },
-      { type: "tank", rx: 0.95, ry: 0.5 },
-      { type: "tank", rx: 0.5, ry: 0.95 },
-      { type: "tank", rx: 0.05, ry: 0.5 },
-    ],
-    walls: [
-      { rx: 0.3, ry: 0.3, rw: 0.18, rh: 0.02, type: "bounce" },
-      { rx: 0.52, ry: 0.68, rw: 0.18, rh: 0.02, type: "bounce" },
-      { rx: 0.3, ry: 0.52, rw: 0.02, rh: 0.18, type: "bounce" },
-      { rx: 0.68, ry: 0.3, rw: 0.02, rh: 0.18, type: "bounce" },
-    ],
-  }],
+  name: "The Swarm",
+  description: "They pour through the gaps",
+  shipRx: 0.5, shipRy: 0.5,
+  waves: [
+    {
+      enemies: Array.from({ length: 20 }, (_, i) => {
+        const edge = i % 4;
+        const offset = 0.15 + (i / 20) * 0.7;
+        if (edge === 0) return { type: "swarm" as EnemyType, rx: offset, ry: -0.04 };
+        if (edge === 1) return { type: "swarm" as EnemyType, rx: 1.04, ry: offset };
+        if (edge === 2) return { type: "swarm" as EnemyType, rx: offset, ry: 1.04 };
+        return { type: "swarm" as EnemyType, rx: -0.04, ry: offset };
+      }),
+      walls: [
+        { rx: 0.38, ry: 0.35, rw: 0.24, rh: 0.02, type: "solid" },
+        { rx: 0.38, ry: 0.63, rw: 0.24, rh: 0.02, type: "solid" },
+        { rx: 0.36, ry: 0.37, rw: 0.02, rh: 0.1, type: "solid" },
+        { rx: 0.62, ry: 0.37, rw: 0.02, rh: 0.1, type: "solid" },
+        { rx: 0.36, ry: 0.53, rw: 0.02, rh: 0.1, type: "solid" },
+        { rx: 0.62, ry: 0.53, rw: 0.02, rh: 0.1, type: "solid" },
+      ],
+    },
+  ],
 };
