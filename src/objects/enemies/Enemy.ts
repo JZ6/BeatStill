@@ -4,7 +4,7 @@ import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
 
-export type EnemyType = "basic" | "tracker" | "sniper" | "spiral" | "tank" | "swarm" | "snake" | "circler";
+export type EnemyType = "basic" | "tracker" | "sniper" | "spiral" | "tank" | "swarm" | "snake" | "circler" | "sentinel" | "phantom" | "phantom_decoy";
 
 export abstract class Enemy extends Phaser.GameObjects.Graphics {
   hp: number;

@@ -62,6 +62,7 @@ export class GameScene extends Phaser.Scene {
   paused = false;
   godMode = false;
   upgradePending = false;
+  bossActive = false;
   private upgradeOverlay: HTMLDivElement | null = null;
 
   chainTimer = 0;
@@ -459,7 +460,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  registerKill(x: number, y: number) {
+  registerKill(x: number, y: number, isBoss = false) {
     const dx = x - this.lastKillX;
     const dy = y - this.lastKillY;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -481,7 +482,8 @@ export class GameScene extends Phaser.Scene {
     this.chainTier = getChainTier(this.chainCount);
     const tier = CHAIN_TIERS[this.chainTier];
 
-    const points = Math.floor(100 * tier.mult);
+    const basePoints = isBoss ? 500 : 100;
+    const points = Math.floor(basePoints * tier.mult);
     this.score += points;
     this.scoreText.setText(`SCORE: ${this.score}`);
 
@@ -633,13 +635,19 @@ export class GameScene extends Phaser.Scene {
         if (this.circleOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) {
           const killed = e.takeDamage(b.damage);
           if (killed) {
+            const isBoss = e.enemyType === "sentinel" || e.enemyType === "phantom";
             const pCount = [20, 25, 30, 35, 35, 35][this.chainTier];
             const pCount2 = [10, 12, 15, 18, 18, 18][this.chainTier];
             const pSize = [3, 3, 4, 5, 5, 5][this.chainTier];
             const tierColor = CHAIN_TIERS[this.chainTier]?.color ?? 0xffcc66;
             this.particles.burst(e.x, e.y, b.bulletColor, pCount, 100, pSize);
             this.particles.burst(e.x, e.y, this.chainTier > 0 ? tierColor : 0xffcc66, pCount2, 60, pSize - 1);
-            this.registerKill(e.x, e.y);
+            this.registerKill(e.x, e.y, isBoss);
+            if (isBoss) this.onBossKill(e.x, e.y);
+            if (e.enemyType === "phantom_decoy") {
+              const phantoms = ([...this.enemies.getChildren()] as Enemy[]).filter((en) => en.enemyType === "phantom");
+              for (const p of phantoms) (p as any).notifyDecoyKilled?.();
+            }
           } else {
             this.particles.burst(b.x, b.y, b.bulletColor, 6, 40, 2);
             this.audioManager.onEnemyHit();
@@ -760,6 +768,11 @@ export class GameScene extends Phaser.Scene {
     updateHighWave(this.wave);
     this.processUnlocks();
 
+    if (this.wave >= 5 && this.wave % 5 === 0) {
+      this.spawnBossWave();
+      return;
+    }
+
     const enemyCount = 8 + this.wave * 3;
     const pool = this.buildEnemyPool(this.wave);
 
@@ -775,6 +788,85 @@ export class GameScene extends Phaser.Scene {
       const ay = Phaser.Math.Between(80, GAME_H - 80);
       this.asteroids.add(new Asteroid(this, ax, ay, "large"));
     }
+  }
+
+  private spawnBossWave() {
+    this.bossActive = true;
+    this.waveText.setText(`WAVE ${this.wave} — BOSS`);
+
+    const warningText = this.add.text(GAME_W / 2, GAME_H / 2, "WARNING", {
+      fontFamily: "monospace", fontSize: "42px", color: "#ff4444", align: "center",
+    }).setOrigin(0.5).setDepth(100).setAlpha(0);
+
+    this.tweens.add({
+      targets: warningText,
+      alpha: { from: 0, to: 1 },
+      duration: 400,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        warningText.destroy();
+        const bossType = (this.wave % 10 === 0 && this.wave >= 10) ? "phantom" as const : "sentinel" as const;
+        this.enemies.add(createEnemy(this, GAME_W / 2, -40, bossType));
+      },
+    });
+
+    if (this.audioStarted) this.audioManager.onBossWarning();
+  }
+
+  private onBossKill(x: number, y: number) {
+    this.bossActive = false;
+
+    this.particles.burst(x, y, 0xffaa22, 40, 150, 5);
+    this.particles.burst(x, y, 0xffcc66, 40, 120, 4);
+    this.particles.burst(x, y, 0xffffff, 30, 100, 3);
+    this.cameras.main.shake(300, 0.02);
+
+    if (this.audioStarted) this.audioManager.onBossDeath();
+
+    ([...this.enemies.getChildren()] as Enemy[]).forEach((e) => {
+      if (e.enemyType === "phantom_decoy") e.destroy();
+    });
+
+    for (let i = 0; i < 4; i++) {
+      const shard = new Shard(this, x + Phaser.Math.Between(-30, 30), y + Phaser.Math.Between(-30, 30));
+      this.shards.add(shard);
+    }
+
+    const defeatedText = this.add.text(GAME_W / 2, GAME_H / 2, "BOSS DEFEATED", {
+      fontFamily: "monospace", fontSize: "32px", color: "#ffaa44", align: "center",
+    }).setOrigin(0.5).setDepth(100).setAlpha(0);
+
+    this.tweens.add({
+      targets: defeatedText,
+      alpha: { from: 0, to: 1 },
+      duration: 500,
+      yoyo: true,
+      hold: 1500,
+      onComplete: () => {
+        defeatedText.destroy();
+        this.upgradePending = true;
+        this.showBossUpgradeSelection();
+      },
+    });
+  }
+
+  private showBossUpgradeSelection() {
+    const upgrades = rollUpgrades(this.stats, 4);
+    if (upgrades.length === 0) {
+      this.upgradePending = false;
+      this.spawnWave();
+      return;
+    }
+    const overlay = createUpgradeOverlay(upgrades, this.stats, (upg) => {
+      this.applyUpgrade(upg);
+      overlay.remove();
+      this.upgradeOverlay = null;
+      this.upgradePending = false;
+      this.spawnWave();
+    });
+    this.upgradeOverlay = overlay;
+    document.body.appendChild(overlay);
   }
 
   private spawnLevelWave(index: number) {

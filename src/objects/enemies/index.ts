@@ -8,6 +8,9 @@ export { SniperEnemy } from "./SniperEnemy";
 export { CirclerEnemy } from "./CirclerEnemy";
 export { SpiralEnemy } from "./SpiralEnemy";
 export { TankEnemy } from "./TankEnemy";
+export { SentinelBoss } from "./SentinelBoss";
+export { PhantomBoss } from "./PhantomBoss";
+export { PhantomDecoy } from "./PhantomDecoy";
 
 import type { EnemyType } from "./Enemy";
 import { SwarmEnemy } from "./SwarmEnemy";
@@ -18,6 +21,9 @@ import { SniperEnemy } from "./SniperEnemy";
 import { CirclerEnemy } from "./CirclerEnemy";
 import { SpiralEnemy } from "./SpiralEnemy";
 import { TankEnemy } from "./TankEnemy";
+import { SentinelBoss } from "./SentinelBoss";
+import { PhantomBoss } from "./PhantomBoss";
+import { PhantomDecoy } from "./PhantomDecoy";
 import type { Enemy } from "./Enemy";
 
 export function createEnemy(scene: Phaser.Scene, x: number, y: number, type: EnemyType): Enemy {
@@ -30,5 +36,8 @@ export function createEnemy(scene: Phaser.Scene, x: number, y: number, type: Ene
     case "circler": return new CirclerEnemy(scene, x, y);
     case "spiral": return new SpiralEnemy(scene, x, y);
     case "tank": return new TankEnemy(scene, x, y);
+    case "sentinel": return new SentinelBoss(scene, x, y);
+    case "phantom": return new PhantomBoss(scene, x, y);
+    case "phantom_decoy": return new PhantomDecoy(scene, x, y);
   }
 }

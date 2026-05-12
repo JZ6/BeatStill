@@ -268,6 +268,43 @@ export class AudioManager {
     });
   }
 
+  onBossWarning() {
+    if (!this.started) return;
+    const now = Tone.now();
+    const bass = this.theme.bassNotes;
+    this.safe(() => this.bassPulse.triggerAttackRelease(bass[0], "8n", now));
+    const deathNotes = [...this.theme.deathNotes].reverse();
+    deathNotes.slice(0, 3).forEach((note, i) => {
+      this.safe(() => this.deathSynth.triggerAttackRelease(note, "8n", now + 0.3 + i * 0.2));
+    });
+  }
+
+  onBossPhaseChange() {
+    if (!this.started) return;
+    const scale = this.theme.scale;
+    const idx = this.noteIndex % scale.length;
+    const n1 = scale[idx];
+    const n2 = scale[Math.min(idx + 2, scale.length - 1)];
+    const n3 = scale[Math.min(idx + 4, scale.length - 1)];
+    const now = Tone.now();
+    this.safe(() => this.padSynth.triggerAttackRelease([n1, n2, n3], "1n", now));
+    const bass = this.theme.bassNotes;
+    this.safe(() => this.bassSynth.triggerAttackRelease(bass[0], "4n", now));
+  }
+
+  onBossDeath() {
+    if (!this.started) return;
+    const scale = this.theme.scale;
+    const now = Tone.now();
+    for (let i = 0; i < 5; i++) {
+      const note = scale[Math.min(i * 2, scale.length - 1)];
+      this.safe(() => this.leadSynth.triggerAttackRelease(note, "8n", now + i * 0.12));
+    }
+    this.safe(() => this.padSynth.triggerAttackRelease(scale.slice(0, 3), "2n", now + 0.1));
+    const bass = this.theme.bassNotes;
+    this.safe(() => this.bassSynth.triggerAttackRelease(bass[0], "2n", now + 0.6));
+  }
+
   setVolume(fraction: number) {
     if (!this.master) return;
     if (fraction <= 0) {
