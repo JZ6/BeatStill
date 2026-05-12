@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
-import { Enemy } from "../objects/Enemy";
+import { createEnemy } from "../objects/enemies";
 import { GAME_W, GAME_H, isMobile } from "./GameConfig";
 
 const STORAGE_KEY = "beatstill_tutorial_done";
@@ -54,7 +54,7 @@ function buildSteps(): TutorialStep[] {
         const spacing = GAME_W / 4;
         for (let i = 0; i < 3; i++) {
           const x = spacing + i * spacing;
-          const enemy = new Enemy(scene, x, -30, "basic");
+          const enemy = createEnemy(scene, x, -30, "basic");
           scene.enemies.add(enemy);
         }
       },
@@ -66,7 +66,7 @@ function buildSteps(): TutorialStep[] {
       onEnter: (scene) => {
         const cx = GAME_W / 2 - 60;
         for (let i = 0; i < 3; i++) {
-          const enemy = new Enemy(scene, cx + i * 60, 200, "basic");
+          const enemy = createEnemy(scene, cx + i * 60, 200, "basic");
           scene.enemies.add(enemy);
         }
       },

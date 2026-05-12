@@ -1,4 +1,4 @@
-import type { EnemyType } from "../objects/Enemy";
+import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
 
 type AsteroidSize = "large" | "medium" | "small";

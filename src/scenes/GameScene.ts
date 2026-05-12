@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Ship } from "../objects/Ship";
-import { Enemy } from "../objects/Enemy";
+import { Enemy, createEnemy } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import { Bullet } from "../objects/Bullet";
 import { TimeManager } from "../systems/TimeManager";
@@ -18,7 +18,7 @@ import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, getState, 
 import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, type LevelDef } from "../systems/Levels";
 import { createUpgradeOverlay } from "../ui/UpgradeOverlay";
 import { Wall } from "../objects/Wall";
-import type { EnemyType } from "../objects/Enemy";
+import type { EnemyType } from "../objects/enemies";
 
 const CHAIN_WINDOW = 800;
 const CHAIN_RADIUS = 120;
@@ -623,7 +623,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < enemyCount; i++) {
       const { x, y } = this.randomEdgePosition();
       const type = pool[Math.floor(Math.random() * pool.length)];
-      this.enemies.add(new Enemy(this, x, y, type));
+      this.enemies.add(createEnemy(this, x, y, type));
     }
 
     const asteroidCount = 1 + Math.floor(this.wave / 2);
@@ -643,7 +643,7 @@ export class GameScene extends Phaser.Scene {
     for (const e of wave.enemies) {
       const x = e.rx * GAME_W;
       const y = e.ry * GAME_H;
-      const enemy = new Enemy(this, x, y, e.type);
+      const enemy = createEnemy(this, x, y, e.type);
       this.enemies.add(enemy);
     }
 
@@ -753,7 +753,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < count; i++) {
       const { x, y } = this.randomEdgePosition();
       const type = pool[Math.floor(Math.random() * pool.length)];
-      this.enemies.add(new Enemy(this, x, y, type));
+      this.enemies.add(createEnemy(this, x, y, type));
     }
   }
 
