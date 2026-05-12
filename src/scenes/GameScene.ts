@@ -303,7 +303,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(100);
 
     this.chainText = this.add
-      .text(16, 60, "", {
+      .text(16, 78, "", {
         fontFamily: "monospace",
         fontSize: "18px",
         color: "#ffaa44",

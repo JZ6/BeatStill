@@ -27,6 +27,11 @@ export class StartScene extends Phaser.Scene {
   private particles: FloatingParticle[] = [];
   private titleText!: Phaser.GameObjects.Text;
   private titleGlow!: Phaser.GameObjects.Text;
+  private titleBaseY = 0;
+  private titleDriftAngle = 0;
+  private timeScale = 0.1;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
 
   constructor() {
     super("StartScene");
@@ -41,8 +46,15 @@ export class StartScene extends Phaser.Scene {
 
     this.initParticles();
 
+    const titleY = cy - 100;
+    this.titleBaseY = titleY;
+    this.titleDriftAngle = 0;
+    this.timeScale = 0.1;
+    this.lastPointerX = cx;
+    this.lastPointerY = cy;
+
     this.titleGlow = this.add
-      .text(cx, cy - 140, "BEAT STILL", {
+      .text(cx, titleY, "BEAT STILL", {
         fontFamily: "monospace",
         fontSize: "72px",
         color: "#ffaa44",
@@ -52,7 +64,7 @@ export class StartScene extends Phaser.Scene {
       .setDepth(0);
 
     this.titleText = this.add
-      .text(cx, cy - 140, "BEAT STILL", {
+      .text(cx, titleY, "BEAT STILL", {
         fontFamily: "monospace",
         fontSize: "72px",
         color: "#e8d5b0",
@@ -63,8 +75,6 @@ export class StartScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.titleGlow,
       alpha: { from: 0.08, to: 0.25 },
-      scaleX: { from: 1.0, to: 1.03 },
-      scaleY: { from: 1.0, to: 1.03 },
       duration: 2000,
       yoyo: true,
       repeat: -1,
@@ -79,8 +89,8 @@ export class StartScene extends Phaser.Scene {
       { label: "OPTIONS", action: () => this.showOptionsOverlay() },
     ];
 
-    const startY = cy + 10;
-    const spacing = 40;
+    const startY = cy + 20;
+    const spacing = 38;
 
     const buttons: Phaser.GameObjects.Text[] = [];
     for (let i = 0; i < menuItems.length; i++) {
@@ -137,7 +147,24 @@ export class StartScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    this.updateParticles(delta);
+    const pointer = this.input.activePointer;
+    const dx = pointer.x - this.lastPointerX;
+    const dy = pointer.y - this.lastPointerY;
+    const speed = Math.sqrt(dx * dx + dy * dy);
+    this.lastPointerX = pointer.x;
+    this.lastPointerY = pointer.y;
+
+    const targetScale = Math.min(speed / 8, 1);
+    this.timeScale += (targetScale - this.timeScale) * 0.08;
+    const ts = Math.max(this.timeScale, 0.05);
+
+    this.titleDriftAngle += delta * 0.0008 * ts;
+    const driftY = Math.sin(this.titleDriftAngle) * 6;
+    const driftX = Math.cos(this.titleDriftAngle * 0.7) * 4;
+    this.titleText.setPosition(GAME_W / 2 + driftX, this.titleBaseY + driftY);
+    this.titleGlow.setPosition(GAME_W / 2 + driftX, this.titleBaseY + driftY);
+
+    this.updateParticles(delta, ts);
     this.drawBackground();
   }
 
@@ -158,8 +185,8 @@ export class StartScene extends Phaser.Scene {
     }
   }
 
-  private updateParticles(delta: number) {
-    const dt = delta / 1000;
+  private updateParticles(delta: number, ts: number) {
+    const dt = (delta / 1000) * ts;
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
