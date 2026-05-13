@@ -3,7 +3,7 @@ import { Bullet } from "./Bullet";
 import type { GameScene } from "../scenes/GameScene";
 import { defaultStats, type PlayerStats } from "../systems/Upgrades";
 import { getWeapon } from "../systems/Weapons";
-import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 import { options } from "../systems/GameOptions";
 import type { TouchControls } from "../systems/TouchControls";
 
@@ -53,38 +53,41 @@ export class Ship extends Phaser.GameObjects.Container {
   drawShip() {
     this.graphics.clear();
     const c = this.shipColor;
-    this.graphics.lineStyle(3, c, 0.3);
+    const s = px(1);
+    this.graphics.lineStyle(3 * s, c, 0.3);
     this.graphics.beginPath();
-    this.graphics.moveTo(0, -18);
-    this.graphics.lineTo(-12, 14);
-    this.graphics.lineTo(12, 14);
+    this.graphics.moveTo(0, -18 * s);
+    this.graphics.lineTo(-12 * s, 14 * s);
+    this.graphics.lineTo(12 * s, 14 * s);
     this.graphics.closePath();
     this.graphics.strokePath();
 
-    this.graphics.lineStyle(1.5, c, 1);
+    this.graphics.lineStyle(1.5 * s, c, 1);
     this.graphics.beginPath();
-    this.graphics.moveTo(0, -18);
-    this.graphics.lineTo(-12, 14);
-    this.graphics.lineTo(12, 14);
+    this.graphics.moveTo(0, -18 * s);
+    this.graphics.lineTo(-12 * s, 14 * s);
+    this.graphics.lineTo(12 * s, 14 * s);
     this.graphics.closePath();
     this.graphics.strokePath();
 
     this.graphics.fillStyle(0xffffff, 1);
-    this.graphics.fillCircle(0, 0, 3);
+    this.graphics.fillCircle(0, 0, 3 * s);
   }
 
   drawHealthBar() {
     this.healthBar.clear();
-    const x = -HEALTHBAR_WIDTH / 2;
-    const y = 22;
+    const w = px(HEALTHBAR_WIDTH);
+    const h = px(HEALTHBAR_HEIGHT);
+    const x = -w / 2;
+    const y = px(22);
 
     this.healthBar.fillStyle(0x333333, 0.6);
-    this.healthBar.fillRect(x, y, HEALTHBAR_WIDTH, HEALTHBAR_HEIGHT);
+    this.healthBar.fillRect(x, y, w, h);
 
     const pct = this.hp / this.maxHp;
     const color = pct > 0.5 ? 0x00ff88 : pct > 0.25 ? 0xffaa00 : 0xff2222;
     this.healthBar.fillStyle(color, 0.9);
-    this.healthBar.fillRect(x, y, HEALTHBAR_WIDTH * pct, HEALTHBAR_HEIGHT);
+    this.healthBar.fillRect(x, y, w * pct, h);
   }
 
   takeDamage(amount: number): boolean {
@@ -148,8 +151,8 @@ export class Ship extends Phaser.GameObjects.Container {
     this.x += vx * moveSpeed;
     this.y += vy * moveSpeed;
 
-    this.x = Phaser.Math.Clamp(this.x, 16, GAME_W - 16);
-    this.y = Phaser.Math.Clamp(this.y, 16, GAME_H - 16);
+    this.x = Phaser.Math.Clamp(this.x, px(16), GAME_W - px(16));
+    this.y = Phaser.Math.Clamp(this.y, px(16), GAME_H - px(16));
 
     this.rotation = aimAngle + Math.PI / 2;
     this.healthBar.setRotation(-this.rotation);
@@ -186,8 +189,8 @@ export class Ship extends Phaser.GameObjects.Container {
       const lt = hasOverclock && weapon.lifetime > 0 ? weapon.lifetime / 2 : weapon.lifetime;
       const bullet = new Bullet(
         this.scene,
-        this.x + Math.cos(a) * 20,
-        this.y + Math.sin(a) * 20,
+        this.x + Math.cos(a) * px(20),
+        this.y + Math.sin(a) * px(20),
         a,
         speed,
         "player",

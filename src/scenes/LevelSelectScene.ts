@@ -1,13 +1,10 @@
 import Phaser from "phaser";
-import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 import { ALL_LEVELS, isLevelUnlocked, isLevelCompleted } from "../systems/Levels";
 
 const COLS = 4;
 const ROWS = 3;
 const PER_PAGE = COLS * ROWS;
-const CARD_W = 140;
-const CARD_H = 100;
-const GAP = 16;
 
 export class LevelSelectScene extends Phaser.Scene {
   private page = 0;
@@ -35,9 +32,9 @@ export class LevelSelectScene extends Phaser.Scene {
     bg.setDepth(-1);
 
     this.add
-      .text(GAME_W / 2, 45, "CAMPAIGN", {
+      .text(GAME_W / 2, px(45), "CAMPAIGN", {
         fontFamily: "monospace",
-        fontSize: "36px",
+        fontSize: `${px(36)}px`,
         color: "#e8d5b0",
       })
       .setOrigin(0.5)
@@ -48,9 +45,9 @@ export class LevelSelectScene extends Phaser.Scene {
     this.buildPage(this.page);
 
     this.leftArrow = this.add
-      .text(40, GAME_H / 2, "◀", {
+      .text(px(40), GAME_H / 2, "◀", {
         fontFamily: "monospace",
-        fontSize: "32px",
+        fontSize: `${px(32)}px`,
         color: "#887766",
       })
       .setOrigin(0.5)
@@ -61,9 +58,9 @@ export class LevelSelectScene extends Phaser.Scene {
       .on("pointerdown", () => this.changePage(-1));
 
     this.rightArrow = this.add
-      .text(GAME_W - 40, GAME_H / 2, "▶", {
+      .text(GAME_W - px(40), GAME_H / 2, "▶", {
         fontFamily: "monospace",
-        fontSize: "32px",
+        fontSize: `${px(32)}px`,
         color: "#887766",
       })
       .setOrigin(0.5)
@@ -74,18 +71,18 @@ export class LevelSelectScene extends Phaser.Scene {
       .on("pointerdown", () => this.changePage(1));
 
     this.pageText = this.add
-      .text(GAME_W / 2, GAME_H - 70, "", {
+      .text(GAME_W / 2, GAME_H - px(70), "", {
         fontFamily: "monospace",
-        fontSize: "14px",
+        fontSize: `${px(14)}px`,
         color: "#666",
       })
       .setOrigin(0.5)
       .setDepth(10);
 
     const backBtn = this.add
-      .text(GAME_W / 2, GAME_H - 35, "BACK", {
+      .text(GAME_W / 2, GAME_H - px(35), "BACK", {
         fontFamily: "monospace",
-        fontSize: "20px",
+        fontSize: `${px(20)}px`,
         color: "#887766",
       })
       .setOrigin(0.5)
@@ -107,13 +104,17 @@ export class LevelSelectScene extends Phaser.Scene {
   private buildPage(page: number) {
     this.pageContainer.removeAll(true);
 
+    const cardW = px(140);
+    const cardH = px(100);
+    const gap = px(16);
+
     const start = page * PER_PAGE;
     const end = Math.min(start + PER_PAGE, ALL_LEVELS.length);
     const count = end - start;
     const rowsOnPage = Math.ceil(count / COLS);
 
-    const totalW = COLS * CARD_W + (COLS - 1) * GAP;
-    const totalH = rowsOnPage * CARD_H + (rowsOnPage - 1) * GAP;
+    const totalW = COLS * cardW + (COLS - 1) * gap;
+    const totalH = rowsOnPage * cardH + (rowsOnPage - 1) * gap;
     const startX = (GAME_W - totalW) / 2;
     const startY = (GAME_H - totalH) / 2;
 
@@ -121,8 +122,8 @@ export class LevelSelectScene extends Phaser.Scene {
       const level = ALL_LEVELS[start + i];
       const col = i % COLS;
       const row = Math.floor(i / COLS);
-      const x = startX + col * (CARD_W + GAP);
-      const y = startY + row * (CARD_H + GAP);
+      const x = startX + col * (cardW + gap);
+      const y = startY + row * (cardH + gap);
 
       const unlocked = isLevelUnlocked(level.id);
       const completed = isLevelCompleted(level.id);
@@ -130,17 +131,17 @@ export class LevelSelectScene extends Phaser.Scene {
       const card = this.add.graphics();
       card.fillStyle(unlocked ? 0x111111 : 0x0a0a0a, 1);
       card.lineStyle(2, completed ? 0xffaa44 : unlocked ? 0x444444 : 0x222222, 1);
-      card.fillRect(x, y, CARD_W, CARD_H);
-      card.strokeRect(x, y, CARD_W, CARD_H);
+      card.fillRect(x, y, cardW, cardH);
+      card.strokeRect(x, y, cardW, cardH);
       this.pageContainer.add(card);
 
-      const cx = x + CARD_W / 2;
+      const cx = x + cardW / 2;
 
       this.pageContainer.add(
         this.add
-          .text(cx, y + 18, `${level.id}`, {
+          .text(cx, y + px(18), `${level.id}`, {
             fontFamily: "monospace",
-            fontSize: "24px",
+            fontSize: `${px(24)}px`,
             color: unlocked ? (completed ? "#ffaa44" : "#e8d5b0") : "#333",
           })
           .setOrigin(0.5),
@@ -148,9 +149,9 @@ export class LevelSelectScene extends Phaser.Scene {
 
       this.pageContainer.add(
         this.add
-          .text(cx, y + 48, level.name, {
+          .text(cx, y + px(48), level.name, {
             fontFamily: "monospace",
-            fontSize: "11px",
+            fontSize: `${px(11)}px`,
             color: unlocked ? "#998877" : "#333",
           })
           .setOrigin(0.5),
@@ -159,9 +160,9 @@ export class LevelSelectScene extends Phaser.Scene {
       if (completed) {
         this.pageContainer.add(
           this.add
-            .text(cx, y + 72, "✓", {
+            .text(cx, y + px(72), "✓", {
               fontFamily: "monospace",
-              fontSize: "18px",
+              fontSize: `${px(18)}px`,
               color: "#ffaa44",
             })
             .setOrigin(0.5),
@@ -169,28 +170,28 @@ export class LevelSelectScene extends Phaser.Scene {
       } else if (!unlocked) {
         this.pageContainer.add(
           this.add
-            .text(cx, y + 72, "🔒", { fontSize: "16px" })
+            .text(cx, y + px(72), "🔒", { fontSize: `${px(16)}px` })
             .setOrigin(0.5),
         );
       }
 
       if (unlocked) {
         const hitZone = this.add
-          .zone(cx, y + CARD_H / 2, CARD_W, CARD_H)
+          .zone(cx, y + cardH / 2, cardW, cardH)
           .setInteractive({ useHandCursor: true })
           .on("pointerover", () => {
             card.clear();
             card.fillStyle(0x1a1510, 1);
             card.lineStyle(2, 0xffaa44, 1);
-            card.fillRect(x, y, CARD_W, CARD_H);
-            card.strokeRect(x, y, CARD_W, CARD_H);
+            card.fillRect(x, y, cardW, cardH);
+            card.strokeRect(x, y, cardW, cardH);
           })
           .on("pointerout", () => {
             card.clear();
             card.fillStyle(0x111111, 1);
             card.lineStyle(2, completed ? 0xffaa44 : 0x444444, 1);
-            card.fillRect(x, y, CARD_W, CARD_H);
-            card.strokeRect(x, y, CARD_W, CARD_H);
+            card.fillRect(x, y, cardW, cardH);
+            card.strokeRect(x, y, cardW, cardH);
           })
           .on("pointerdown", () => {
             this.scene.start("GameScene", { mode: "level", levelDef: level });

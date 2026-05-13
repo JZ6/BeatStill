@@ -3,6 +3,7 @@ import { UpgradePickup } from "../objects/Shard";
 import { addWeaponKill } from "./Unlocks";
 import { addKill } from "./Achievements";
 import { getLuckyStarBonus } from "./Shop";
+import { px } from "./GameConfig";
 
 export const CHAIN_WINDOW = 800;
 export const CHAIN_RADIUS = 120;
@@ -47,7 +48,7 @@ export class ChainSystem {
     this.scorePopups = [];
     for (let i = 0; i < 8; i++) {
       const t = this.scene.add
-        .text(0, 0, "", { fontFamily: "monospace", fontSize: "16px", color: "#ffffff" })
+        .text(0, 0, "", { fontFamily: "monospace", fontSize: `${px(16)}px`, color: "#ffffff" })
         .setOrigin(0.5)
         .setDepth(100)
         .setAlpha(0);
@@ -103,7 +104,7 @@ export class ChainSystem {
       this.spawnPopup(x, y, `+${points}`, tier.textColor);
 
       if (this.chainTier > prevTier && tier.name) {
-        this.spawnPopup(x, y - 20, tier.name, tier.textColor, 24);
+        this.spawnPopup(x, y - px(20), tier.name, tier.textColor, px(24));
         s.tweens.add({
           targets: s.chainText,
           scaleX: { from: 1.4, to: 1 },
@@ -171,7 +172,7 @@ export class ChainSystem {
     this.updatePopups(delta, ts);
   }
 
-  spawnPopup(x: number, y: number, text: string, color: string, size = 16) {
+  spawnPopup(x: number, y: number, text: string, color: string, size = px(16)) {
     let oldest = this.scorePopups[0];
     for (const p of this.scorePopups) {
       if (p.timer <= 0) { oldest = p; break; }
@@ -203,7 +204,7 @@ export class ChainSystem {
     if (ts < 0.1) alpha = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);
     this.arcGraphics.lineStyle(2, tier.color, alpha);
     this.arcGraphics.beginPath();
-    this.arcGraphics.arc(this.lastKillX, this.lastKillY, 25, -Math.PI / 2, -Math.PI / 2 + arcAngle, false);
+    this.arcGraphics.arc(this.lastKillX, this.lastKillY, px(25), -Math.PI / 2, -Math.PI / 2 + arcAngle, false);
     this.arcGraphics.strokePath();
   }
 
@@ -211,7 +212,7 @@ export class ChainSystem {
     for (const p of this.scorePopups) {
       if (p.timer <= 0) continue;
       p.timer -= delta * Math.max(ts, 0.3);
-      p.text.y -= 40 * (delta / 600) * Math.max(ts, 0.3);
+      p.text.y -= px(40) * (delta / 600) * Math.max(ts, 0.3);
       p.text.setAlpha(Math.max(p.timer / 600, 0));
       if (p.timer <= 0) p.text.setAlpha(0);
     }

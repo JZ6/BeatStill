@@ -6,7 +6,7 @@ import { Wall } from "../objects/Wall";
 import { UpgradePickup } from "../objects/Shard";
 import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, type LevelDef } from "./Levels";
 import { addShards, getState } from "./Unlocks";
-import { GAME_W, GAME_H } from "./GameConfig";
+import { GAME_W, GAME_H, px } from "./GameConfig";
 
 export class LevelRunner {
   waveIndex = 0;
@@ -81,12 +81,12 @@ export class LevelRunner {
 
     const nextLevel = ALL_LEVELS.find((l) => l.id === this.levelDef.id + 1);
     const hasNext = nextLevel && isLevelUnlocked(nextLevel.id);
-    const btnY = GAME_H / 2 + 60;
+    const btnY = GAME_H / 2 + px(60);
 
     if (hasNext) {
       const nextBtn = s.add
         .text(GAME_W / 2, btnY, "NEXT LEVEL", {
-          fontFamily: "monospace", fontSize: "22px", color: "#ffaa44",
+          fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#ffaa44",
         })
         .setOrigin(0.5)
         .setDepth(101)
@@ -99,8 +99,8 @@ export class LevelRunner {
     }
 
     const levelsBtn = s.add
-      .text(GAME_W / 2, btnY + 40, "CAMPAIGN", {
-        fontFamily: "monospace", fontSize: "18px", color: "#887766",
+      .text(GAME_W / 2, btnY + px(40), "CAMPAIGN", {
+        fontFamily: "monospace", fontSize: `${px(18)}px`, color: "#887766",
       })
       .setOrigin(0.5)
       .setDepth(101)

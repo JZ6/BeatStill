@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { createEnemy, type EnemyType, type Enemy } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
-import { GAME_W, GAME_H } from "./GameConfig";
+import { GAME_W, GAME_H, px } from "./GameConfig";
 import type { GameScene } from "../scenes/GameScene";
 
 export class EndlessMode {
@@ -60,7 +60,7 @@ export class EndlessMode {
     s.waveText.setText(`WAVE ${s.wave} — BOSS`);
 
     const warningText = s.add.text(GAME_W / 2, GAME_H / 2, "WARNING", {
-      fontFamily: "monospace", fontSize: "42px", color: "#ff4444", align: "center",
+      fontFamily: "monospace", fontSize: `${px(42)}px`, color: "#ff4444", align: "center",
     }).setOrigin(0.5).setDepth(100).setAlpha(0);
 
     s.tweens.add({

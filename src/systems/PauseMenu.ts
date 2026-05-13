@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GAME_W, GAME_H } from "./GameConfig";
+import { GAME_W, GAME_H, px } from "./GameConfig";
 import { createOptionsOverlay } from "../ui/OptionsOverlay";
 
 export class PauseMenu {
@@ -29,16 +29,16 @@ export class PauseMenu {
     this.overlay.setVisible(false);
 
     this.text = this.scene.add
-      .text(GAME_W / 2, GAME_H / 2 - 60, "PAUSED", {
-        fontFamily: "monospace", fontSize: "64px", color: "#e8d5b0", align: "center",
+      .text(GAME_W / 2, GAME_H / 2 - px(60), "PAUSED", {
+        fontFamily: "monospace", fontSize: `${px(64)}px`, color: "#e8d5b0", align: "center",
       })
       .setOrigin(0.5)
       .setDepth(201)
       .setVisible(false);
 
     this.resumeBtn = this.scene.add
-      .text(GAME_W / 2, GAME_H / 2 + 20, "RESUME", {
-        fontFamily: "monospace", fontSize: "22px", color: "#ffaa44",
+      .text(GAME_W / 2, GAME_H / 2 + px(20), "RESUME", {
+        fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#ffaa44",
       })
       .setOrigin(0.5)
       .setDepth(201)
@@ -52,8 +52,8 @@ export class PauseMenu {
       });
 
     this.optionsBtn = this.scene.add
-      .text(GAME_W / 2, GAME_H / 2 + 60, "OPTIONS", {
-        fontFamily: "monospace", fontSize: "22px", color: "#887766",
+      .text(GAME_W / 2, GAME_H / 2 + px(60), "OPTIONS", {
+        fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#887766",
       })
       .setOrigin(0.5)
       .setDepth(201)
@@ -67,8 +67,8 @@ export class PauseMenu {
       });
 
     this.menuBtn = this.scene.add
-      .text(GAME_W / 2, GAME_H / 2 + 100, "MAIN MENU", {
-        fontFamily: "monospace", fontSize: "22px", color: "#887766",
+      .text(GAME_W / 2, GAME_H / 2 + px(100), "MAIN MENU", {
+        fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#887766",
       })
       .setOrigin(0.5)
       .setDepth(201)
@@ -140,16 +140,16 @@ export class PauseMenu {
     );
 
     this.confirmText = this.scene.add
-      .text(GAME_W / 2, GAME_H / 2 - 30, "QUIT TO MENU?\nProgress will be lost.", {
-        fontFamily: "monospace", fontSize: "20px", color: "#e8d5b0", align: "center",
+      .text(GAME_W / 2, GAME_H / 2 - px(30), "QUIT TO MENU?\nProgress will be lost.", {
+        fontFamily: "monospace", fontSize: `${px(20)}px`, color: "#e8d5b0", align: "center",
       })
       .setOrigin(0.5)
       .setDepth(301)
       .setVisible(false);
 
     this.confirmYes = this.scene.add
-      .text(GAME_W / 2 - 60, GAME_H / 2 + 30, "YES", {
-        fontFamily: "monospace", fontSize: "22px", color: "#ff6644",
+      .text(GAME_W / 2 - px(60), GAME_H / 2 + px(30), "YES", {
+        fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#ff6644",
       })
       .setOrigin(0.5)
       .setDepth(301)
@@ -163,8 +163,8 @@ export class PauseMenu {
       });
 
     this.confirmNo = this.scene.add
-      .text(GAME_W / 2 + 60, GAME_H / 2 + 30, "NO", {
-        fontFamily: "monospace", fontSize: "22px", color: "#ffaa44",
+      .text(GAME_W / 2 + px(60), GAME_H / 2 + px(30), "NO", {
+        fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#ffaa44",
       })
       .setOrigin(0.5)
       .setDepth(301)

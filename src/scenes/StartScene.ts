@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GAME_W, GAME_H, isMobile } from "../systems/GameConfig";
+import { GAME_W, GAME_H, isMobile, px } from "../systems/GameConfig";
 import { createOptionsOverlay } from "../ui/OptionsOverlay";
 import { createCollectionOverlay } from "../ui/CollectionOverlay";
 import { createHowToOverlay } from "../ui/HowToOverlay";
@@ -57,7 +57,7 @@ export class StartScene extends Phaser.Scene {
 
     this.initParticles();
 
-    const titleY = cy - 110;
+    const titleY = cy - px(110);
     this.titleBaseY = titleY;
     this.titleDriftAngle = 0;
     this.timeScale = 0.1;
@@ -68,7 +68,7 @@ export class StartScene extends Phaser.Scene {
     this.titleGlow = this.add
       .text(cx, titleY, "BEAT STILL", {
         fontFamily: "monospace",
-        fontSize: "72px",
+        fontSize: `${px(72)}px`,
         color: "#ffaa44",
       })
       .setOrigin(0.5)
@@ -78,7 +78,7 @@ export class StartScene extends Phaser.Scene {
     this.titleText = this.add
       .text(cx, titleY, "BEAT STILL", {
         fontFamily: "monospace",
-        fontSize: "72px",
+        fontSize: `${px(72)}px`,
         color: "#e8d5b0",
       })
       .setOrigin(0.5)
@@ -94,9 +94,9 @@ export class StartScene extends Phaser.Scene {
     });
 
     this.taglineText = this.add
-      .text(cx, titleY + 48, "TIME BENDS TO YOUR WILL", {
+      .text(cx, titleY + px(48), "TIME BENDS TO YOUR WILL", {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: `${px(13)}px`,
         color: "#554433",
         letterSpacing: 6,
       })
@@ -121,8 +121,8 @@ export class StartScene extends Phaser.Scene {
       { label: "OPTIONS", action: () => this.showOptionsOverlay(), primary: false },
     ];
 
-    const startY = cy + 20;
-    const spacing = 36;
+    const startY = cy + px(20);
+    const spacing = px(36);
 
     const buttons: Phaser.GameObjects.Text[] = [];
     for (let i = 0; i < menuItems.length; i++) {
@@ -132,7 +132,7 @@ export class StartScene extends Phaser.Scene {
       const btn = this.add
         .text(cx, startY + i * spacing, item.label, {
           fontFamily: "monospace",
-          fontSize: item.primary ? "22px" : "16px",
+          fontSize: item.primary ? `${px(22)}px` : `${px(16)}px`,
           color: baseColor,
         })
         .setOrigin(0.5)
@@ -166,9 +166,9 @@ export class StartScene extends Phaser.Scene {
     }
 
     this.hintText = this.add
-      .text(cx, GAME_H - 40, "— move mouse to flow time —", {
+      .text(cx, GAME_H - px(40), "— move mouse to flow time —", {
         fontFamily: "monospace",
-        fontSize: "11px",
+        fontSize: `${px(11)}px`,
         color: "#333",
       })
       .setOrigin(0.5)
@@ -296,8 +296,8 @@ export class StartScene extends Phaser.Scene {
 
     const sep = this.separatorGraphics;
     sep.clear();
-    const sepY = this.titleBaseY + 70;
-    const sepW = 120;
+    const sepY = this.titleBaseY + px(70);
+    const sepW = px(120);
     const sepAlpha = 0.2 + ts * 0.15;
     sep.lineStyle(1, 0xffaa44, sepAlpha);
     sep.lineBetween(GAME_W / 2 - sepW, sepY, GAME_W / 2 + sepW, sepY);

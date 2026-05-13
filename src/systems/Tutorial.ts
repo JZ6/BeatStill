@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
 import { createEnemy } from "../objects/enemies";
-import { GAME_W, GAME_H, isMobile } from "./GameConfig";
+import { GAME_W, GAME_H, isMobile, px } from "./GameConfig";
 
 const STORAGE_KEY = "beatstill_tutorial_done";
 
@@ -106,35 +106,35 @@ export class TutorialManager {
     const cx = GAME_W / 2;
 
     this.msgText = scene.add
-      .text(cx, GAME_H - 90, "", {
+      .text(cx, GAME_H - px(90), "", {
         fontFamily: "monospace",
-        fontSize: "24px",
+        fontSize: `${px(24)}px`,
         color: "#ffaa44",
         align: "center",
         stroke: "#0a0806",
-        strokeThickness: 4,
+        strokeThickness: px(4),
       })
       .setOrigin(0.5)
       .setDepth(300)
       .setAlpha(0);
 
     this.hintText = scene.add
-      .text(cx, GAME_H - 58, "", {
+      .text(cx, GAME_H - px(58), "", {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: `${px(13)}px`,
         color: "#887766",
         align: "center",
         stroke: "#0a0806",
-        strokeThickness: 3,
+        strokeThickness: px(3),
       })
       .setOrigin(0.5)
       .setDepth(300)
       .setAlpha(0);
 
     this.stepDots = scene.add
-      .text(cx, GAME_H - 25, "", {
+      .text(cx, GAME_H - px(25), "", {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: `${px(12)}px`,
         color: "#554433",
         align: "center",
       })
@@ -143,9 +143,9 @@ export class TutorialManager {
       .setAlpha(0);
 
     this.skipText = scene.add
-      .text(GAME_W - 32, GAME_H - 20, "SKIP TUTORIAL", {
+      .text(GAME_W - px(32), GAME_H - px(20), "SKIP TUTORIAL", {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: `${px(13)}px`,
         color: "#554433",
       })
       .setOrigin(1, 1)

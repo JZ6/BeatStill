@@ -11,7 +11,7 @@ import { defaultStats, ALL_UPGRADES, type PlayerStats, type UpgradeDef } from ".
 import { options } from "../systems/GameOptions";
 import { getWeapon } from "../systems/Weapons";
 import { TutorialManager, isTutorialDone } from "../systems/Tutorial";
-import { GAME_W, GAME_H, isMobile } from "../systems/GameConfig";
+import { GAME_W, GAME_H, isMobile, px } from "../systems/GameConfig";
 import { TouchControls } from "../systems/TouchControls";
 import { UpgradePickup } from "../objects/Shard";
 import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, updateBestChain, addWeaponPickup, addWeaponKill, getState } from "../systems/Unlocks";
@@ -174,7 +174,7 @@ export class GameScene extends Phaser.Scene {
 
     if (isMobile()) {
       this.pauseBtn = this.add
-        .text(GAME_W - 16, 16, "❚❚", { fontFamily: "monospace", fontSize: "24px", color: "#887766" })
+        .text(GAME_W - px(16), px(16), "❚❚", { fontFamily: "monospace", fontSize: `${px(24)}px`, color: "#887766" })
         .setOrigin(1, 0)
         .setDepth(150)
         .setInteractive({ useHandCursor: true })
@@ -319,53 +319,53 @@ export class GameScene extends Phaser.Scene {
 
   private createHUD() {
     this.scoreText = this.add
-      .text(16, 16, "SCORE: 0", { fontFamily: "monospace", fontSize: "20px", color: "#e8d5b0" })
+      .text(px(16), px(16), "SCORE: 0", { fontFamily: "monospace", fontSize: `${px(20)}px`, color: "#e8d5b0" })
       .setDepth(100);
 
     this.weaponText = this.add
-      .text(16, 42, "STANDARD", { fontFamily: "monospace", fontSize: "13px", color: "#666" })
+      .text(px(16), px(42), "STANDARD", { fontFamily: "monospace", fontSize: `${px(13)}px`, color: "#666" })
       .setDepth(100);
 
     this.waveText = this.add
-      .text(GAME_W - 16, 16, "WAVE 0", {
-        fontFamily: "monospace", fontSize: "20px", color: "#e8d5b0", align: "right",
+      .text(GAME_W - px(16), px(16), "WAVE 0", {
+        fontFamily: "monospace", fontSize: `${px(20)}px`, color: "#e8d5b0", align: "right",
       })
       .setOrigin(1, 0)
       .setDepth(100);
 
     this.chainText = this.add
-      .text(16, 78, "", { fontFamily: "monospace", fontSize: "18px", color: "#ffaa44" })
+      .text(px(16), px(78), "", { fontFamily: "monospace", fontSize: `${px(18)}px`, color: "#ffaa44" })
       .setDepth(100)
       .setAlpha(0);
 
     this.gameOverText = this.add
       .text(GAME_W / 2, GAME_H / 2, "", {
-        fontFamily: "monospace", fontSize: "48px", color: "#ff6644", align: "center",
+        fontFamily: "monospace", fontSize: `${px(48)}px`, color: "#ff6644", align: "center",
       })
       .setOrigin(0.5)
       .setDepth(100);
 
     this.fpsText = this.add
-      .text(GAME_W - 16, 40, "", { fontFamily: "monospace", fontSize: "14px", color: "#666" })
+      .text(GAME_W - px(16), px(40), "", { fontFamily: "monospace", fontSize: `${px(14)}px`, color: "#666" })
       .setOrigin(1, 0)
       .setDepth(100);
 
     this.shardText = this.add
-      .text(16, 60, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffaa44" })
+      .text(px(16), px(60), "", { fontFamily: "monospace", fontSize: `${px(13)}px`, color: "#ffaa44" })
       .setDepth(100);
 
     this.toastText = this.add
-      .text(GAME_W / 2, 50, "", {
-        fontFamily: "monospace", fontSize: "22px", color: "#ffaa44",
-        align: "center", stroke: "#0a0806", strokeThickness: 4,
+      .text(GAME_W / 2, px(50), "", {
+        fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#ffaa44",
+        align: "center", stroke: "#0a0806", strokeThickness: px(4),
       })
       .setOrigin(0.5)
       .setDepth(400)
       .setAlpha(0);
 
     this.relicHudText = this.add
-      .text(16, GAME_H - 20, "", {
-        fontFamily: "monospace", fontSize: "12px", color: "#887766",
+      .text(px(16), GAME_H - px(20), "", {
+        fontFamily: "monospace", fontSize: `${px(12)}px`, color: "#887766",
       })
       .setDepth(100);
   }
@@ -395,7 +395,7 @@ export class GameScene extends Phaser.Scene {
         this.mutators.addMutator(mutator);
         const mutText = this.add
           .text(GAME_W / 2, GAME_H / 2, mutator.name.toUpperCase(), {
-            fontFamily: "monospace", fontSize: "28px", color: "#ff6644", align: "center",
+            fontFamily: "monospace", fontSize: `${px(28)}px`, color: "#ff6644", align: "center",
           })
           .setOrigin(0.5)
           .setDepth(100)
@@ -443,7 +443,7 @@ export class GameScene extends Phaser.Scene {
 
     const defeatedText = this.add
       .text(GAME_W / 2, GAME_H / 2, "BOSS DEFEATED", {
-        fontFamily: "monospace", fontSize: "32px", color: "#ffaa44", align: "center",
+        fontFamily: "monospace", fontSize: `${px(32)}px`, color: "#ffaa44", align: "center",
       })
       .setOrigin(0.5)
       .setDepth(100)
@@ -649,8 +649,8 @@ export class GameScene extends Phaser.Scene {
 
   private createMobileGameOverUI(isLevel: boolean) {
     this.menuBtn = this.add
-      .text(GAME_W / 2, GAME_H / 2 + 120, isLevel ? "CAMPAIGN" : "MENU", {
-        fontFamily: "monospace", fontSize: "20px", color: "#887766",
+      .text(GAME_W / 2, GAME_H / 2 + px(120), isLevel ? "CAMPAIGN" : "MENU", {
+        fontFamily: "monospace", fontSize: `${px(20)}px`, color: "#887766",
       })
       .setOrigin(0.5)
       .setDepth(101)

@@ -15,6 +15,7 @@ const game = new Phaser.Game({
   height: GAME_H,
   backgroundColor: "#0a0806",
   parent: document.body,
+  render: { roundPixels: true },
   physics: { default: "arcade", arcade: { debug: false } },
   scene: [StartScene, GameScene, LevelSelectScene],
   scale: {

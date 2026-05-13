@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { GAME_W, GAME_H } from "./GameConfig";
+import { GAME_W, GAME_H, px } from "./GameConfig";
 import {
   type FrameSnapshot,
   T_PLAYER, T_ENEMY, T_PLAYER_BULLET, T_ENEMY_BULLET, T_ASTEROID, T_SHARD,
@@ -29,9 +29,9 @@ export class ReplayRenderer {
     this.graphics.setDepth(501);
 
     this.label = scene.add
-      .text(GAME_W / 2, 24, "KILLCAM", {
+      .text(GAME_W / 2, px(24), "KILLCAM", {
         fontFamily: "monospace",
-        fontSize: "18px",
+        fontSize: `${px(18)}px`,
         color: "#ff4444",
         align: "center",
       })

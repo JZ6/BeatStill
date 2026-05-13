@@ -17,9 +17,15 @@ function computeDimensions(quality: number): { w: number; h: number } {
 
 export let GAME_W = 1280;
 export let GAME_H = 720;
+export let UI_SCALE = 1;
+
+export function px(base: number): number {
+  return Math.round(base * UI_SCALE);
+}
 
 export function initDimensions(quality: number) {
   const { w, h } = computeDimensions(quality);
   GAME_W = w;
   GAME_H = h;
+  UI_SCALE = GAME_H / 720;
 }
