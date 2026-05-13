@@ -29,11 +29,11 @@ function snapshotGameState(): Record<string, unknown> | null {
     wave: scene.wave,
     score: scene.score,
     gameOver: scene.gameOver,
-    paused: scene.paused,
+    paused: scene.pauseMenu?.isActive ?? false,
     godMode: scene.godMode,
-    chainCount: scene.chainCount,
-    chainTier: scene.chainTier,
-    chainTimer: scene.chainTimer,
+    chainCount: scene.chain?.chainCount ?? 0,
+    chainTier: scene.chain?.chainTier ?? 0,
+    chainTimer: scene.chain?.chainTimer ?? 0,
     player: scene.ship
       ? {
           x: Math.round(scene.ship.x),

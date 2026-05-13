@@ -70,7 +70,7 @@ function buildSteps(): TutorialStep[] {
           scene.enemies.add(enemy);
         }
       },
-      condition: (scene) => scene.chainCount >= 2,
+      condition: (scene) => scene.chain.chainCount >= 2,
     },
   ];
 }

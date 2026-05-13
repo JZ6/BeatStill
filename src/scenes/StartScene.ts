@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { GAME_W, GAME_H, isMobile } from "../systems/GameConfig";
 import { createOptionsOverlay } from "../ui/OptionsOverlay";
 import { createCollectionOverlay } from "../ui/CollectionOverlay";
+import { createHowToOverlay } from "../ui/HowToOverlay";
 import { AudioManager } from "../systems/AudioManager";
 import { theremin } from "../sounds";
 import { options } from "../systems/GameOptions";
@@ -336,51 +337,9 @@ export class StartScene extends Phaser.Scene {
 
   private showHowToOverlay() {
     if (this.howToOverlay) return;
-    const mobile = isMobile();
-
-    const overlay = document.createElement("div");
-    overlay.className = "options-overlay";
-
-    const title = document.createElement("div");
-    title.className = "options-title";
-    title.textContent = "HOW TO PLAY";
-    overlay.appendChild(title);
-
-    const content = document.createElement("div");
-    content.style.cssText = "font-family:monospace;font-size:15px;color:#998877;text-align:center;line-height:2.2;max-width:500px;";
-    content.innerHTML = mobile
-      ? [
-          "Left stick — move",
-          "Right stick — aim & shoot",
-          "",
-          "Move to speed up time",
-          "Release to freeze time",
-        ].join("<br>")
-      : [
-          "WASD — move",
-          "Mouse — aim",
-          "Click — shoot",
-          "ESC — pause",
-          "",
-          "Move to speed up time",
-          "Stop to freeze time",
-        ].join("<br>");
-    overlay.appendChild(content);
-
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "options-close-btn";
-    closeBtn.textContent = "CLOSE";
-    closeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      overlay.remove();
+    const overlay = createHowToOverlay(() => {
       this.howToOverlay = null;
     });
-    overlay.appendChild(closeBtn);
-
-    for (const evt of ["pointerdown", "pointerup", "pointermove", "click", "keydown"] as const) {
-      overlay.addEventListener(evt, (e) => e.stopPropagation());
-    }
-
     this.howToOverlay = overlay;
     document.body.appendChild(overlay);
   }
