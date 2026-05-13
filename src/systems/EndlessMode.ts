@@ -19,13 +19,30 @@ export class EndlessMode {
       return;
     }
 
-    const enemyCount = 8 + s.wave * 3;
+    const params = s.mutators.getActiveParams();
+    const enemyCount = Math.floor((8 + s.wave * 3) * params.enemyCountMult);
     const pool = this.buildEnemyPool(s.wave);
 
+    let eliteCount = 0;
     for (let i = 0; i < enemyCount; i++) {
       const { x, y } = this.randomEdgePosition();
       const type = pool[Math.floor(Math.random() * pool.length)];
-      s.enemies.add(createEnemy(s, x, y, type));
+      const enemy = createEnemy(s, x, y, type);
+
+      if (params.enemySpeedMult !== 1) enemy.speed *= params.enemySpeedMult;
+      if (params.enemyFireRateMult !== 1) enemy.fireRate *= params.enemyFireRateMult;
+      if (params.enemyHpMult === 0) { enemy.hp = 1; enemy.maxHp = 1; }
+      else if (params.enemyHpMult !== 1) {
+        enemy.hp = Math.ceil(enemy.hp * params.enemyHpMult);
+        enemy.maxHp = enemy.hp;
+      }
+
+      if (s.wave >= 3 && eliteCount < 2 && Math.random() < 0.15) {
+        enemy.makeElite();
+        eliteCount++;
+      }
+
+      s.enemies.add(enemy);
     }
 
     const asteroidCount = 1 + Math.floor(s.wave / 2);

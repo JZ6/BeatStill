@@ -3,6 +3,7 @@ import { GAME_W, GAME_H, isMobile } from "../systems/GameConfig";
 import { createOptionsOverlay } from "../ui/OptionsOverlay";
 import { createCollectionOverlay } from "../ui/CollectionOverlay";
 import { createHowToOverlay } from "../ui/HowToOverlay";
+import { createShopOverlay } from "../ui/ShopOverlay";
 import { AudioManager } from "../systems/AudioManager";
 import { theremin } from "../sounds";
 import { options } from "../systems/GameOptions";
@@ -23,6 +24,7 @@ export class StartScene extends Phaser.Scene {
   private optionsOverlay: HTMLDivElement | null = null;
   private collectionOverlay: HTMLDivElement | null = null;
   private howToOverlay: HTMLDivElement | null = null;
+  private shopOverlay: HTMLDivElement | null = null;
   private audioManager: AudioManager | null = null;
   private audioStarted = false;
   private bgGraphics!: Phaser.GameObjects.Graphics;
@@ -115,6 +117,7 @@ export class StartScene extends Phaser.Scene {
       { label: "ENDLESS", action: () => this.startGame(), primary: true },
       { label: "HOW TO PLAY", action: () => this.showHowToOverlay(), primary: false },
       { label: "COLLECTION", action: () => this.showCollectionOverlay(), primary: false },
+      { label: "SHOP", action: () => this.showShopOverlay(), primary: false },
       { label: "OPTIONS", action: () => this.showOptionsOverlay(), primary: false },
     ];
 
@@ -188,6 +191,8 @@ export class StartScene extends Phaser.Scene {
       this.collectionOverlay = null;
       this.howToOverlay?.remove();
       this.howToOverlay = null;
+      this.shopOverlay?.remove();
+      this.shopOverlay = null;
       this.audioManager?.dispose();
       this.audioManager = null;
       this.audioStarted = false;
@@ -301,7 +306,7 @@ export class StartScene extends Phaser.Scene {
   }
 
   private hasOverlay(): boolean {
-    return !!(this.optionsOverlay || this.collectionOverlay || this.howToOverlay);
+    return !!(this.optionsOverlay || this.collectionOverlay || this.howToOverlay || this.shopOverlay);
   }
 
   private ensureAudio() {
@@ -351,6 +356,15 @@ export class StartScene extends Phaser.Scene {
       this.collectionOverlay = null;
     });
     this.collectionOverlay = overlay;
+    document.body.appendChild(overlay);
+  }
+
+  private showShopOverlay() {
+    if (this.shopOverlay) return;
+    const overlay = createShopOverlay(() => {
+      this.shopOverlay = null;
+    });
+    this.shopOverlay = overlay;
     document.body.appendChild(overlay);
   }
 }

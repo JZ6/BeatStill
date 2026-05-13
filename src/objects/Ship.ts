@@ -182,6 +182,8 @@ export class Ship extends Phaser.GameObjects.Container {
 
     for (let i = 0; i < count; i++) {
       const a = startAngle + step * i;
+      const hasOverclock = gameScene.relics.hasRelic("overclock");
+      const lt = hasOverclock && weapon.lifetime > 0 ? weapon.lifetime / 2 : weapon.lifetime;
       const bullet = new Bullet(
         this.scene,
         this.x + Math.cos(a) * 20,
@@ -194,8 +196,9 @@ export class Ship extends Phaser.GameObjects.Container {
         {
           color: weapon.bulletColor,
           radius: weapon.bulletRadius,
-          lifetime: weapon.lifetime,
+          lifetime: lt,
           homing: weapon.homing,
+          canRicochet: gameScene.relics.hasRelic("ricochet"),
         },
       );
       gameScene.playerBullets.add(bullet);
@@ -203,7 +206,8 @@ export class Ship extends Phaser.GameObjects.Container {
     gameScene.audioManager.onShoot(weapon.shotSound);
 
     const cooldownReduction = BASE.fireCooldown - this.stats.fireCooldown;
-    return Math.max(weapon.baseCooldown - cooldownReduction, 30);
+    const cd = Math.max(weapon.baseCooldown - cooldownReduction, 30);
+    return gameScene.relics.hasRelic("overclock") ? Math.max(cd / 2, 20) : cd;
   }
 
 }

@@ -9,6 +9,7 @@ export interface BulletOpts {
   radius?: number;
   lifetime?: number;
   homing?: boolean;
+  canRicochet?: boolean;
 }
 
 export class Bullet extends Phaser.GameObjects.Graphics {
@@ -23,6 +24,8 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   bulletColor: number;
   alive = true;
   sourceEnemy: Phaser.GameObjects.GameObject | null = null;
+  private canRicochet: boolean;
+  private bounced = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -48,6 +51,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.lifetime = opts?.lifetime ?? 0;
     this.homing = opts?.homing ?? false;
 
+    this.canRicochet = opts?.canRicochet ?? false;
     this.bulletColor = opts?.color ?? (owner === "player" ? 0xffff00 : 0xff4488);
     const glowAlpha = owner === "player" ? 0.3 : 0.25;
 
@@ -74,8 +78,17 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.x += this.vx * timeScale * dt;
     this.y += this.vy * timeScale * dt;
 
-    if (this.x < -20 || this.x > GAME_W + 20 || this.y < -20 || this.y > GAME_H + 20) {
-      this.kill();
+    const oob = this.x < -20 || this.x > GAME_W + 20 || this.y < -20 || this.y > GAME_H + 20;
+    if (oob) {
+      if (this.canRicochet && !this.bounced) {
+        this.bounced = true;
+        if (this.x < -20 || this.x > GAME_W + 20) this.vx = -this.vx;
+        if (this.y < -20 || this.y > GAME_H + 20) this.vy = -this.vy;
+        this.x = Phaser.Math.Clamp(this.x, 0, GAME_W);
+        this.y = Phaser.Math.Clamp(this.y, 0, GAME_H);
+      } else {
+        this.kill();
+      }
     }
   }
 

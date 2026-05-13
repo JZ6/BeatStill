@@ -26,6 +26,8 @@ export interface UnlockState {
   bestChain: number;
   unlockedIds: string[];
   weaponMastery: Record<string, WeaponMasteryEntry>;
+  evolvedWeapons: string[];
+  shopPurchases: Record<string, number>;
 }
 
 const STORAGE_KEY = "beatstill_unlocks";
@@ -37,6 +39,8 @@ const DEFAULT_STATE: UnlockState = {
   bestChain: 0,
   unlockedIds: [],
   weaponMastery: {},
+  evolvedWeapons: [],
+  shopPurchases: {},
 };
 
 export const ALL_UNLOCKS: UnlockDef[] = [
@@ -181,4 +185,22 @@ export function addWeaponKill(weaponId: string) {
   }
   state.weaponMastery[weaponId].kills++;
   saveState();
+}
+
+export function recordEvolution(weaponId: string) {
+  if (!state.evolvedWeapons.includes(weaponId)) {
+    state.evolvedWeapons.push(weaponId);
+    saveState();
+  }
+}
+
+export function hasEvolved(weaponId: string): boolean {
+  return state.evolvedWeapons.includes(weaponId);
+}
+
+export function spendShards(cost: number): boolean {
+  if (state.shards < cost) return false;
+  state.shards -= cost;
+  saveState();
+  return true;
 }

@@ -21,9 +21,16 @@ import { checkAchievements, addBossDefeat, recordWeaponUsed, recordThemeUsed, ty
 import type { EnemyType } from "../objects/enemies";
 import { EndlessMode } from "../systems/EndlessMode";
 import { ChainSystem, MAGNET_SPEEDS } from "../systems/ChainSystem";
+import { checkEvolution } from "../systems/Evolutions";
+import { recordEvolution } from "../systems/Unlocks";
 import { CollisionSystem } from "../systems/CollisionSystem";
 import { LevelRunner } from "../systems/LevelRunner";
 import { PauseMenu } from "../systems/PauseMenu";
+import { RelicSystem, type RelicDef } from "../systems/Relics";
+import { createRelicSelectOverlay } from "../ui/RelicSelectOverlay";
+import { MutatorSystem } from "../systems/WaveMutators";
+import { ReplayRecorder } from "../systems/ReplayRecorder";
+import { ReplayRenderer } from "../systems/ReplayRenderer";
 
 export class GameScene extends Phaser.Scene {
   ship!: Ship;
@@ -43,6 +50,8 @@ export class GameScene extends Phaser.Scene {
   private endlessMode!: EndlessMode;
   pauseMenu!: PauseMenu;
   level: LevelRunner | null = null;
+  relics!: RelicSystem;
+  mutators!: MutatorSystem;
 
   stats!: PlayerStats;
   score = 0;
@@ -73,10 +82,15 @@ export class GameScene extends Phaser.Scene {
   private toastText!: Phaser.GameObjects.Text;
   private toastQueue: string[] = [];
   private toastActive = false;
+  private relicOverlay: HTMLDivElement | null = null;
+  relicSelectActive = false;
+  private relicHudText!: Phaser.GameObjects.Text;
   private runDamageTaken = 0;
   bossFightDamageTaken = 0;
   private freezeTime = 0;
   private fpsTimer = 0;
+  private recorder!: ReplayRecorder;
+  private replayRenderer: ReplayRenderer | null = null;
 
   constructor() {
     super("GameScene");
@@ -96,6 +110,11 @@ export class GameScene extends Phaser.Scene {
     this.runDamageTaken = 0;
     this.bossFightDamageTaken = 0;
     this.freezeTime = 0;
+    this.relics = new RelicSystem();
+    this.mutators = new MutatorSystem();
+    this.relicSelectActive = false;
+    this.recorder = new ReplayRecorder();
+    this.replayRenderer = null;
 
     this.bgGraphics = this.add.graphics();
     this.bgGraphics.setDepth(-1);
@@ -184,6 +203,8 @@ export class GameScene extends Phaser.Scene {
       this.toastQueue.length = 0;
       this.toastActive = false;
       this.pauseMenu.cleanup();
+      this.relicOverlay?.remove();
+      this.relicOverlay = null;
     });
 
     this.waveTimer = 0;
@@ -199,12 +220,16 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     if (this.gameOver) {
+      if (this.replayRenderer?.isPlaying) {
+        this.replayRenderer.update(delta);
+        return;
+      }
       if (this.restartKey?.isDown) this.restartGame();
       this.particles.update(delta, 0.3);
       return;
     }
 
-    if (this.pauseMenu.isActive) return;
+    if (this.pauseMenu.isActive || this.relicSelectActive) return;
 
     this.touchControls?.update();
 
@@ -240,6 +265,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.audioStarted) this.audioManager.updateTimeScale(ts);
+    this.recorder.record(this);
 
     this.fpsTimer += delta;
     if (this.fpsTimer > 500) {
@@ -271,14 +297,16 @@ export class GameScene extends Phaser.Scene {
       b.update(delta, ts);
     }
 
-    for (const b of [...this.enemyBullets.getChildren()] as Bullet[]) b.update(delta, ts);
+    const enemyTs = (this.relics.hasRelic("timewarp") && ts < 0.15) ? ts * 0.1 : ts;
+    for (const b of [...this.enemyBullets.getChildren()] as Bullet[]) b.update(delta, enemyTs);
   }
 
   private updatePickupMagnets(delta: number, ts: number) {
-    const magnetSpd = MAGNET_SPEEDS[this.chain.chainTier] ?? 0;
+    const hasMagnetism = this.relics.hasRelic("magnetism");
+    const magnetSpd = hasMagnetism ? MAGNET_SPEEDS[5] : (MAGNET_SPEEDS[this.chain.chainTier] ?? 0);
     for (const p of [...this.shards.getChildren()] as UpgradePickup[]) {
       if (!p.alive) continue;
-      if (magnetSpd > 0 && this.chain.chainTimer > 0) {
+      if (hasMagnetism || (magnetSpd > 0 && this.chain.chainTimer > 0)) {
         p.magnetTarget = this.ship;
         p.magnetSpeed = magnetSpd;
       } else {
@@ -334,6 +362,12 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(400)
       .setAlpha(0);
+
+    this.relicHudText = this.add
+      .text(16, GAME_H - 20, "", {
+        fontFamily: "monospace", fontSize: "12px", color: "#887766",
+      })
+      .setDepth(100);
   }
 
   drawBackground() {
@@ -354,6 +388,29 @@ export class GameScene extends Phaser.Scene {
     updateHighWave(this.wave);
     this.processUnlocks();
     this.processAchievements(false, false);
+
+    if (this.wave === 6 || (this.wave > 6 && (this.wave - 1) % 5 === 0)) {
+      const mutator = this.mutators.rollMutator();
+      if (mutator) {
+        this.mutators.addMutator(mutator);
+        const mutText = this.add
+          .text(GAME_W / 2, GAME_H / 2, mutator.name.toUpperCase(), {
+            fontFamily: "monospace", fontSize: "28px", color: "#ff6644", align: "center",
+          })
+          .setOrigin(0.5)
+          .setDepth(100)
+          .setAlpha(0);
+        this.tweens.add({
+          targets: mutText,
+          alpha: { from: 0, to: 1 },
+          duration: 400,
+          yoyo: true,
+          hold: 1200,
+          onComplete: () => mutText.destroy(),
+        });
+      }
+    }
+
     this.endlessMode.spawnWave();
   }
 
@@ -370,6 +427,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(300, 0.02);
 
     if (this.audioStarted) this.audioManager.onBossDeath();
+    this.offerRelicChoice();
 
     ([...this.enemies.getChildren()] as Enemy[]).forEach((e) => {
       if (e.enemyType === "phantom_decoy") e.destroy();
@@ -399,6 +457,40 @@ export class GameScene extends Phaser.Scene {
       hold: 1500,
       onComplete: () => defeatedText.destroy(),
     });
+  }
+
+  // --- Relics ---
+
+  offerRelicChoice() {
+    const choices = this.relics.pickChoices(3);
+    if (choices.length === 0) return;
+    this.relicSelectActive = true;
+    const overlay = createRelicSelectOverlay(choices, (relic) => {
+      this.relicOverlay = null;
+      this.relicSelectActive = false;
+      this.applyRelic(relic);
+    });
+    this.relicOverlay = overlay;
+    document.body.appendChild(overlay);
+  }
+
+  private applyRelic(relic: RelicDef) {
+    this.relics.addRelic(relic.id);
+    this.toastQueue.push(`RELIC: ${relic.name}`);
+    if (!this.toastActive) this.showNextToast();
+    this.updateRelicHud();
+
+    if (relic.id === "glass") {
+      this.ship.maxHp = 1;
+      this.ship.hp = 1;
+      this.ship.drawHealthBar();
+      this.stats.damage *= 3;
+    }
+  }
+
+  private updateRelicHud() {
+    const icons = this.relics.getActive().map((r) => r.icon).join(" ");
+    this.relicHudText.setText(icons);
   }
 
   // --- Pickups ---
@@ -432,6 +524,18 @@ export class GameScene extends Phaser.Scene {
       this.ship.maxHp = this.stats.maxHp;
       this.ship.hp = Math.min(this.ship.hp + 1, this.ship.maxHp);
       this.ship.drawHealthBar();
+    }
+
+    const evo = checkEvolution(this.stats);
+    if (evo) {
+      this.stats.weaponId = evo.evolvedWeaponId;
+      recordEvolution(evo.evolvedWeaponId);
+      this.particles.burst(this.ship.x, this.ship.y, 0xffaa22, 50, 200, 6);
+      this.particles.burst(this.ship.x, this.ship.y, 0xffffff, 30, 150, 4);
+      this.cameras.main.shake(400, 0.03);
+      this.toastQueue.push(`EVOLVED: ${getWeapon(evo.evolvedWeaponId).name.toUpperCase()}`);
+      if (!this.toastActive) this.showNextToast();
+      if (this.audioStarted) this.audioManager.onBossDeath();
     }
   }
 
@@ -469,7 +573,8 @@ export class GameScene extends Phaser.Scene {
       levelJustCompleted,
     };
     const newAchievements = checkAchievements(ctx);
-    for (const a of newAchievements) this.toastQueue.push(`★ ${a.name}`);
+    for (const a of newAchievements) this.toastQueue.push(`★ ${a.name} (+${a.reward}◆)`);
+    if (newAchievements.length > 0) this.shardText.setText(`◆ ${getState().shards}`);
     if (!this.toastActive && this.toastQueue.length > 0) this.showNextToast();
   }
 
@@ -509,7 +614,20 @@ export class GameScene extends Phaser.Scene {
     updateBestChain(this.chain.bestChain);
     this.processUnlocks();
     this.processAchievements(false, false);
+    this.audioManager.onPlayerDeath();
 
+    const frames = this.recorder.getReplayFrames(300);
+    if (frames.length > 30) {
+      this.replayRenderer = new ReplayRenderer(this, frames, () => {
+        this.replayRenderer = null;
+        this.showGameOverScreen();
+      });
+    } else {
+      this.showGameOverScreen();
+    }
+  }
+
+  private showGameOverScreen() {
     const mobile = isMobile();
     const isLevel = !!this.level;
     let controls: string;
@@ -521,7 +639,6 @@ export class GameScene extends Phaser.Scene {
 
     const scoreLine = isLevel ? "" : `\nSCORE: ${this.score}  |  WAVE: ${this.wave}\n`;
     this.gameOverText.setText(`GAME OVER\n${scoreLine}\n${controls}`);
-    this.audioManager.onPlayerDeath();
 
     if (mobile) this.createMobileGameOverUI(isLevel);
 

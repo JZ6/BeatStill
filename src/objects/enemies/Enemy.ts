@@ -17,6 +17,7 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
   targetX!: number;
   targetY!: number;
   protected color: number;
+  isElite = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, hp: number, speed: number, fireRate: number, color: number, radius: number) {
     super(scene, { x, y });
@@ -39,6 +40,10 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
 
   draw(color: number) {
     this.clear();
+    if (this.isElite) {
+      this.lineStyle(4, 0xffdd44, 0.3);
+      this.strokeCircle(0, 0, this.radius + 6);
+    }
     this.drawShape(color);
     if (this.maxHp > 1) {
       const barW = this.radius * 2;
@@ -47,9 +52,16 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
       const barY = this.radius + 7;
       this.fillStyle(0x222222, 0.8);
       this.fillRect(barX, barY, barW, barH);
-      this.fillStyle(color, 0.9);
+      this.fillStyle(this.isElite ? 0xffdd44 : color, 0.9);
       this.fillRect(barX, barY, barW * (this.hp / this.maxHp), barH);
     }
+  }
+
+  makeElite() {
+    this.isElite = true;
+    this.hp *= 3;
+    this.maxHp *= 3;
+    this.draw(this.color);
   }
 
   protected abstract drawShape(color: number): void;

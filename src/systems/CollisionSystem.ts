@@ -58,7 +58,13 @@ export class CollisionSystem {
           s.particles.burst(e.x, e.y, b.bulletColor, pCount, 100, pSize);
           s.particles.burst(e.x, e.y, tier > 0 ? tierColor : 0xffcc66, pCount2, 60, pSize - 1);
           s.chain.registerKill(e.x, e.y, isBoss);
+          if (s.relics.hasRelic("vampiric") && Math.random() < 0.15 && s.ship.hp < s.ship.maxHp) {
+            s.ship.hp = Math.min(s.ship.hp + 1, s.ship.maxHp);
+            s.ship.drawHealthBar();
+            s.particles.burst(s.ship.x, s.ship.y, 0x44ff44, 8, 40, 2);
+          }
           if (isBoss) s.onBossKill(e.x, e.y);
+          if (e.isElite && !isBoss) s.offerRelicChoice();
           if (e.enemyType === "phantom_decoy") {
             const phantoms = ([...s.enemies.getChildren()] as Enemy[]).filter((en) => en.enemyType === "phantom");
             for (const p of phantoms) (p as any).notifyDecoyKilled?.();

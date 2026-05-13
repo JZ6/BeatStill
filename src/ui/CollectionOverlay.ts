@@ -1,7 +1,8 @@
 import { options, saveOptions } from "../systems/GameOptions";
-import { ALL_UNLOCKS, getState, isUnlocked, requirementText, SHIP_COLORS, getWeaponMastery, isWeaponMastered } from "../systems/Unlocks";
+import { ALL_UNLOCKS, getState, isUnlocked, requirementText, SHIP_COLORS, getWeaponMastery, isWeaponMastered, hasEvolved } from "../systems/Unlocks";
 import { ALL_WEAPONS } from "../systems/Weapons";
 import { ALL_ACHIEVEMENTS, isAchievementUnlocked, getAchievementState } from "../systems/Achievements";
+import { ALL_EVOLUTIONS, getEvolutionRequirement } from "../systems/Evolutions";
 
 const STYLE_ID = "collection-overlay-styles";
 
@@ -164,9 +165,9 @@ export function createCollectionOverlay(onClose: () => void): HTMLDivElement {
 }
 
 function renderWeapons(container: HTMLDivElement, refresh: () => void) {
-  const allWeapons = ALL_WEAPONS;
+  const baseWeapons = ALL_WEAPONS.filter((w) => !w.isEvolution);
 
-  for (const w of allWeapons) {
+  for (const w of baseWeapons) {
     const isStd = w.id === "standard";
     const mastery = isStd ? null : getWeaponMastery(w.id);
     const mastered = isStd || isWeaponMastered(w.id);
@@ -241,6 +242,51 @@ function renderWeapons(container: HTMLDivElement, refresh: () => void) {
 
     container.appendChild(item);
   }
+
+  const evoLabel = document.createElement("div");
+  evoLabel.className = "col-section-label";
+  evoLabel.textContent = "EVOLUTIONS";
+  container.appendChild(evoLabel);
+
+  const evolvedWeapons = ALL_WEAPONS.filter((w) => w.isEvolution);
+  for (const w of evolvedWeapons) {
+    const discovered = hasEvolved(w.id);
+    const req = getEvolutionRequirement(w.id);
+
+    const item = document.createElement("div");
+    item.className = `col-item${discovered ? "" : " locked"}`;
+
+    const icon = document.createElement("div");
+    icon.className = "col-icon";
+    icon.style.color = discovered ? `#${w.bulletColor.toString(16).padStart(6, "0")}` : "#333";
+    icon.textContent = discovered ? w.icon : "?";
+
+    const info = document.createElement("div");
+    info.className = "col-info";
+
+    const name = document.createElement("div");
+    name.className = "col-name";
+    name.style.color = discovered ? "#e8d5b0" : "#444";
+    name.textContent = discovered ? w.name : "???";
+
+    const desc = document.createElement("div");
+    desc.className = "col-desc";
+    desc.textContent = discovered ? w.description : req;
+
+    info.appendChild(name);
+    info.appendChild(desc);
+    item.appendChild(icon);
+    item.appendChild(info);
+
+    if (discovered) {
+      const check = document.createElement("div");
+      check.style.cssText = "color:#ffaa44;font-size:12px;flex-shrink:0;";
+      check.textContent = "✓";
+      item.appendChild(check);
+    }
+
+    container.appendChild(item);
+  }
 }
 
 function renderAchievements(container: HTMLDivElement) {
@@ -291,9 +337,14 @@ function renderAchievements(container: HTMLDivElement) {
       item.appendChild(icon);
       item.appendChild(info);
 
+      const reward = document.createElement("div");
+      reward.style.cssText = `font-size:11px;flex-shrink:0;color:${done ? "#ffaa44" : "#555"};margin-left:auto;padding-left:8px;`;
+      reward.textContent = `+${a.reward}◆`;
+      item.appendChild(reward);
+
       if (done) {
         const check = document.createElement("div");
-        check.style.cssText = "color:#ffaa44;font-size:16px;flex-shrink:0;";
+        check.style.cssText = "color:#ffaa44;font-size:16px;flex-shrink:0;margin-left:4px;";
         check.textContent = "✓";
         item.appendChild(check);
       }

@@ -1,4 +1,5 @@
 import { ALL_WEAPONS } from "./Weapons";
+import { applyShopBonuses } from "./Shop";
 
 export interface PlayerStats {
   bulletCount: number;
@@ -15,7 +16,7 @@ export interface PlayerStats {
 }
 
 export function defaultStats(): PlayerStats {
-  return {
+  const stats: PlayerStats = {
     bulletCount: 1,
     bulletSpread: 0.15,
     pierce: 0,
@@ -28,6 +29,8 @@ export function defaultStats(): PlayerStats {
     chainWindow: 0,
     chainRadius: 0,
   };
+  applyShopBonuses(stats);
+  return stats;
 }
 
 export interface UpgradeDef {
@@ -133,7 +136,7 @@ export const ALL_UPGRADES: UpgradeDef[] = [
     apply: (s) => { s.chainRadius = Math.min(s.chainRadius + 30, 90); },
   },
   // Weapon upgrades — one per non-standard weapon
-  ...ALL_WEAPONS.filter((w) => w.id !== "standard").map((w) => ({
+  ...ALL_WEAPONS.filter((w) => w.id !== "standard" && !w.isEvolution).map((w) => ({
     id: `weapon_${w.id}`,
     name: w.name,
     icon: w.icon,

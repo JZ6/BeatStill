@@ -2,6 +2,7 @@ import type { GameScene } from "../scenes/GameScene";
 import { UpgradePickup } from "../objects/Shard";
 import { addWeaponKill } from "./Unlocks";
 import { addKill } from "./Achievements";
+import { getLuckyStarBonus } from "./Shop";
 
 export const CHAIN_WINDOW = 800;
 export const CHAIN_RADIUS = 120;
@@ -70,8 +71,9 @@ export class ChainSystem {
     const dx = x - this.lastKillX;
     const dy = y - this.lastKillY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const effectiveRadius = CHAIN_RADIUS + s.stats.chainRadius;
-    const effectiveWindow = CHAIN_WINDOW + s.stats.chainWindow;
+    const hasMetronome = s.relics.hasRelic("metronome");
+    const effectiveRadius = (CHAIN_RADIUS + s.stats.chainRadius) * (hasMetronome ? 0.5 : 1);
+    const effectiveWindow = (CHAIN_WINDOW + s.stats.chainWindow) * (hasMetronome ? 1.5 : 1);
 
     const prevTier = this.chainTier;
 
@@ -129,7 +131,7 @@ export class ChainSystem {
     s.runKills++;
     addKill();
 
-    const dropRate = DROP_RATES[this.chainTier] ?? 0.12;
+    const dropRate = (DROP_RATES[this.chainTier] ?? 0.12) + getLuckyStarBonus();
     if (Math.random() < dropRate) {
       const upgrade = s.rollDrop();
       if (upgrade) {
