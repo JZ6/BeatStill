@@ -4,6 +4,7 @@ import type { Enemy } from "../objects/enemies";
 import type { Asteroid } from "../objects/Asteroid";
 import type { Wall } from "../objects/Wall";
 import { CHAIN_TIERS } from "./ChainSystem";
+import { px } from "./GameConfig";
 
 export function circleOverlap(
   x1: number, y1: number, r1: number,
@@ -132,7 +133,7 @@ export class CollisionSystem {
     const s = this.scene;
     for (const b of enemyBullets) {
       if (!b.alive) continue;
-      if (circleOverlap(b.x, b.y, b.radius, s.ship.x, s.ship.y, 4)) {
+      if (circleOverlap(b.x, b.y, b.radius, s.ship.x, s.ship.y, px(4))) {
         b.kill();
         s.recordDamage();
         s.particles.burst(s.ship.x, s.ship.y, 0xff4422, 15, 80, 3);
@@ -151,7 +152,7 @@ export class CollisionSystem {
     const s = this.scene;
     for (const a of asteroidArr) {
       if (!a.active) continue;
-      if (circleOverlap(a.x, a.y, a.radius, s.ship.x, s.ship.y, 4)) {
+      if (circleOverlap(a.x, a.y, a.radius, s.ship.x, s.ship.y, px(4))) {
         s.recordDamage();
         s.particles.burst(s.ship.x, s.ship.y, 0xff4422, 15, 80, 3);
         if (s.ship.takeDamage(1)) {

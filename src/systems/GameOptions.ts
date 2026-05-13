@@ -13,13 +13,21 @@ export interface GameOptions {
   starterWeapon: string;   // weapon id for run start
 }
 
+function detectResolution(): number {
+  const h = window.innerHeight * (window.devicePixelRatio || 1);
+  if (h >= 1440) return 3;
+  if (h >= 1080) return 2;
+  if (h >= 720) return 1;
+  return 0;
+}
+
 const DEFAULTS: GameOptions = {
   targetFps: 60,
   particleQuality: 500,
   bulletGlow: true,
   showFps: false,
   masterVolume: 70,
-  resolution: 1,
+  resolution: detectResolution(),
   controls: 0,
   shipColor: 0x00ffff,
   themeId: "theremin",

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { options } from "../systems/GameOptions";
-import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 
 export type BulletOwner = "player" | "enemy";
 
@@ -47,7 +47,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.owner = owner;
     this.damage = damage;
     this.pierce = pierce;
-    this.radius = opts?.radius ?? 3;
+    this.radius = px(opts?.radius ?? 3);
     this.lifetime = opts?.lifetime ?? 0;
     this.homing = opts?.homing ?? false;
 

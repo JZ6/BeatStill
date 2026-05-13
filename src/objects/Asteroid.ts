@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
-import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 
 const SIZE_CONFIG = {
   large: { radius: 40 },
@@ -29,7 +29,7 @@ export class Asteroid extends Phaser.GameObjects.Graphics {
     scene.add.existing(this);
     this.setDepth(3);
 
-    this.radius = SIZE_CONFIG[size].radius;
+    this.radius = px(SIZE_CONFIG[size].radius);
     this.size = size;
 
     const centerX = GAME_W / 2;

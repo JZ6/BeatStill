@@ -9,10 +9,10 @@ const FPS_OPTIONS = [
 ];
 
 const RES_OPTIONS = [
-  { label: "Low",    value: 0 },
-  { label: "Medium", value: 1 },
-  { label: "High",   value: 2 },
-  { label: "Ultra",  value: 3 },
+  { label: "480p",  value: 0 },
+  { label: "720p",  value: 1 },
+  { label: "1080p", value: 2 },
+  { label: "1440p", value: 3 },
 ];
 
 const CONTROLS_OPTIONS = [

@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Bullet } from "../Bullet";
 import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
-import { GAME_W, GAME_H } from "../../systems/GameConfig";
+import { GAME_W, GAME_H, px } from "../../systems/GameConfig";
 
 export type EnemyType = "basic" | "tracker" | "sniper" | "spiral" | "tank" | "swarm" | "snake" | "circler" | "sentinel" | "phantom" | "phantom_decoy";
 
@@ -28,7 +28,7 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
     this.speed = speed;
     this.fireRate = fireRate;
     this.color = color;
-    this.radius = radius;
+    this.radius = px(radius);
     this.fireCooldown = Phaser.Math.Between(500, 1500);
     this.pickNewTarget();
   }
@@ -41,15 +41,15 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
   draw(color: number) {
     this.clear();
     if (this.isElite) {
-      this.lineStyle(4, 0xffdd44, 0.3);
-      this.strokeCircle(0, 0, this.radius + 6);
+      this.lineStyle(px(4), 0xffdd44, 0.3);
+      this.strokeCircle(0, 0, this.radius + px(6));
     }
     this.drawShape(color);
     if (this.maxHp > 1) {
       const barW = this.radius * 2;
-      const barH = 3;
+      const barH = px(3);
       const barX = -this.radius;
-      const barY = this.radius + 7;
+      const barY = this.radius + px(7);
       this.fillStyle(0x222222, 0.8);
       this.fillRect(barX, barY, barW, barH);
       this.fillStyle(this.isElite ? 0xffdd44 : color, 0.9);
@@ -78,10 +78,10 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
       }
       this.closePath();
     };
-    this.lineStyle(3, color, 0.3);
-    drawPoly(r + 4);
+    this.lineStyle(px(3), color, 0.3);
+    drawPoly(r + px(4));
     this.strokePath();
-    this.lineStyle(1.5, color, 1);
+    this.lineStyle(px(1.5), color, 1);
     drawPoly(r);
     this.strokePath();
     this.fillStyle(color, 0.15);
@@ -91,9 +91,9 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
 
   protected drawCircleShape(color: number) {
     const r = this.radius;
-    this.lineStyle(3, color, 0.3);
-    this.strokeCircle(0, 0, r + 4);
-    this.lineStyle(1.5, color, 1);
+    this.lineStyle(px(3), color, 0.3);
+    this.strokeCircle(0, 0, r + px(4));
+    this.lineStyle(px(1.5), color, 1);
     this.strokeCircle(0, 0, r);
     this.fillStyle(color, 0.15);
     this.fillCircle(0, 0, r);

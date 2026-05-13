@@ -500,7 +500,7 @@ export class GameScene extends Phaser.Scene {
       if (!p.alive) continue;
       const dx = p.x - this.ship.x;
       const dy = p.y - this.ship.y;
-      if (dx * dx + dy * dy < 40 * 40) {
+      if (dx * dx + dy * dy < px(40) * px(40)) {
         this.applyUpgrade(p.upgrade);
         if (p.upgrade.isWeapon) {
           const wId = p.upgrade.id.replace("weapon_", "");

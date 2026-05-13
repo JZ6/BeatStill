@@ -2,10 +2,10 @@ import Phaser from "phaser";
 import type { UpgradeDef } from "../systems/Upgrades";
 import { UPGRADE_COLORS } from "../systems/Upgrades";
 import { getWeapon } from "../systems/Weapons";
+import { px } from "../systems/GameConfig";
 
 const LIFETIME = 10000;
 const FADE_START = 7000;
-const SIZE = 8;
 
 export class UpgradePickup extends Phaser.GameObjects.Graphics {
   elapsed = 0;
@@ -31,9 +31,10 @@ export class UpgradePickup extends Phaser.GameObjects.Graphics {
       this.pickupColor = UPGRADE_COLORS[upgrade.id] ?? 0xffaa44;
     }
 
-    this.label = scene.add.text(x, y - SIZE - 8, upgrade.icon, {
+    const sz = px(8);
+    this.label = scene.add.text(x, y - sz - px(8), upgrade.icon, {
       fontFamily: "monospace",
-      fontSize: "10px",
+      fontSize: `${px(10)}px`,
       color: `#${this.pickupColor.toString(16).padStart(6, "0")}`,
       align: "center",
     }).setOrigin(0.5).setDepth(7);
@@ -44,31 +45,32 @@ export class UpgradePickup extends Phaser.GameObjects.Graphics {
   private draw(alpha: number) {
     this.clear();
     const c = this.pickupColor;
+    const s = px(8);
 
     this.fillStyle(c, alpha * 0.15);
-    this.fillCircle(0, 0, SIZE * 2.5);
+    this.fillCircle(0, 0, s * 2.5);
 
     this.fillStyle(c, alpha * 0.7);
     this.beginPath();
-    this.moveTo(0, -SIZE);
-    this.lineTo(SIZE * 0.6, 0);
-    this.lineTo(0, SIZE);
-    this.lineTo(-SIZE * 0.6, 0);
+    this.moveTo(0, -s);
+    this.lineTo(s * 0.6, 0);
+    this.lineTo(0, s);
+    this.lineTo(-s * 0.6, 0);
     this.closePath();
     this.fillPath();
 
     this.lineStyle(1, c, alpha);
     this.beginPath();
-    this.moveTo(0, -SIZE);
-    this.lineTo(SIZE * 0.6, 0);
-    this.lineTo(0, SIZE);
-    this.lineTo(-SIZE * 0.6, 0);
+    this.moveTo(0, -s);
+    this.lineTo(s * 0.6, 0);
+    this.lineTo(0, s);
+    this.lineTo(-s * 0.6, 0);
     this.closePath();
     this.strokePath();
 
     if (this.upgrade.isWeapon) {
       this.lineStyle(1, c, alpha * 0.4);
-      this.strokeCircle(0, 0, SIZE + 3);
+      this.strokeCircle(0, 0, s + px(3));
     }
   }
 
@@ -87,11 +89,11 @@ export class UpgradePickup extends Phaser.GameObjects.Graphics {
         this.startY = this.y;
       }
     } else {
-      this.y = this.startY + Math.sin(this.elapsed * 0.003) * 4;
+      this.y = this.startY + Math.sin(this.elapsed * 0.003) * px(4);
     }
     this.rotation += 1.2 * timeScale * (delta / 1000);
 
-    this.label.setPosition(this.x, this.y - SIZE - 8);
+    this.label.setPosition(this.x, this.y - px(8) - px(8));
     this.label.rotation = this.rotation;
 
     if (this.elapsed > FADE_START) {
