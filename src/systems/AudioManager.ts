@@ -99,7 +99,7 @@ export class AudioManager {
     if (this.bgSequence) { this.bgSequence.stop(); this.bgSequence.dispose(); }
     if (this.bassSequence) { this.bassSequence.stop(); this.bassSequence.dispose(); }
     if (this.leadSynth) this.leadSynth.dispose();
-    if (this.leadEffects && "dispose" in this.leadEffects) {
+    if (this.leadEffects && this.leadEffects !== this.delay && "dispose" in this.leadEffects) {
       (this.leadEffects as Tone.ToneAudioNode).dispose();
     }
     if (this.padSynth) this.padSynth.dispose();
@@ -189,8 +189,8 @@ export class AudioManager {
     const scale = this.theme.scale;
     const note = scale[this.noteIndex % scale.length];
     this.noteIndex++;
-    const time = this.quantize();
-    this.safe(() => this.leadSynth.triggerAttackRelease(note, "8n", time));
+    const now = Tone.now();
+    this.safe(() => this.leadSynth.triggerAttackRelease(note, "8n", now));
   }
 
   onEnemyKill() {
@@ -200,8 +200,8 @@ export class AudioManager {
     const note1 = scale[i];
     const note2 = scale[(i + 2) % scale.length];
     this.noteIndex++;
-    const time = this.quantize();
-    this.safe(() => this.leadSynth.triggerAttackRelease([note1, note2], "4n", time));
+    const now = Tone.now();
+    this.safe(() => this.leadSynth.triggerAttackRelease([note1, note2], "4n", now));
   }
 
   onChainKill(chainLength: number, tier: number) {
@@ -210,28 +210,28 @@ export class AudioManager {
     const baseIdx = this.noteIndex % scale.length;
     const scaleIdx = Math.min(baseIdx + chainLength, scale.length - 1);
     this.noteIndex++;
-    const time = this.quantize();
+    const now = Tone.now();
 
     if (tier <= 1) {
       const note = scale[scaleIdx];
-      this.safe(() => this.leadSynth.triggerAttackRelease(note, "4n", time));
+      this.safe(() => this.leadSynth.triggerAttackRelease(note, "4n", now));
     } else if (tier === 2) {
       const n1 = scale[scaleIdx];
       const n2 = scale[Math.min(scaleIdx + 2, scale.length - 1)];
-      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2], "4n", time));
+      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2], "4n", now));
     } else if (tier === 3) {
       const n1 = scale[scaleIdx];
       const n2 = scale[Math.min(scaleIdx + 2, scale.length - 1)];
       const n3 = scale[Math.min(scaleIdx + 4, scale.length - 1)];
-      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2, n3], "4n", time));
+      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2, n3], "4n", now));
     } else {
       const n1 = scale[scaleIdx];
       const n2 = scale[Math.min(scaleIdx + 2, scale.length - 1)];
       const n3 = scale[Math.min(scaleIdx + 4, scale.length - 1)];
-      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2, n3], "2n", time));
+      this.safe(() => this.leadSynth.triggerAttackRelease([n1, n2, n3], "2n", now));
       const bass = this.theme.bassNotes;
       const bassNote = bass[Math.min(scaleIdx % bass.length, bass.length - 1)];
-      this.safe(() => this.bassSynth.triggerAttackRelease(bassNote, "4n", time));
+      this.safe(() => this.bassSynth.triggerAttackRelease(bassNote, "4n", now));
     }
   }
 
@@ -325,7 +325,7 @@ export class AudioManager {
     this.bassSequence?.stop();
     this.bassSequence?.dispose();
     this.leadSynth?.dispose();
-    if (this.leadEffects && "dispose" in this.leadEffects) {
+    if (this.leadEffects && this.leadEffects !== this.delay && "dispose" in this.leadEffects) {
       (this.leadEffects as Tone.ToneAudioNode).dispose();
     }
     this.padSynth?.dispose();
