@@ -1,17 +1,8 @@
-import type { AudioManager, ShotSound } from "./AudioManager";
+import type { AudioManager } from "./AudioManager";
 import type { GameScene } from "../scenes/GameScene";
 import { allThemes } from "../sounds";
 import { getCrashReports, getAllReportsText } from "./CrashReporter";
 import { ALL_WEAPONS } from "./Weapons";
-
-const SHOT_SOUNDS: { id: ShotSound; label: string; desc: string }[] = [
-  { id: "soft", label: "Soft", desc: "Gentle sine blip, blends into background" },
-  { id: "tap", label: "Tap", desc: "Tiny pink noise puff, like a muted tap" },
-  { id: "bubble", label: "Bubble", desc: "Soft filtered pop, bubbly texture" },
-  { id: "pulse", label: "Pulse", desc: "Faint triangle tick, almost subliminal" },
-  { id: "kick", label: "Kick", desc: "Deep thump, pitch sweep" },
-  { id: "808", label: "808 Sub", desc: "Deep sine thump, long sustain" },
-];
 
 function makeTab(label: string): { tab: HTMLButtonElement; content: HTMLDivElement } {
   const tab = document.createElement("button");
@@ -190,52 +181,6 @@ function buildAudioTab(
   themeButtons[0].style.borderColor = "#ffaa44";
   ac.appendChild(themeRow);
 
-  const shotLabel = document.createElement("div");
-  shotLabel.className = "dp-label";
-  shotLabel.textContent = "SHOT SOUND";
-  ac.appendChild(shotLabel);
-
-  const radios: HTMLInputElement[] = [];
-
-  for (const shot of SHOT_SOUNDS) {
-    const row = document.createElement("div");
-    row.className = "dp-row";
-
-    const radio = document.createElement("input");
-    radio.type = "radio";
-    radio.name = "shot-sound";
-    radio.value = shot.id;
-    radio.id = `shot-${shot.id}`;
-    radio.checked = shot.id === "soft";
-    radios.push(radio);
-
-    const label = document.createElement("label");
-    label.htmlFor = `shot-${shot.id}`;
-    label.textContent = shot.label;
-
-    const desc = document.createElement("span");
-    desc.className = "dp-desc";
-    desc.textContent = shot.desc;
-
-    const btn = document.createElement("button");
-    btn.textContent = "Preview";
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const am = getAudioManager();
-      if (!am) return;
-      await am.start();
-      am.previewShot(shot.id);
-    });
-
-    radio.addEventListener("change", () => {
-      const am = getAudioManager();
-      if (am) am.activeShotSound = shot.id;
-    });
-
-    row.append(radio, label, desc, btn);
-    ac.appendChild(row);
-  }
-
   const previewLabel = document.createElement("div");
   previewLabel.className = "dp-label";
   previewLabel.textContent = "GAME SOUNDS";
@@ -279,8 +224,6 @@ function buildAudioTab(
         b.style.borderColor = allThemes[i].name === currentName ? "#ffaa44" : "#444";
       });
     }
-    const currentShot = am.activeShotSound;
-    radios.forEach((r) => { r.checked = r.value === currentShot; });
   }
 
   return { tab, content: ac, syncState };

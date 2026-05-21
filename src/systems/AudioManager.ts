@@ -15,6 +15,7 @@ export class AudioManager {
   private bassSynth!: Tone.MonoSynth;
   private deathSynth!: Tone.MonoSynth;
   private clashSynth!: Tone.MonoSynth;
+  private themeShotSynth!: Tone.MonoSynth | Tone.MembraneSynth | Tone.NoiseSynth;
   private hitSynth!: Tone.NoiseSynth;
 
   private warmReverb!: Tone.Reverb;
@@ -107,9 +108,9 @@ export class AudioManager {
     if (this.bassSynth) this.bassSynth.dispose();
     if (this.deathSynth) this.deathSynth.dispose();
     if (this.clashSynth) this.clashSynth.dispose();
+    if (this.themeShotSynth) this.themeShotSynth.dispose();
 
     this.theme = theme;
-    this.activeShotSound = theme.shotSound;
     this.lastRampedBpm = 0;
     this.lastRampedReverb = 0;
     this.lastRampedDelay = 0;
@@ -125,6 +126,7 @@ export class AudioManager {
     }).connect(this.warmReverb);
     this.deathSynth = theme.createDeathSynth(this.warmReverb);
     this.clashSynth = theme.createClashSynth(this.delay);
+    this.themeShotSynth = theme.createShotSynth(this.warmReverb);
 
     this.bgSequence = new Tone.Sequence(
       (time, chord) => {
@@ -174,10 +176,16 @@ export class AudioManager {
     }
   }
 
-  onShoot(soundOverride?: ShotSound) {
+  onShoot() {
     if (!this.started) return;
     const time = this.quantize();
-    this.safe(() => this.triggerShot(soundOverride ?? this.activeShotSound, time));
+    this.safe(() => {
+      if (this.themeShotSynth instanceof Tone.NoiseSynth) {
+        this.themeShotSynth.triggerAttackRelease("32n", time);
+      } else {
+        this.themeShotSynth.triggerAttackRelease("C2", "32n", time);
+      }
+    });
   }
 
   previewShot(type: ShotSound) {
@@ -334,6 +342,7 @@ export class AudioManager {
     this.bassSynth?.dispose();
     this.deathSynth?.dispose();
     this.clashSynth?.dispose();
+    this.themeShotSynth?.dispose();
     this.hitSynth?.dispose();
     for (const synth of Object.values(this.shotSynths ?? {})) {
       synth.dispose();

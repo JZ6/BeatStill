@@ -45,15 +45,34 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
       this.strokeCircle(0, 0, this.radius + px(6));
     }
     this.drawShape(color);
-    if (this.maxHp > 1) {
-      const barW = this.radius * 2;
-      const barH = px(3);
-      const barX = -this.radius;
-      const barY = this.radius + px(7);
-      this.fillStyle(0x222222, 0.8);
-      this.fillRect(barX, barY, barW, barH);
-      this.fillStyle(this.isElite ? 0xffdd44 : color, 0.9);
-      this.fillRect(barX, barY, barW * (this.hp / this.maxHp), barH);
+    this.drawCracks(color);
+  }
+
+  private drawCracks(color: number) {
+    const dmg = 1 - this.hp / this.maxHp;
+    if (dmg <= 0) return;
+    const r = this.radius;
+    const crackCount = Math.min(Math.ceil(dmg * 5), 4);
+    this.lineStyle(px(1), color, 0.4 + dmg * 0.4);
+    for (let c = 0; c < crackCount; c++) {
+      const seed = c * 31 + 7;
+      const startAngle = ((seed * 137) % 360) * (Math.PI / 180);
+      const len = r * (0.4 + dmg * 0.4);
+      const segments = 3;
+      let cx = Math.cos(startAngle) * r * 0.15;
+      let cy = Math.sin(startAngle) * r * 0.15;
+      this.beginPath();
+      this.moveTo(cx, cy);
+      for (let s = 0; s < segments; s++) {
+        const segSeed = seed * 13 + s * 7;
+        const jitter = ((segSeed % 11) / 11 - 0.5) * 0.8;
+        const segAngle = startAngle + jitter;
+        const segLen = len / segments;
+        cx += Math.cos(segAngle) * segLen;
+        cy += Math.sin(segAngle) * segLen;
+        this.lineTo(cx, cy);
+      }
+      this.strokePath();
     }
   }
 
@@ -68,35 +87,64 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
 
   protected drawPolygon(color: number, sides: number) {
     const r = this.radius;
+    const dmg = 1 - this.hp / this.maxHp;
     const drawPoly = (rad: number) => {
       this.beginPath();
       for (let i = 0; i < sides; i++) {
         const a = (Math.PI * 2 * i) / sides - Math.PI / 2;
-        const px = Math.cos(a) * rad;
-        const py = Math.sin(a) * rad;
-        if (i === 0) this.moveTo(px, py); else this.lineTo(px, py);
+        const dent = dmg * 0.35 * (((i * 7 + 3) % sides) / Math.max(sides - 1, 1));
+        const vr = rad * (1 - dent);
+        const vx = Math.cos(a) * vr;
+        const vy = Math.sin(a) * vr;
+        if (i === 0) this.moveTo(vx, vy); else this.lineTo(vx, vy);
       }
       this.closePath();
     };
-    this.lineStyle(px(3), color, 0.3);
+    this.lineStyle(px(3), color, 0.3 * (1 - dmg * 0.6));
     drawPoly(r + px(4));
     this.strokePath();
     this.lineStyle(px(1.5), color, 1);
     drawPoly(r);
     this.strokePath();
-    this.fillStyle(color, 0.15);
+    this.fillStyle(color, 0.15 * (1 - dmg * 0.5));
     drawPoly(r);
     this.fillPath();
   }
 
   protected drawCircleShape(color: number) {
     const r = this.radius;
-    this.lineStyle(px(3), color, 0.3);
-    this.strokeCircle(0, 0, r + px(4));
-    this.lineStyle(px(1.5), color, 1);
-    this.strokeCircle(0, 0, r);
-    this.fillStyle(color, 0.15);
-    this.fillCircle(0, 0, r);
+    const dmg = 1 - this.hp / this.maxHp;
+    if (dmg > 0) {
+      const n = 16;
+      const drawWobble = (rad: number) => {
+        this.beginPath();
+        for (let i = 0; i < n; i++) {
+          const a = (Math.PI * 2 * i) / n;
+          const jitter = dmg * 0.25 * (((i * 7 + 3) % n) / (n - 1));
+          const vr = rad * (1 - jitter);
+          const vx = Math.cos(a) * vr;
+          const vy = Math.sin(a) * vr;
+          if (i === 0) this.moveTo(vx, vy); else this.lineTo(vx, vy);
+        }
+        this.closePath();
+      };
+      this.lineStyle(px(3), color, 0.3 * (1 - dmg * 0.6));
+      drawWobble(r + px(4));
+      this.strokePath();
+      this.lineStyle(px(1.5), color, 1);
+      drawWobble(r);
+      this.strokePath();
+      this.fillStyle(color, 0.15 * (1 - dmg * 0.5));
+      drawWobble(r);
+      this.fillPath();
+    } else {
+      this.lineStyle(px(3), color, 0.3);
+      this.strokeCircle(0, 0, r + px(4));
+      this.lineStyle(px(1.5), color, 1);
+      this.strokeCircle(0, 0, r);
+      this.fillStyle(color, 0.15);
+      this.fillCircle(0, 0, r);
+    }
   }
 
   update(delta: number, timeScale: number, gameScene: GameScene) {

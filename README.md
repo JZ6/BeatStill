@@ -10,9 +10,15 @@ make it so cannon is the only gun type that can destroy enemy shots
 
 remove kill cam, add a better death animation
 
-instead of healthbars make the enemies look more broken when they take more damage
+instead of health bars make the enemies look more broken as they take damage
 
-make the player shot sounds better match the 
+make the player shot sounds better match the selected audio
+
+make the player shot slower 
+
+spawn more enemies
+
+make time go faster if players moving fast and shooting/spinning fast 
 
 # Thoughts
 
@@ -28,3 +34,6 @@ find a way to let users select weapons
 
 find a way for u to test beatstill, can you use the chrome cli?
 
+rethink how waves work in endless, should be continuously spawned enemies
+
+make weapons work like diepio, need penetration and damage to destroy other bullets

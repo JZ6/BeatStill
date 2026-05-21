@@ -4,7 +4,6 @@ import type { SoundTheme } from "./SoundTheme";
 export const theremin: SoundTheme = {
   name: "Theremin",
   bpm: 100,
-  shotSound: "soft",
   scale: ["C3", "D3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4", "C5", "D5"],
   chords: [
     ["E3", "G3", "B3"],
@@ -58,6 +57,14 @@ export const theremin: SoundTheme = {
       oscillator: { type: "sine" },
       envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.04 },
       volume: -20,
+    }).connect(destination);
+  },
+
+  createShotSynth(destination) {
+    return new Tone.MonoSynth({
+      oscillator: { type: "sine" },
+      envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.04 },
+      volume: -16,
     }).connect(destination);
   },
 };

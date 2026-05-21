@@ -4,7 +4,6 @@ import type { SoundTheme } from "./SoundTheme";
 export const synth: SoundTheme = {
   name: "Synth",
   bpm: 120,
-  shotSound: "pulse",
   scale: ["C3", "Eb3", "F3", "G3", "Bb3", "C4", "Eb4", "F4", "G4", "Bb4", "C5", "Eb5"],
   chords: [
     ["C3", "Eb3", "G3"],
@@ -60,6 +59,14 @@ export const synth: SoundTheme = {
       oscillator: { type: "square" },
       envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.03 },
       volume: -22,
+    }).connect(destination);
+  },
+
+  createShotSynth(destination) {
+    return new Tone.MonoSynth({
+      oscillator: { type: "square" },
+      envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.03 },
+      volume: -18,
     }).connect(destination);
   },
 };

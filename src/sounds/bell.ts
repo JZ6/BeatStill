@@ -4,7 +4,6 @@ import type { SoundTheme } from "./SoundTheme";
 export const bell: SoundTheme = {
   name: "Bell",
   bpm: 90,
-  shotSound: "bubble",
   scale: ["D3", "F3", "G3", "A3", "C4", "D4", "F4", "G4", "A4", "C5", "D5", "F5"],
   chords: [
     ["D3", "F3", "A3"],
@@ -60,6 +59,15 @@ export const bell: SoundTheme = {
       oscillator: { type: "sine" },
       envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
       volume: -18,
+    }).connect(destination);
+  },
+
+  createShotSynth(destination) {
+    return new Tone.MonoSynth({
+      oscillator: { type: "sine" },
+      envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.06 },
+      filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05, baseFrequency: 3000, octaves: -2.5 },
+      volume: -14,
     }).connect(destination);
   },
 };

@@ -4,7 +4,6 @@ import type { SoundTheme } from "./SoundTheme";
 export const ethereal: SoundTheme = {
   name: "Ethereal",
   bpm: 80,
-  shotSound: "soft",
   scale: ["B2", "D3", "E3", "F#3", "A3", "B3", "D4", "E4", "F#4", "A4", "B4", "D5"],
   chords: [
     ["B2", "D3", "F#3"],
@@ -60,6 +59,14 @@ export const ethereal: SoundTheme = {
       oscillator: { type: "sine" },
       envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.08 },
       volume: -20,
+    }).connect(destination);
+  },
+
+  createShotSynth(destination) {
+    return new Tone.MonoSynth({
+      oscillator: { type: "sine" },
+      envelope: { attack: 0.003, decay: 0.15, sustain: 0, release: 0.1 },
+      volume: -18,
     }).connect(destination);
   },
 };

@@ -4,7 +4,6 @@ import type { SoundTheme } from "./SoundTheme";
 export const piano: SoundTheme = {
   name: "Piano",
   bpm: 95,
-  shotSound: "tap",
   scale: ["F2", "A2", "C3", "F3", "A3", "C4", "F4", "A4", "C5", "F5", "A5", "C6"],
   chords: [
     ["F2", "A2", "C3"],
@@ -58,6 +57,15 @@ export const piano: SoundTheme = {
       oscillator: { type: "sine" },
       envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.06 },
       volume: -20,
+    }).connect(destination);
+  },
+
+  createShotSynth(destination) {
+    return new Tone.MembraneSynth({
+      pitchDecay: 0.04,
+      octaves: 3,
+      envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.08 },
+      volume: -16,
     }).connect(destination);
   },
 };
