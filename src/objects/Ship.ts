@@ -26,6 +26,7 @@ export class Ship extends Phaser.GameObjects.Container {
   shipColor: number;
   damageMultiplier = 1;
   private inputMag = 0;
+  private lastAimAngle = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -123,7 +124,10 @@ export class Ship extends Phaser.GameObjects.Container {
         firing = true;
       }
       const moveMag = Math.sqrt(vx * vx + vy * vy);
-      this.inputMag = Math.max(moveMag, firing ? 0.5 : 0);
+      let touchAimDelta = Math.abs(aimAngle - this.lastAimAngle);
+      if (touchAimDelta > Math.PI) touchAimDelta = Math.PI * 2 - touchAimDelta;
+      const touchSpinMag = Math.min(touchAimDelta * 3, 0.4);
+      this.inputMag = Math.min(moveMag + (firing ? 0.6 : 0) + touchSpinMag, 1);
     } else {
       if (this.keys) {
         if (this.keys.a.isDown) vx -= 1;
@@ -137,8 +141,11 @@ export class Ship extends Phaser.GameObjects.Container {
       const pointer = this.scene.input.activePointer;
       const mouseDx = Math.abs(pointer.velocity.x) + Math.abs(pointer.velocity.y);
       const mouseMag = Math.min(mouseDx / 500, 1);
-      const shootMag = pointer.isDown ? 0.5 : 0;
-      this.inputMag = Math.max(mag, mouseMag, shootMag);
+      const shootMag = pointer.isDown ? 0.6 : 0;
+      let aimDelta = Math.abs(aimAngle - this.lastAimAngle);
+      if (aimDelta > Math.PI) aimDelta = Math.PI * 2 - aimDelta;
+      const spinMag = Math.min(aimDelta * 3, 0.4);
+      this.inputMag = Math.min(mag + shootMag + spinMag + mouseMag * 0.3, 1);
 
       aimAngle = Phaser.Math.Angle.Between(
         this.x, this.y,
@@ -146,6 +153,8 @@ export class Ship extends Phaser.GameObjects.Container {
       );
       firing = pointer.isDown;
     }
+
+    this.lastAimAngle = aimAngle;
 
     const playerTimeScale = timeScale * 0.5 + 0.5;
     const moveSpeed = this.stats.moveSpeed * playerTimeScale * (delta / 1000);
