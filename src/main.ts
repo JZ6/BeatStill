@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { StartScene } from "./scenes/StartScene";
 import { GameScene } from "./scenes/GameScene";
 import { LevelSelectScene } from "./scenes/LevelSelectScene";
+import { LevelDesignerScene } from "./scenes/LevelDesignerScene";
 import { createDevPanel } from "./systems/DevPanel";
 import { initCrashReporter } from "./systems/CrashReporter";
 import { options, registerGame } from "./systems/GameOptions";
@@ -17,7 +18,7 @@ const game = new Phaser.Game({
   parent: document.body,
   render: { roundPixels: true },
   physics: { default: "arcade", arcade: { debug: false } },
-  scene: [StartScene, GameScene, LevelSelectScene],
+  scene: [StartScene, GameScene, LevelSelectScene, LevelDesignerScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

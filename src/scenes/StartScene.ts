@@ -118,6 +118,7 @@ export class StartScene extends Phaser.Scene {
       { label: "HOW TO PLAY", action: () => this.showHowToOverlay(), primary: false },
       { label: "COLLECTION", action: () => this.showCollectionOverlay(), primary: false },
       { label: "SHOP", action: () => this.showShopOverlay(), primary: false },
+      { label: "DESIGNER", action: () => this.scene.start("LevelDesignerScene"), primary: false },
       { label: "OPTIONS", action: () => this.showOptionsOverlay(), primary: false },
     ];
 
