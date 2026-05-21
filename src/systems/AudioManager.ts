@@ -36,6 +36,10 @@ export class AudioManager {
     return this.theme;
   }
 
+  get isStarted() {
+    return this.started;
+  }
+
   async start() {
     if (this.started) return;
     await Tone.start();

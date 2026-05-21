@@ -157,7 +157,7 @@ function buildGameTab(
 
 function buildAudioTab(
   getAudioManager: () => AudioManager | null,
-): { tab: HTMLButtonElement; content: HTMLDivElement } {
+): { tab: HTMLButtonElement; content: HTMLDivElement; syncState: () => void } {
   const { tab, content: ac } = makeTab("Audio");
   ac.style.flexDirection = "column";
   ac.style.gap = "10px";
@@ -175,14 +175,14 @@ function buildAudioTab(
     const btn = document.createElement("button");
     btn.className = "dp-game-btn";
     btn.textContent = theme.name;
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const am = getAudioManager();
-      if (am) {
-        am.loadTheme(theme);
-        themeButtons.forEach((b) => (b.style.borderColor = "#444"));
-        btn.style.borderColor = "#ffaa44";
-      }
+      if (!am) return;
+      await am.start();
+      am.loadTheme(theme);
+      themeButtons.forEach((b) => (b.style.borderColor = "#444"));
+      btn.style.borderColor = "#ffaa44";
     });
     themeButtons.push(btn);
     themeRow.appendChild(btn);
@@ -195,6 +195,8 @@ function buildAudioTab(
   shotLabel.textContent = "SHOT SOUND";
   ac.appendChild(shotLabel);
 
+  const radios: HTMLInputElement[] = [];
+
   for (const shot of SHOT_SOUNDS) {
     const row = document.createElement("div");
     row.className = "dp-row";
@@ -205,6 +207,7 @@ function buildAudioTab(
     radio.value = shot.id;
     radio.id = `shot-${shot.id}`;
     radio.checked = shot.id === "soft";
+    radios.push(radio);
 
     const label = document.createElement("label");
     label.htmlFor = `shot-${shot.id}`;
@@ -216,10 +219,12 @@ function buildAudioTab(
 
     const btn = document.createElement("button");
     btn.textContent = "Preview";
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const am = getAudioManager();
-      if (am) am.previewShot(shot.id);
+      if (!am) return;
+      await am.start();
+      am.previewShot(shot.id);
     });
 
     radio.addEventListener("change", () => {
@@ -231,7 +236,20 @@ function buildAudioTab(
     ac.appendChild(row);
   }
 
-  return { tab, content: ac };
+  function syncState() {
+    const am = getAudioManager();
+    if (!am || !am.isStarted) return;
+    const currentName = am.currentTheme?.name;
+    if (currentName) {
+      themeButtons.forEach((b, i) => {
+        b.style.borderColor = allThemes[i].name === currentName ? "#ffaa44" : "#444";
+      });
+    }
+    const currentShot = am.activeShotSound;
+    radios.forEach((r) => { r.checked = r.value === currentShot; });
+  }
+
+  return { tab, content: ac, syncState };
 }
 
 function buildSoundsTab(
@@ -264,10 +282,12 @@ function buildSoundsTab(
     const btn = document.createElement("button");
     btn.className = "dp-game-btn";
     btn.textContent = sound.label;
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       const am = getAudioManager();
-      if (am) sound.fn(am);
+      if (!am) return;
+      await am.start();
+      sound.fn(am);
     });
     soundRow.appendChild(btn);
   }
@@ -363,9 +383,10 @@ export function createDevPanel(
   const tabContainer = document.createElement("div");
   panel.appendChild(tabContainer);
 
+  const audioTab = buildAudioTab(getAudioManager);
   const tabs = [
     buildGameTab(getScene, getAudioManager),
-    buildAudioTab(getAudioManager),
+    audioTab,
     buildSoundsTab(getAudioManager),
     buildCrashTab(),
   ];
@@ -381,6 +402,7 @@ export function createDevPanel(
       });
       tab.classList.add("dp-tab-active");
       content.style.display = "flex";
+      if (tab === audioTab.tab) audioTab.syncState();
     });
   }
   tabs[0].tab.classList.add("dp-tab-active");
@@ -390,7 +412,11 @@ export function createDevPanel(
     if (e.key === "`") {
       e.preventDefault();
       e.stopPropagation();
-      panel.style.display = panel.style.display === "none" ? "flex" : "none";
+      const opening = panel.style.display === "none";
+      panel.style.display = opening ? "flex" : "none";
+      if (opening && audioTab.tab.classList.contains("dp-tab-active")) {
+        audioTab.syncState();
+      }
     }
   }, true);
 
