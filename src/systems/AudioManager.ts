@@ -27,7 +27,6 @@ export class AudioManager {
   private theme!: SoundTheme;
   private noteIndex = 0;
   private started = false;
-  private lastQuantized = 0;
   private lastRampedBpm = 0;
   private lastRampedReverb = 0;
   private lastRampedDelay = 0;
@@ -149,15 +148,6 @@ export class AudioManager {
     this.bassSequence.start(0);
   }
 
-  private quantize(): number {
-    const now = Tone.now();
-    const grid = (60 / (this.theme?.bpm ?? 100)) / 4;
-    const quantized = Math.ceil(now / grid) * grid;
-    if (quantized <= this.lastQuantized) return this.lastQuantized + grid;
-    this.lastQuantized = quantized;
-    return quantized;
-  }
-
   private safe(fn: () => void) {
     try { fn(); } catch (e) {
       if (e instanceof Error && !e.message.includes("start")) {
@@ -178,12 +168,12 @@ export class AudioManager {
 
   onShoot() {
     if (!this.started) return;
-    const time = this.quantize();
+    const now = Tone.now();
     this.safe(() => {
       if (this.themeShotSynth instanceof Tone.NoiseSynth) {
-        this.themeShotSynth.triggerAttackRelease("32n", time);
+        this.themeShotSynth.triggerAttackRelease("32n", now);
       } else {
-        this.themeShotSynth.triggerAttackRelease("C2", "32n", time);
+        this.themeShotSynth.triggerAttackRelease("C2", "32n", now);
       }
     });
   }
@@ -256,8 +246,7 @@ export class AudioManager {
     if (!this.started) return;
     const bass = this.theme.bassNotes;
     const note = bass[Math.floor(Math.random() * bass.length)];
-    const time = this.quantize();
-    this.safe(() => this.bassSynth.triggerAttackRelease(note, "8n", time));
+    this.safe(() => this.bassSynth.triggerAttackRelease(note, "8n", Tone.now()));
   }
 
   onBulletClash() {

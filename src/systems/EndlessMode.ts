@@ -20,7 +20,7 @@ export class EndlessMode {
     }
 
     const params = s.mutators.getActiveParams();
-    const enemyCount = Math.floor((12 + s.wave * 4) * params.enemyCountMult);
+    const enemyCount = Math.floor((32 + s.wave * 10) * params.enemyCountMult);
     const pool = this.buildEnemyPool(s.wave);
 
     let eliteCount = 0;
