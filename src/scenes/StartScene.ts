@@ -6,7 +6,8 @@ import { createHowToOverlay } from "../ui/HowToOverlay";
 import { createShopOverlay } from "../ui/ShopOverlay";
 import { AudioManager } from "../systems/AudioManager";
 import { theremin } from "../sounds";
-import { options } from "../systems/GameOptions";
+import { options, saveOptions } from "../systems/GameOptions";
+import { ALL_WEAPONS } from "../systems/Weapons";
 
 interface EnemySilhouette {
   x: number;
@@ -243,6 +244,68 @@ export class StartScene extends Phaser.Scene {
       });
     }
 
+    const weaponY = primaryY + btnH + px(32);
+    const baseWeapons = ALL_WEAPONS.filter((w) => !w.isEvolution);
+    const weaponLabel = this.add
+      .text(cx, weaponY, "WEAPON", {
+        fontFamily: "monospace",
+        fontSize: `${px(10)}px`,
+        color: "#443322",
+        letterSpacing: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(6)
+      .setAlpha(0);
+
+    this.tweens.add({ targets: weaponLabel, alpha: 0.8, duration: 400, delay: 600 });
+
+    const weaponBtnY = weaponY + px(16);
+    const weaponTexts: Phaser.GameObjects.Text[] = [];
+
+    for (const weapon of baseWeapons) {
+      const selected = options.starterWeapon === weapon.id;
+      const t = this.add
+        .text(0, weaponBtnY, weapon.icon, {
+          fontFamily: "monospace",
+          fontSize: `${px(14)}px`,
+          color: selected ? "#ffaa44" : "#554444",
+        })
+        .setOrigin(0.5)
+        .setDepth(6)
+        .setAlpha(0)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerover", () => {
+          if (!this.hasOverlay()) t.setColor("#ffcc88");
+        })
+        .on("pointerout", () => {
+          t.setColor(options.starterWeapon === weapon.id ? "#ffaa44" : "#554444");
+        })
+        .on("pointerdown", () => {
+          if (this.hasOverlay()) return;
+          options.starterWeapon = weapon.id;
+          saveOptions(options);
+          for (const wt of weaponTexts) {
+            const wid = baseWeapons[weaponTexts.indexOf(wt)]?.id;
+            wt.setColor(wid === weapon.id ? "#ffaa44" : "#554444");
+          }
+        });
+      weaponTexts.push(t);
+    }
+
+    const wSpacing = px(24);
+    let wTotalW = 0;
+    for (let i = 0; i < weaponTexts.length; i++) {
+      wTotalW += weaponTexts[i].width;
+      if (i < weaponTexts.length - 1) wTotalW += wSpacing;
+    }
+    let wCurX = cx - wTotalW / 2;
+    for (let i = 0; i < weaponTexts.length; i++) {
+      const t = weaponTexts[i];
+      t.setX(wCurX + t.width / 2);
+      wCurX += t.width + wSpacing;
+      this.tweens.add({ targets: t, alpha: 1, duration: 400, delay: 600 + i * 60 });
+    }
+
     const secondaryItems = [
       { label: "HOW TO PLAY", action: () => this.showHowToOverlay() },
       { label: "COLLECTION", action: () => this.showCollectionOverlay() },
@@ -251,7 +314,7 @@ export class StartScene extends Phaser.Scene {
       { label: "OPTIONS", action: () => this.showOptionsOverlay() },
     ];
 
-    const secY = primaryY + btnH + px(40);
+    const secY = primaryY + btnH + px(72);
     const secSpacing = px(16);
     const secTexts: Phaser.GameObjects.Text[] = [];
 

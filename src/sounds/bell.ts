@@ -4,6 +4,7 @@ import type { SoundTheme } from "./SoundTheme";
 export const bell: SoundTheme = {
   name: "Bell",
   bpm: 90,
+  shotSound: "bubble",
   scale: ["D3", "F3", "G3", "A3", "C4", "D4", "F4", "G4", "A4", "C5", "D5", "F5"],
   chords: [
     ["D3", "F3", "A3"],

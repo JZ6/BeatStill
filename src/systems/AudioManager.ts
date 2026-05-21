@@ -109,6 +109,7 @@ export class AudioManager {
     if (this.clashSynth) this.clashSynth.dispose();
 
     this.theme = theme;
+    this.activeShotSound = theme.shotSound;
     this.lastRampedBpm = 0;
     this.lastRampedReverb = 0;
     this.lastRampedDelay = 0;

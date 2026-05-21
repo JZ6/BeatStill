@@ -10,6 +10,10 @@ make it so cannon is the only gun type that can destroy enemy shots
 
 remove kill cam, add a better death animation
 
+instead of healthbars make the enemies look more broken when they take more damage
+
+make the player shot sounds better match the 
+
 # Thoughts
 
 take some inspiration from vampire survivors and super hot, and see how we can make this game more interesting for players

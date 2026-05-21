@@ -4,6 +4,7 @@ import type { SoundTheme } from "./SoundTheme";
 export const synth: SoundTheme = {
   name: "Synth",
   bpm: 120,
+  shotSound: "pulse",
   scale: ["C3", "Eb3", "F3", "G3", "Bb3", "C4", "Eb4", "F4", "G4", "Bb4", "C5", "Eb5"],
   chords: [
     ["C3", "Eb3", "G3"],

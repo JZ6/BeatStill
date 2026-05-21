@@ -203,11 +203,12 @@ export class Ship extends Phaser.GameObjects.Container {
           lifetime: lt,
           homing: weapon.homing,
           canRicochet: gameScene.relics.hasRelic("ricochet"),
+          canDestroyBullets: weapon.id === "cannon" || weapon.id === "nuke",
         },
       );
       gameScene.playerBullets.add(bullet);
     }
-    gameScene.audioManager.onShoot(weapon.shotSound);
+    gameScene.audioManager.onShoot();
 
     const cooldownReduction = BASE.fireCooldown - this.stats.fireCooldown;
     const cd = Math.max(weapon.baseCooldown - cooldownReduction, 30);

@@ -4,6 +4,7 @@ import type { SoundTheme } from "./SoundTheme";
 export const guitar: SoundTheme = {
   name: "Guitar",
   bpm: 110,
+  shotSound: "tap",
   scale: ["A2", "C3", "D3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4", "C5"],
   chords: [
     ["A2", "E3", "A3"],

@@ -29,8 +29,7 @@ import { PauseMenu } from "../systems/PauseMenu";
 import { RelicSystem, type RelicDef } from "../systems/Relics";
 import { createRelicSelectOverlay } from "../ui/RelicSelectOverlay";
 import { MutatorSystem } from "../systems/WaveMutators";
-import { ReplayRecorder } from "../systems/ReplayRecorder";
-import { ReplayRenderer } from "../systems/ReplayRenderer";
+import { DeathAnimation } from "../systems/DeathAnimation";
 
 export class GameScene extends Phaser.Scene {
   ship!: Ship;
@@ -89,8 +88,7 @@ export class GameScene extends Phaser.Scene {
   bossFightDamageTaken = 0;
   private freezeTime = 0;
   private fpsTimer = 0;
-  private recorder!: ReplayRecorder;
-  private replayRenderer: ReplayRenderer | null = null;
+  private deathAnim: DeathAnimation | null = null;
   private deathOverlay: Phaser.GameObjects.Graphics | null = null;
   private gameOverReady = false;
 
@@ -115,8 +113,7 @@ export class GameScene extends Phaser.Scene {
     this.relics = new RelicSystem();
     this.mutators = new MutatorSystem();
     this.relicSelectActive = false;
-    this.recorder = new ReplayRecorder();
-    this.replayRenderer = null;
+    this.deathAnim = null;
     this.deathOverlay = null;
     this.gameOverReady = false;
 
@@ -209,8 +206,8 @@ export class GameScene extends Phaser.Scene {
       this.pauseMenu.cleanup();
       this.relicOverlay?.remove();
       this.relicOverlay = null;
-      this.replayRenderer?.stop();
-      this.replayRenderer = null;
+      this.deathAnim?.stop();
+      this.deathAnim = null;
       this.deathOverlay = null;
     });
 
@@ -228,13 +225,8 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (!this.scene.isActive()) return;
     if (this.gameOver) {
-      if (this.replayRenderer?.isPlaying) {
-        if (this.restartKey?.isDown || this.escKey?.isDown) {
-          this.skipReplay();
-        }
-        this.replayRenderer?.update(delta);
-        this.particles.update(delta, 0.3);
-        return;
+      if (this.deathAnim) {
+        if (this.deathAnim.update(delta)) this.deathAnim = null;
       }
       if (this.gameOverReady && this.restartKey?.isDown) this.restartGame();
       this.particles.update(delta, 0.3);
@@ -277,7 +269,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.audioStarted) this.audioManager.updateTimeScale(ts);
-    this.recorder.record(this);
 
     this.fpsTimer += delta;
     if (this.fpsTimer > 500) {
@@ -631,27 +622,9 @@ export class GameScene extends Phaser.Scene {
     this.processAchievements(false, false);
     this.audioManager.onPlayerDeath();
 
-    const frames = this.recorder.getReplayFrames(300);
-    if (frames.length > 30) {
-      this.replayRenderer = new ReplayRenderer(this, frames, () => {
-        this.replayRenderer = null;
-        this.showGameOverScreen();
-      });
-      this.time.delayedCall(400, () => {
-        this.input.once("pointerdown", () => {
-          if (this.replayRenderer?.isPlaying) this.skipReplay();
-        });
-      });
-    } else {
+    this.deathAnim = new DeathAnimation(this, this.ship.x, this.ship.y, this.ship.shipColor, () => {
       this.showGameOverScreen();
-    }
-  }
-
-  private skipReplay() {
-    if (!this.replayRenderer?.isPlaying) return;
-    this.replayRenderer.stop();
-    this.replayRenderer = null;
-    this.showGameOverScreen();
+    });
   }
 
   private showGameOverScreen() {

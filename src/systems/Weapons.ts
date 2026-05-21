@@ -1,5 +1,3 @@
-import type { ShotSound } from "./AudioManager";
-
 export interface WeaponDef {
   id: string;
   name: string;
@@ -15,7 +13,6 @@ export interface WeaponDef {
   bulletColor: number;
   lifetime: number;
   homing: boolean;
-  shotSound: ShotSound;
   isEvolution?: boolean;
 }
 
@@ -35,7 +32,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0xffff00,
     lifetime: 0,
     homing: false,
-    shotSound: "soft",
+
   },
   {
     id: "shotgun",
@@ -52,7 +49,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0xff8833,
     lifetime: 800,
     homing: false,
-    shotSound: "kick",
+
   },
   {
     id: "laser",
@@ -69,7 +66,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0x00ffff,
     lifetime: 0,
     homing: false,
-    shotSound: "pulse",
+
   },
   {
     id: "cannon",
@@ -86,7 +83,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0xff4400,
     lifetime: 0,
     homing: false,
-    shotSound: "808",
+
   },
   {
     id: "homing",
@@ -103,7 +100,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0x44ff44,
     lifetime: 0,
     homing: true,
-    shotSound: "bubble",
+
   },
 
   // --- Evolutions ---
@@ -122,7 +119,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0xff6600,
     lifetime: 600,
     homing: false,
-    shotSound: "kick",
+
     isEvolution: true,
   },
   {
@@ -140,7 +137,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0x00ffff,
     lifetime: 0,
     homing: false,
-    shotSound: "pulse",
+
     isEvolution: true,
   },
   {
@@ -158,7 +155,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0xff2200,
     lifetime: 2000,
     homing: false,
-    shotSound: "808",
+
     isEvolution: true,
   },
   {
@@ -176,7 +173,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0x88ff44,
     lifetime: 0,
     homing: true,
-    shotSound: "bubble",
+
     isEvolution: true,
   },
   {
@@ -194,7 +191,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     bulletColor: 0xffff88,
     lifetime: 0,
     homing: false,
-    shotSound: "soft",
+
     isEvolution: true,
   },
 ];

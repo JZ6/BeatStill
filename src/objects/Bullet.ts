@@ -10,6 +10,7 @@ export interface BulletOpts {
   lifetime?: number;
   homing?: boolean;
   canRicochet?: boolean;
+  canDestroyBullets?: boolean;
 }
 
 export class Bullet extends Phaser.GameObjects.Graphics {
@@ -24,6 +25,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   bulletColor: number;
   alive = true;
   sourceEnemy: Phaser.GameObjects.GameObject | null = null;
+  canDestroyBullets: boolean;
   private canRicochet: boolean;
   private bounced = false;
 
@@ -51,6 +53,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.lifetime = opts?.lifetime ?? 0;
     this.homing = opts?.homing ?? false;
 
+    this.canDestroyBullets = opts?.canDestroyBullets ?? false;
     this.canRicochet = opts?.canRicochet ?? false;
     this.bulletColor = opts?.color ?? (owner === "player" ? 0xffff00 : 0xff4488);
     const glowAlpha = owner === "player" ? 0.3 : 0.25;

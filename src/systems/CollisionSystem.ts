@@ -115,7 +115,7 @@ export class CollisionSystem {
   private bulletVsBullet(playerBullets: Bullet[], enemyBullets: Bullet[]) {
     const s = this.scene;
     for (const pb of playerBullets) {
-      if (!pb.alive) continue;
+      if (!pb.alive || !pb.canDestroyBullets) continue;
       for (const eb of enemyBullets) {
         if (!eb.alive) continue;
         if (circleOverlap(pb.x, pb.y, pb.radius, eb.x, eb.y, eb.radius)) {

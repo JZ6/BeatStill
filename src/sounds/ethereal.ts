@@ -4,6 +4,7 @@ import type { SoundTheme } from "./SoundTheme";
 export const ethereal: SoundTheme = {
   name: "Ethereal",
   bpm: 80,
+  shotSound: "soft",
   scale: ["B2", "D3", "E3", "F#3", "A3", "B3", "D4", "E4", "F#4", "A4", "B4", "D5"],
   chords: [
     ["B2", "D3", "F#3"],

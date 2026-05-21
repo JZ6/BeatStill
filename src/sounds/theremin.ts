@@ -4,6 +4,7 @@ import type { SoundTheme } from "./SoundTheme";
 export const theremin: SoundTheme = {
   name: "Theremin",
   bpm: 100,
+  shotSound: "soft",
   scale: ["C3", "D3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4", "C5", "D5"],
   chords: [
     ["E3", "G3", "B3"],
