@@ -7,12 +7,12 @@ export class TrackerEnemy extends Enemy {
   readonly enemyType = "tracker" as const;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 1, 60, 2500, 0xff8800, 12);
+    super(scene, x, y, 1, 60, 2000, 0xff8800, 12);
     this.draw(this.color);
   }
 
   protected drawShape(color: number) {
-    this.drawPolygon(color, 3);
+    this.drawPolygon(color, 4);
   }
 
   protected updateMovement(delta: number, timeScale: number, gameScene: GameScene) {
@@ -22,6 +22,6 @@ export class TrackerEnemy extends Enemy {
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return aimed(angleToPlayer, 2, 0.3, 170);
+    return aimed(angleToPlayer, 3, 0.4, 220);
   }
 }

@@ -9,7 +9,7 @@ export class CirclerEnemy extends Enemy {
   private driftAngle: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 3, 20, 2800, 0x44ff88, 16);
+    super(scene, x, y, 3, 20, 2200, 0x44ff88, 16);
     this.driftAngle = Math.random() * Math.PI * 2;
     this.draw(this.color);
   }
@@ -28,6 +28,6 @@ export class CirclerEnemy extends Enemy {
   }
 
   protected getFirePattern(): BulletConfig[] {
-    return radial(12, 80);
+    return radial(16, 110);
   }
 }

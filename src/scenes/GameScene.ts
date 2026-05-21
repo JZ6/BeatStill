@@ -226,6 +226,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    if (!this.scene.isActive()) return;
     if (this.gameOver) {
       if (this.replayRenderer?.isPlaying) {
         if (this.restartKey?.isDown || this.escKey?.isDown) {

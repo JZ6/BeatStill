@@ -6,7 +6,7 @@ export class SniperEnemy extends Enemy {
   readonly enemyType = "sniper" as const;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 1, 20, 2000, 0xff2266, 10);
+    super(scene, x, y, 1, 20, 1600, 0xff2266, 10);
     this.draw(this.color);
   }
 
@@ -21,6 +21,6 @@ export class SniperEnemy extends Enemy {
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return aimed(angleToPlayer, 1, 0, 280);
+    return aimed(angleToPlayer, 2, 0.15, 350);
   }
 }

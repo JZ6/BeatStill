@@ -327,6 +327,7 @@ export class StartScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    if (!this.scene.isActive()) return;
     const pointer = this.input.activePointer;
     const dx = pointer.x - this.lastPointerX;
     const dy = pointer.y - this.lastPointerY;
@@ -464,13 +465,13 @@ export class StartScene extends Phaser.Scene {
   // ── Enemy Silhouettes ─────────────────────────────────────────
 
   private static readonly ENEMY_DEFS = [
-    { color: 0x44ff44, sides: 4, radius: 16 },
-    { color: 0xff8800, sides: 3, radius: 14 },
+    { color: 0x44ff44, sides: 0, radius: 16 },
+    { color: 0xff8800, sides: 4, radius: 14 },
     { color: 0xff2266, sides: 5, radius: 12 },
     { color: 0xaa44ff, sides: 7, radius: 18 },
     { color: 0xff4444, sides: 8, radius: 22 },
-    { color: 0xffff44, sides: 0, radius: 10 },
-    { color: 0x44ddff, sides: 3, radius: 14 },
+    { color: 0xffff44, sides: 3, radius: 10 },
+    { color: 0x44ddff, sides: 2, radius: 14 },
     { color: 0x44ff88, sides: 6, radius: 16 },
     { color: 0xffaa22, sides: 12, radius: 28 },
     { color: 0x4488ff, sides: 4, radius: 24 },
@@ -662,7 +663,7 @@ export class StartScene extends Phaser.Scene {
         g.strokeRoundedRect(btn.x - 2, btn.y - 2, btn.w + 4, btn.h + 4, 6);
       }
 
-      btn.text.setColor(hover ? "#ffcc88" : "#ffaa44");
+      if (btn.text.scene) btn.text.setColor(hover ? "#ffcc88" : "#ffaa44");
     }
 
     if (this.menuButtons.length > 0) {

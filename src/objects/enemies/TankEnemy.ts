@@ -6,7 +6,7 @@ export class TankEnemy extends Enemy {
   readonly enemyType = "tank" as const;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 6, 15, 3500, 0xff4444, 24);
+    super(scene, x, y, 6, 15, 2800, 0xff4444, 24);
     this.draw(this.color);
   }
 
@@ -21,6 +21,6 @@ export class TankEnemy extends Enemy {
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return [...radial(6, 90), ...aimed(angleToPlayer, 3, 0.4, 140)];
+    return [...radial(8, 120), ...aimed(angleToPlayer, 4, 0.5, 180)];
   }
 }

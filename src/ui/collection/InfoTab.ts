@@ -16,14 +16,14 @@ interface BestiaryEntry {
 }
 
 const BESTIARY: BestiaryEntry[] = [
-  { name: "Drone", icon: "◆", color: 0x44ff44, hp: 2, speed: 40, fireRate: 3000, shape: "Square", behavior: "Wanders randomly, fires radial bursts that scale with wave", danger: 1 },
-  { name: "Tracker", icon: "▲", color: 0xff8800, hp: 1, speed: 60, fireRate: 2500, shape: "Triangle", behavior: "Follows your position, fires aimed volleys", danger: 2 },
-  { name: "Sniper", icon: "✦", color: 0xff2266, hp: 1, speed: 20, fireRate: 2000, shape: "Pentagon", behavior: "Barely moves, fires fast precise shots", danger: 2 },
-  { name: "Spiral", icon: "✺", color: 0xaa44ff, hp: 3, speed: 25, fireRate: 400, shape: "Heptagon", behavior: "Fires continuous rotating spiral patterns", danger: 3 },
-  { name: "Swarm", icon: "●", color: 0xffff44, hp: 1, speed: 90, fireRate: 4000, shape: "Circle", behavior: "Rushes directly at you, fast but fragile", danger: 2 },
-  { name: "Snake", icon: "≋", color: 0x44ddff, hp: 2, speed: 50, fireRate: 3000, shape: "Wave", behavior: "Weaves toward you in sinusoidal path", danger: 2 },
-  { name: "Circler", icon: "⬡", color: 0x44ff88, hp: 3, speed: 20, fireRate: 2800, shape: "Hexagon", behavior: "Drifts around the arena, fires 12-bullet radial bursts", danger: 3 },
-  { name: "Tank", icon: "■", color: 0xff4444, hp: 6, speed: 15, fireRate: 3500, shape: "Octagon", behavior: "Slow and tough, fires radial + aimed combo patterns", danger: 4 },
+  { name: "Drone", icon: "◆", color: 0x44ff44, hp: 2, speed: 40, fireRate: 2400, shape: "Circle", behavior: "Wanders randomly, fires radial bursts that scale with wave", danger: 1 },
+  { name: "Tracker", icon: "▲", color: 0xff8800, hp: 1, speed: 60, fireRate: 2000, shape: "Square", behavior: "Follows your position, fires aimed volleys", danger: 2 },
+  { name: "Sniper", icon: "✦", color: 0xff2266, hp: 1, speed: 20, fireRate: 1600, shape: "Pentagon", behavior: "Barely moves, fires fast precise shots", danger: 2 },
+  { name: "Spiral", icon: "✺", color: 0xaa44ff, hp: 3, speed: 25, fireRate: 300, shape: "Heptagon", behavior: "Fires continuous rotating spiral patterns", danger: 3 },
+  { name: "Swarm", icon: "●", color: 0xffff44, hp: 1, speed: 90, fireRate: 3200, shape: "Triangle", behavior: "Rushes directly at you, fast but fragile", danger: 2 },
+  { name: "Snake", icon: "≋", color: 0x44ddff, hp: 2, speed: 50, fireRate: 2400, shape: "Line", behavior: "Weaves toward you in sinusoidal path", danger: 2 },
+  { name: "Circler", icon: "⬡", color: 0x44ff88, hp: 3, speed: 20, fireRate: 2200, shape: "Hexagon", behavior: "Drifts around the arena, fires 16-bullet radial bursts", danger: 3 },
+  { name: "Tank", icon: "■", color: 0xff4444, hp: 6, speed: 15, fireRate: 2800, shape: "Octagon", behavior: "Slow and tough, fires radial + aimed combo patterns", danger: 4 },
   { name: "Sentinel", icon: "⊛", color: 0xffaa22, hp: 30, speed: 8, fireRate: 2000, shape: "Dodecagon", behavior: "3-phase boss that summons minions, intensifies attacks each phase", danger: 5, isBoss: true },
   { name: "Phantom", icon: "◈", color: 0x4488ff, hp: 40, speed: 40, fireRate: 2500, shape: "Diamond", behavior: "Teleporting boss that spawns decoys, charges power when time is frozen", danger: 5, isBoss: true },
 ];

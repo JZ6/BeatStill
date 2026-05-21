@@ -7,7 +7,7 @@ export class SpiralEnemy extends Enemy {
   private spiralAngle = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 3, 25, 400, 0xaa44ff, 18);
+    super(scene, x, y, 3, 25, 300, 0xaa44ff, 18);
     this.draw(this.color);
   }
 
@@ -23,6 +23,6 @@ export class SpiralEnemy extends Enemy {
   }
 
   protected getFirePattern(): BulletConfig[] {
-    return spiral(3, 100, this.spiralAngle);
+    return spiral(4, 130, this.spiralAngle);
   }
 }

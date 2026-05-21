@@ -7,12 +7,12 @@ export class BasicEnemy extends Enemy {
   readonly enemyType = "basic" as const;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 2, 40, 3000, 0x44ff44, 16);
+    super(scene, x, y, 2, 40, 2400, 0x44ff44, 16);
     this.draw(this.color);
   }
 
   protected drawShape(color: number) {
-    this.drawPolygon(color, 4);
+    this.drawCircleShape(color);
   }
 
   protected updateMovement(delta: number, timeScale: number) {
@@ -22,6 +22,6 @@ export class BasicEnemy extends Enemy {
   }
 
   protected getFirePattern(_angleToPlayer: number, gameScene: GameScene): BulletConfig[] {
-    return radial(Math.min(3 + Math.floor(gameScene.wave / 3), 6), 120);
+    return radial(Math.min(4 + Math.floor(gameScene.wave / 2), 10), 160);
   }
 }

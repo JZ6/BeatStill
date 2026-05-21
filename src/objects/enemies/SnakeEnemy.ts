@@ -8,29 +8,12 @@ export class SnakeEnemy extends Enemy {
   private snakePhase = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 2, 50, 3000, 0x44ddff, 14);
+    super(scene, x, y, 2, 50, 2400, 0x44ddff, 14);
     this.draw(this.color);
   }
 
   protected drawShape(color: number) {
-    const r = this.radius;
-    const segments = 6;
-    const segLen = (r * 2) / segments;
-    const amplitude = r * 0.5;
-
-    const drawWave = (rad: number, alpha: number, width: number) => {
-      this.lineStyle(width, color, alpha);
-      this.beginPath();
-      for (let i = 0; i <= segments; i++) {
-        const py = -r + i * segLen;
-        const px = Math.sin(this.snakePhase + i * 1.2) * amplitude * (rad / r);
-        if (i === 0) this.moveTo(px, py); else this.lineTo(px, py);
-      }
-      this.strokePath();
-    };
-
-    drawWave(r + 4, 0.3, 3);
-    drawWave(r, 1, 1.5);
+    this.drawPolygon(color, 2);
   }
 
   protected updateMovement(delta: number, timeScale: number, gameScene: GameScene) {
@@ -51,10 +34,9 @@ export class SnakeEnemy extends Enemy {
       this.y += Math.sin(moveAngle) * this.speed * timeScale * dt;
     }
 
-    this.draw(this.color);
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return aimed(angleToPlayer, 2, 0.2, 150);
+    return aimed(angleToPlayer, 3, 0.3, 200);
   }
 }
