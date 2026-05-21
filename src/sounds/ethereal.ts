@@ -16,11 +16,10 @@ export const ethereal: SoundTheme = {
   deathNotes: ["B4", "A4", "F#4", "E4", "D4", "B3"],
 
   createLeadEffects(destination) {
-    const vibrato = new Tone.Vibrato({ frequency: 3, depth: 0.2 }).connect(destination);
-    const chorus = new Tone.Chorus({ frequency: 0.8, delayTime: 5, depth: 0.5, wet: 0.4 })
-      .connect(vibrato)
-      .start();
-    return chorus;
+    const vibrato = new Tone.Vibrato({ frequency: 0.8, depth: 0.15, maxDelay: 0.012 });
+    vibrato.wet.value = 0.4;
+    vibrato.connect(destination);
+    return vibrato;
   },
 
   createLeadSynth(destination) {

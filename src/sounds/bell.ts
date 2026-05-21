@@ -16,10 +16,10 @@ export const bell: SoundTheme = {
   deathNotes: ["D5", "C5", "A4", "G4", "F4", "D4", "C4"],
 
   createLeadEffects(destination) {
-    const chorus = new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, wet: 0.3 })
-      .connect(destination)
-      .start();
-    return chorus;
+    const vibrato = new Tone.Vibrato({ frequency: 1.5, depth: 0.08, maxDelay: 0.01 });
+    vibrato.wet.value = 0.35;
+    vibrato.connect(destination);
+    return vibrato;
   },
 
   createLeadSynth(destination) {

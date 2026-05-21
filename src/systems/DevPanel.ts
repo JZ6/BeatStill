@@ -236,33 +236,10 @@ function buildAudioTab(
     ac.appendChild(row);
   }
 
-  function syncState() {
-    const am = getAudioManager();
-    if (!am || !am.isStarted) return;
-    const currentName = am.currentTheme?.name;
-    if (currentName) {
-      themeButtons.forEach((b, i) => {
-        b.style.borderColor = allThemes[i].name === currentName ? "#ffaa44" : "#444";
-      });
-    }
-    const currentShot = am.activeShotSound;
-    radios.forEach((r) => { r.checked = r.value === currentShot; });
-  }
-
-  return { tab, content: ac, syncState };
-}
-
-function buildSoundsTab(
-  getAudioManager: () => AudioManager | null,
-): { tab: HTMLButtonElement; content: HTMLDivElement } {
-  const { tab, content: sc } = makeTab("Sounds");
-  sc.style.flexDirection = "column";
-  sc.style.gap = "8px";
-
   const previewLabel = document.createElement("div");
   previewLabel.className = "dp-label";
-  previewLabel.textContent = "PREVIEW GAME SOUNDS";
-  sc.appendChild(previewLabel);
+  previewLabel.textContent = "GAME SOUNDS";
+  ac.appendChild(previewLabel);
 
   const soundRow = document.createElement("div");
   soundRow.className = "dp-ctrl-row";
@@ -291,9 +268,22 @@ function buildSoundsTab(
     });
     soundRow.appendChild(btn);
   }
-  sc.appendChild(soundRow);
+  ac.appendChild(soundRow);
 
-  return { tab, content: sc };
+  function syncState() {
+    const am = getAudioManager();
+    if (!am || !am.isStarted) return;
+    const currentName = am.currentTheme?.name;
+    if (currentName) {
+      themeButtons.forEach((b, i) => {
+        b.style.borderColor = allThemes[i].name === currentName ? "#ffaa44" : "#444";
+      });
+    }
+    const currentShot = am.activeShotSound;
+    radios.forEach((r) => { r.checked = r.value === currentShot; });
+  }
+
+  return { tab, content: ac, syncState };
 }
 
 function buildCrashTab(): { tab: HTMLButtonElement; content: HTMLDivElement } {
@@ -387,7 +377,6 @@ export function createDevPanel(
   const tabs = [
     buildGameTab(getScene, getAudioManager),
     audioTab,
-    buildSoundsTab(getAudioManager),
     buildCrashTab(),
   ];
 
