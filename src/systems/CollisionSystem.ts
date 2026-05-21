@@ -4,7 +4,7 @@ import type { Enemy } from "../objects/enemies";
 import type { Asteroid } from "../objects/Asteroid";
 import type { Wall } from "../objects/Wall";
 import { CHAIN_TIERS } from "./ChainSystem";
-import { px } from "./GameConfig";
+
 
 export function circleOverlap(
   x1: number, y1: number, r1: number,
@@ -15,6 +15,34 @@ export function circleOverlap(
   const dist = dx * dx + dy * dy;
   const radii = r1 + r2;
   return dist < radii * radii;
+}
+
+// Checks if a circle overlaps a triangle using point-in-triangle + edge-distance tests.
+function triangleCircleOverlap(
+  ax: number, ay: number,
+  bx: number, by: number,
+  cx: number, cy: number,
+  px: number, py: number, pr: number,
+): boolean {
+  // Point-in-triangle via cross products
+  const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
+  const d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy);
+  const d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay);
+  const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+  const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+  if (!(hasNeg && hasPos)) return true;
+
+  // Edge-segment to circle distance
+  function edgeDist(x1: number, y1: number, x2: number, y2: number): number {
+    const ex = x2 - x1, ey = y2 - y1;
+    const len2 = ex * ex + ey * ey;
+    if (len2 === 0) return Math.hypot(px - x1, py - y1);
+    const t = Math.max(0, Math.min(1, ((px - x1) * ex + (py - y1) * ey) / len2));
+    return Math.hypot(px - (x1 + t * ex), py - (y1 + t * ey));
+  }
+  return edgeDist(ax, ay, bx, by) < pr ||
+         edgeDist(bx, by, cx, cy) < pr ||
+         edgeDist(cx, cy, ax, ay) < pr;
 }
 
 export class CollisionSystem {
@@ -131,9 +159,10 @@ export class CollisionSystem {
 
   private shipVsBullets(enemyBullets: Bullet[]): boolean {
     const s = this.scene;
+    const [ax, ay, bx, by, cx, cy] = s.ship.getHitVertices();
     for (const b of enemyBullets) {
       if (!b.alive) continue;
-      if (circleOverlap(b.x, b.y, b.radius, s.ship.x, s.ship.y, px(4))) {
+      if (triangleCircleOverlap(ax, ay, bx, by, cx, cy, b.x, b.y, b.radius)) {
         b.kill();
         s.recordDamage();
         s.particles.burst(s.ship.x, s.ship.y, 0xff4422, 15, 80, 3);
@@ -150,9 +179,10 @@ export class CollisionSystem {
 
   private shipVsAsteroids(asteroidArr: Asteroid[]) {
     const s = this.scene;
+    const [ax, ay, bx, by, cx, cy] = s.ship.getHitVertices();
     for (const a of asteroidArr) {
       if (!a.active) continue;
-      if (circleOverlap(a.x, a.y, a.radius, s.ship.x, s.ship.y, px(4))) {
+      if (triangleCircleOverlap(ax, ay, bx, by, cx, cy, a.x, a.y, a.radius)) {
         s.recordDamage();
         s.particles.burst(s.ship.x, s.ship.y, 0xff4422, 15, 80, 3);
         if (s.ship.takeDamage(1)) {

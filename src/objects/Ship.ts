@@ -76,6 +76,20 @@ export class Ship extends Phaser.GameObjects.Container {
     this.graphics.fillCircle(0, 0, 3 * s);
   }
 
+  getHitVertices(): [number, number, number, number, number, number] {
+    const s = px(1);
+    const cos = Math.cos(this.rotation);
+    const sin = Math.sin(this.rotation);
+    const rotate = (lx: number, ly: number): [number, number] => [
+      this.x + cos * lx - sin * ly,
+      this.y + sin * lx + cos * ly,
+    ];
+    const [ax, ay] = rotate(0, -18 * s);
+    const [bx, by] = rotate(-12 * s, 14 * s);
+    const [cx, cy] = rotate(12 * s, 14 * s);
+    return [ax, ay, bx, by, cx, cy];
+  }
+
   drawHealthBar() {
     this.healthBar.clear();
     const w = px(HEALTHBAR_WIDTH);
