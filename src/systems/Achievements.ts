@@ -173,9 +173,15 @@ export function isAchievementUnlocked(id: string): boolean {
   return state.unlockedIds.includes(id);
 }
 
+let dirty = false;
+
 export function addKill() {
   state.totalKills++;
-  saveState();
+  dirty = true;
+}
+
+export function flushAchievements() {
+  if (dirty) { saveState(); dirty = false; }
 }
 
 export function addBossDefeat() {

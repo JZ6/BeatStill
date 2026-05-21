@@ -197,7 +197,8 @@ export class ChainSystem {
     this.arcGraphics.clear();
     if (this.chainTimer <= 0) return;
     const tier = CHAIN_TIERS[this.chainTier] ?? CHAIN_TIERS[0];
-    const effectiveWindow = CHAIN_WINDOW + this.scene.stats.chainWindow;
+    const hasMetronome = this.scene.relics.hasRelic("metronome");
+    const effectiveWindow = (CHAIN_WINDOW + this.scene.stats.chainWindow) * (hasMetronome ? 1.5 : 1);
     const progress = this.chainTimer / effectiveWindow;
     const arcAngle = progress * Math.PI * 2;
     let alpha = 0.6;

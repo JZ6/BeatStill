@@ -17,7 +17,7 @@ import { UpgradePickup } from "../objects/Shard";
 import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, updateBestChain, addWeaponPickup, addWeaponKill, getState } from "../systems/Unlocks";
 import { type LevelDef } from "../systems/Levels";
 import { Wall } from "../objects/Wall";
-import { checkAchievements, addBossDefeat, recordWeaponUsed, recordThemeUsed, type AchievementContext } from "../systems/Achievements";
+import { checkAchievements, addBossDefeat, recordWeaponUsed, recordThemeUsed, flushAchievements, type AchievementContext } from "../systems/Achievements";
 import type { EnemyType } from "../objects/enemies";
 import { EndlessMode } from "../systems/EndlessMode";
 import { ChainSystem, MAGNET_SPEEDS } from "../systems/ChainSystem";
@@ -91,6 +91,8 @@ export class GameScene extends Phaser.Scene {
   private fpsTimer = 0;
   private recorder!: ReplayRecorder;
   private replayRenderer: ReplayRenderer | null = null;
+  private deathOverlay: Phaser.GameObjects.Graphics | null = null;
+  private gameOverReady = false;
 
   constructor() {
     super("GameScene");
@@ -115,6 +117,8 @@ export class GameScene extends Phaser.Scene {
     this.relicSelectActive = false;
     this.recorder = new ReplayRecorder();
     this.replayRenderer = null;
+    this.deathOverlay = null;
+    this.gameOverReady = false;
 
     this.bgGraphics = this.add.graphics();
     this.bgGraphics.setDepth(-1);
@@ -205,6 +209,9 @@ export class GameScene extends Phaser.Scene {
       this.pauseMenu.cleanup();
       this.relicOverlay?.remove();
       this.relicOverlay = null;
+      this.replayRenderer?.stop();
+      this.replayRenderer = null;
+      this.deathOverlay = null;
     });
 
     this.waveTimer = 0;
@@ -221,10 +228,14 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (this.gameOver) {
       if (this.replayRenderer?.isPlaying) {
-        this.replayRenderer.update(delta);
+        if (this.restartKey?.isDown || this.escKey?.isDown) {
+          this.skipReplay();
+        }
+        this.replayRenderer?.update(delta);
+        this.particles.update(delta, 0.3);
         return;
       }
-      if (this.restartKey?.isDown) this.restartGame();
+      if (this.gameOverReady && this.restartKey?.isDown) this.restartGame();
       this.particles.update(delta, 0.3);
       return;
     }
@@ -292,7 +303,7 @@ export class GameScene extends Phaser.Scene {
           const d = dx * dx + dy * dy;
           if (d < closestDist) { closestDist = d; closest = e; }
         }
-        if (closest) b.steerToward(closest.x, closest.y, 0.08);
+        if (closest) b.steerToward(closest.x, closest.y, 0.08, delta * ts / 1000);
       }
       b.update(delta, ts);
     }
@@ -484,7 +495,7 @@ export class GameScene extends Phaser.Scene {
       this.ship.maxHp = 1;
       this.ship.hp = 1;
       this.ship.drawHealthBar();
-      this.stats.damage *= 3;
+      this.ship.damageMultiplier = 3;
     }
   }
 
@@ -572,6 +583,7 @@ export class GameScene extends Phaser.Scene {
       bossJustKilled,
       levelJustCompleted,
     };
+    flushAchievements();
     const newAchievements = checkAchievements(ctx);
     for (const a of newAchievements) this.toastQueue.push(`★ ${a.name} (+${a.reward}◆)`);
     if (newAchievements.length > 0) this.shardText.setText(`◆ ${getState().shards}`);
@@ -605,9 +617,11 @@ export class GameScene extends Phaser.Scene {
 
   triggerGameOver() {
     this.gameOver = true;
+    this.gameOverReady = false;
     this.touchControls?.disable();
     this.particles.burst(this.ship.x, this.ship.y, 0xff4422, 40, 150, 4);
     this.particles.burst(this.ship.x, this.ship.y, 0xffcc66, 20, 100, 3);
+    this.ship.setVisible(false);
 
     updateHighScore(this.score);
     updateHighWave(this.wave);
@@ -622,12 +636,31 @@ export class GameScene extends Phaser.Scene {
         this.replayRenderer = null;
         this.showGameOverScreen();
       });
+      this.time.delayedCall(400, () => {
+        this.input.once("pointerdown", () => {
+          if (this.replayRenderer?.isPlaying) this.skipReplay();
+        });
+      });
     } else {
       this.showGameOverScreen();
     }
   }
 
+  private skipReplay() {
+    if (!this.replayRenderer?.isPlaying) return;
+    this.replayRenderer.stop();
+    this.replayRenderer = null;
+    this.showGameOverScreen();
+  }
+
   private showGameOverScreen() {
+    if (!this.deathOverlay) {
+      this.deathOverlay = this.add.graphics();
+      this.deathOverlay.fillStyle(0x0a0806, 0.75);
+      this.deathOverlay.fillRect(0, 0, GAME_W, GAME_H);
+      this.deathOverlay.setDepth(99);
+    }
+
     const mobile = isMobile();
     const isLevel = !!this.level;
     let controls: string;
@@ -639,6 +672,8 @@ export class GameScene extends Phaser.Scene {
 
     const scoreLine = isLevel ? "" : `\nSCORE: ${this.score}  |  WAVE: ${this.wave}\n`;
     this.gameOverText.setText(`GAME OVER\n${scoreLine}\n${controls}`);
+
+    this.time.delayedCall(300, () => { this.gameOverReady = true; });
 
     if (mobile) this.createMobileGameOverUI(isLevel);
 
@@ -660,9 +695,9 @@ export class GameScene extends Phaser.Scene {
         this.goToMenu();
       });
 
-    this.time.delayedCall(200, () => {
+    this.time.delayedCall(500, () => {
       this.input.once("pointerdown", (_p: Phaser.Input.Pointer, targets: Phaser.GameObjects.GameObject[]) => {
-        if (this.gameOver && !targets.includes(this.menuBtn!)) this.restartGame();
+        if (this.gameOver && this.gameOverReady && !targets.includes(this.menuBtn!)) this.restartGame();
       });
     });
   }

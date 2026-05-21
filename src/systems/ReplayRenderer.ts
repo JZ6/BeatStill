@@ -102,6 +102,11 @@ export class ReplayRenderer {
     }
   }
 
+  stop() {
+    if (!this.isPlaying) return;
+    this.cleanup();
+  }
+
   private cleanup() {
     this.isPlaying = false;
     this.graphics.destroy();

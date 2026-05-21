@@ -24,6 +24,7 @@ export class Ship extends Phaser.GameObjects.Container {
   stats!: PlayerStats;
   touchControls?: TouchControls;
   shipColor: number;
+  damageMultiplier = 1;
   private inputMag = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -177,7 +178,7 @@ export class Ship extends Phaser.GameObjects.Container {
     const count = weapon.baseBulletCount + (this.stats.bulletCount - BASE.bulletCount);
     const spread = weapon.baseBulletSpread + (this.stats.bulletSpread - BASE.bulletSpread);
     const speed = weapon.baseBulletSpeed + (this.stats.bulletSpeed - BASE.bulletSpeed);
-    const dmg = Math.max(1, Math.round(weapon.damageMultiplier * this.stats.damage));
+    const dmg = Math.max(1, Math.round(weapon.damageMultiplier * this.stats.damage * this.damageMultiplier));
     const prc = weapon.basePierce + this.stats.pierce;
 
     const startAngle = count > 1 ? angle - spread / 2 : angle;

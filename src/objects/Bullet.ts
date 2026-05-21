@@ -92,7 +92,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     }
   }
 
-  steerToward(tx: number, ty: number, strength: number) {
+  steerToward(tx: number, ty: number, strength: number, dt: number) {
     const dx = tx - this.x;
     const dy = ty - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -102,8 +102,9 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     const desiredVx = (dx / dist) * speed;
     const desiredVy = (dy / dist) * speed;
 
-    this.vx += (desiredVx - this.vx) * strength;
-    this.vy += (desiredVy - this.vy) * strength;
+    const factor = 1 - Math.pow(1 - strength, dt * 60);
+    this.vx += (desiredVx - this.vx) * factor;
+    this.vy += (desiredVy - this.vy) * factor;
 
     const newSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
     if (newSpeed > 0) {

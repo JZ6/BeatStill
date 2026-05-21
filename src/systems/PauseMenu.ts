@@ -85,6 +85,11 @@ export class PauseMenu {
   }
 
   toggle() {
+    if (this.optionsOverlay) {
+      this.optionsOverlay.remove();
+      this.optionsOverlay = null;
+      return;
+    }
     if (this.confirmVisible) {
       this.hideConfirm();
       return;

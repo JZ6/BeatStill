@@ -17,7 +17,7 @@ export class TrackerEnemy extends Enemy {
 
   protected updateMovement(delta: number, timeScale: number, gameScene: GameScene) {
     this.targetX = gameScene.ship.x;
-    this.targetY = gameScene.ship.y - 150;
+    this.targetY = Math.max(40, gameScene.ship.y - 150);
     this.moveTowardTarget(delta / 1000, timeScale);
   }
 

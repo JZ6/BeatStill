@@ -2,8 +2,7 @@
 
 give the start screen a better style, it needs to be eye catching and interesting so users want to play
 
-
-the levels are not exciting, and some are broken like level 3 that cant be won
+add a info that displays the enemy types and their information, also other information like guns, maybe merge that with collections?
 
 # Thoughts
 
