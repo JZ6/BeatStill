@@ -1,6 +1,7 @@
 export interface SpawnParams {
   enemySpeedMult: number;
-  enemyFireRateMult: number;
+  /** Rhythmic density of enemy fire patterns: 1 = as written, 2 = twice the hits per bar (Enemy.setRhythmDensity). */
+  enemyRhythmDensity: number;
   enemyCountMult: number;
   enemyHpMult: number;
 }
@@ -21,7 +22,8 @@ export const ALL_MUTATORS: WaveMutatorDef[] = [
   {
     id: "bullet_storm", name: "Bullet Storm",
     description: "Enemies fire twice as fast",
-    apply: (p) => { p.enemyFireRateMult *= 0.5; },
+    // Double density: each fire pattern gains a hit midway between its hits.
+    apply: (p) => { p.enemyRhythmDensity *= 2; },
   },
   {
     id: "swarm_tide", name: "Swarm Tide",
@@ -64,7 +66,7 @@ export class MutatorSystem {
   getActiveParams(): SpawnParams {
     const params: SpawnParams = {
       enemySpeedMult: 1,
-      enemyFireRateMult: 1,
+      enemyRhythmDensity: 1,
       enemyCountMult: 1,
       enemyHpMult: 1,
     };

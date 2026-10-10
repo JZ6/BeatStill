@@ -68,3 +68,37 @@ describe("MutatorSystem.rollMutator", () => {
     expect(ALL_MUTATORS.map((m) => m.id)).toEqual(["double_time", "bullet_storm", "swarm_tide", "fragile", "armored"]);
   });
 });
+
+describe("MutatorSystem.getActiveParams", () => {
+  it("starts neutral", () => {
+    expect(new MutatorSystem().getActiveParams()).toEqual({
+      enemySpeedMult: 1,
+      enemyRhythmDensity: 1,
+      enemyCountMult: 1,
+      enemyHpMult: 1,
+    });
+  });
+
+  it("bullet_storm doubles the enemy rhythm density and nothing else", () => {
+    const system = new MutatorSystem();
+    system.addMutator(byId("bullet_storm"));
+    expect(system.getActiveParams()).toEqual({
+      enemySpeedMult: 1,
+      enemyRhythmDensity: 2,
+      enemyCountMult: 1,
+      enemyHpMult: 1,
+    });
+    expect(byId("bullet_storm").description).toBe("Enemies fire twice as fast");
+  });
+
+  it("combines mutators", () => {
+    const system = new MutatorSystem();
+    for (const id of ["double_time", "bullet_storm", "swarm_tide", "armored"]) system.addMutator(byId(id));
+    expect(system.getActiveParams()).toEqual({
+      enemySpeedMult: 1.5,
+      enemyRhythmDensity: 2,
+      enemyCountMult: 1.5,
+      enemyHpMult: 1.5,
+    });
+  });
+});
