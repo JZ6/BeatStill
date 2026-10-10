@@ -16,6 +16,9 @@ const INVINCIBLE_FLASH_MS = 80;
 const HEALTHBAR_WIDTH = 40;
 const HEALTHBAR_HEIGHT = 4;
 
+/** Where this frame's aim angle came from: mouse/last pointer, the touch aim stick, or held (move stick only). */
+type AimSource = "pointer" | "touch" | "hold";
+
 /** Input sampled once per frame by readInput() and consumed by update(). */
 interface FrameInput {
   vx: number;
@@ -39,6 +42,7 @@ export class Ship extends Phaser.GameObjects.Container {
   damageMultiplier = 1;
   private pointerFireSuppressed = false;
   private readonly aimTracker = new AngularSpeedTracker();
+  private aimSource: AimSource = "pointer";
   private frameInput: FrameInput = { vx: 0, vy: 0, aimAngle: -Math.PI / 2, firing: false };
   /** Real ms since i-frames started; drives the blink so it doesn't slow down in slow motion. */
   private invincibleFlashElapsed = 0;
@@ -165,15 +169,18 @@ export class Ship extends Phaser.GameObjects.Container {
     let move = 0;
     let aimAngle = this.rotation - Math.PI / 2;
     let firing = false;
+    let aimSource: AimSource = "pointer";
 
     const tc = this.touchControls;
     if (tc && (tc.aimActive || tc.moveActive)) {
       vx = tc.moveVector.x;
       vy = tc.moveVector.y;
       move = Math.min(Math.sqrt(vx * vx + vy * vy), 1);
+      aimSource = "hold";
       if (tc.aimActive) {
         aimAngle = tc.aimAngle;
         firing = true;
+        aimSource = "touch";
       }
     } else {
       const k = this.keys;
@@ -185,6 +192,11 @@ export class Ship extends Phaser.GameObjects.Container {
       firing = pointer.isDown && !this.pointerFireSuppressed;
     }
 
+    // Switching aim source (the aim stick arming, all touches lifting) jumps the angle; that isn't spin.
+    if (aimSource !== this.aimSource) {
+      this.aimSource = aimSource;
+      this.aimTracker.reset();
+    }
     const aimSpeed = this.aimTracker.update(aimAngle, realDt);
     this.frameInput = { vx, vy, aimAngle, firing };
     return { move, aimSpeed, firing };
