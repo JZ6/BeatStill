@@ -47,6 +47,8 @@ function weaponSection(bpm: number): string {
       num(m.shotsPerSec),
       String(m.bulletsPerShot),
       String(m.damagePerBullet),
+      String(m.bulletHp),
+      num(m.clearPerSec, 1),
       num(m.dps, 1),
       num(m.singleTargetDps, 1),
       num(m.legacyShotsPerSec),
@@ -60,7 +62,7 @@ function weaponSection(bpm: number): string {
     const l = loadout;
     parts.push(
       `Weapons at ${bpm} bpm, loadout "${l.name}" (Rapid Fire ${l.rapidFire}, Power ${l.power}, Multi Shot ${l.multiShot}, Penetration ${l.penetration}):\n` +
-        formatTable(["weapon", "note", "shots/s", "bul", "dmg", "DPS", "1-tgt", "old shots/s", "old DPS", "ΔDPS", "speed", "old speed", "range", "old range"], rows),
+        formatTable(["weapon", "note", "shots/s", "bul", "dmg", "HP", "clear/s", "DPS", "1-tgt", "old shots/s", "old DPS", "ΔDPS", "speed", "old speed", "range", "old range"], rows),
     );
   }
   return parts.join("\n\n");

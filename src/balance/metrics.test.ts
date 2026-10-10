@@ -87,6 +87,8 @@ describe("weapon metrics", () => {
       expect(m.damagePerBullet).toBe(Math.max(1, Math.round(w.damageMultiplier)));
       expect(m.dps).toBeCloseTo(m.shotsPerSec * m.bulletsPerShot * m.damagePerBullet);
       expect(m.singleTargetDps).toBeCloseTo(m.shotsPerSec * m.damagePerBullet);
+      expect(m.bulletHp).toBe(m.damagePerBullet + w.basePierce);
+      expect(m.clearPerSec).toBeCloseTo(m.bulletsPerSec * m.bulletHp);
       expect(m.speed).toBe(w.baseBulletSpeed);
     }
   });

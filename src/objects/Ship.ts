@@ -330,7 +330,6 @@ export class Ship extends Phaser.GameObjects.Container {
           lifetime: lt,
           homing: weapon.homing,
           canRicochet: gameScene.relics.hasRelic("ricochet"),
-          canDestroyBullets: weapon.id === "cannon" || weapon.id === "nuke",
         },
       );
       gameScene.playerBullets.add(bullet);

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { options } from "../systems/GameOptions";
 import { GAME_W, GAME_H, px } from "../systems/GameConfig";
+import { ENEMY_BULLET_HP, playerBulletHp } from "../systems/bulletClash";
 
 export type BulletOwner = "player" | "enemy";
 
@@ -10,7 +11,6 @@ export interface BulletOpts {
   lifetime?: number;
   homing?: boolean;
   canRicochet?: boolean;
-  canDestroyBullets?: boolean;
 }
 
 export class Bullet extends Phaser.GameObjects.Graphics {
@@ -25,7 +25,14 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   bulletColor: number;
   alive = true;
   sourceEnemy: Phaser.GameObjects.GameObject | null = null;
-  canDestroyBullets: boolean;
+  /**
+   * Bullet HP (diep.io-style, see systems/bulletClash.ts): damage + pierce for player bullets, 1 for
+   * enemy bullets. Clashes with opposing bullets and enemy hits use it up.
+   */
+  hp: number;
+  /** Position before this frame's movement (swept bullet-vs-bullet contact). */
+  prevX: number;
+  prevY: number;
   private canRicochet: boolean;
   private bounced = false;
   private readonly hitTargets = new Set<object>();
@@ -53,8 +60,10 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.radius = px(opts?.radius ?? 3);
     this.lifetime = opts?.lifetime ?? 0;
     this.homing = opts?.homing ?? false;
+    this.hp = owner === "player" ? playerBulletHp(damage, pierce) : ENEMY_BULLET_HP;
+    this.prevX = x;
+    this.prevY = y;
 
-    this.canDestroyBullets = opts?.canDestroyBullets ?? false;
     this.canRicochet = opts?.canRicochet ?? false;
     this.bulletColor = opts?.color ?? (owner === "player" ? 0xffff00 : 0xff4488);
     const glowAlpha = owner === "player" ? 0.3 : 0.25;
@@ -70,6 +79,8 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   update(delta: number, timeScale: number) {
     if (!this.alive) return;
     const dt = delta / 1000;
+    this.prevX = this.x;
+    this.prevY = this.y;
 
     if (this.lifetime > 0) {
       this.lifetime -= delta * timeScale;
@@ -143,9 +154,14 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     }
   }
 
+  /**
+   * The bullet hit an enemy or asteroid: that costs it 1 HP, and it flies on while it has pierce
+   * and HP left. Returns true if the bullet is spent.
+   */
   hit(): boolean {
     if (!this.alive) return false;
-    if (this.pierce > 0) {
+    this.hp -= 1;
+    if (this.pierce > 0 && this.hp > 0) {
       this.pierce--;
       return false;
     }

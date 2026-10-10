@@ -20,6 +20,7 @@ import { volleyFor } from "../objects/enemies/volleys";
 import { ALL_EVOLUTIONS } from "../systems/Evolutions";
 import { ALL_UPGRADES, baseStats, type PlayerStats } from "../systems/Upgrades";
 import { ALL_WEAPONS, type WeaponDef } from "../systems/Weapons";
+import { playerBulletHp } from "../systems/bulletClash";
 import { shotProfile } from "../systems/weaponMath";
 
 /** The mid tempo balance targets are measured at (palettes run 80–120 bpm, the campaign 92–128). */
@@ -184,6 +185,10 @@ export interface WeaponMetrics {
   bulletsPerSec: number;
   damagePerBullet: number;
   pierce: number;
+  /** Bullet HP (damage + pierce): enemy bullets (1 HP each) one bullet can destroy. */
+  bulletHp: number;
+  /** Most enemy bullets the stream can destroy per second (bullets/s × bullet HP). */
+  clearPerSec: number;
   /** Every bullet lands. */
   dps: number;
   /** One bullet per shot lands. */
@@ -230,6 +235,8 @@ export function weaponMetrics(weapon: WeaponDef, bpm: number, loadout: Loadout =
     bulletsPerSec: shotsPerSec * shot.count,
     damagePerBullet: shot.damage,
     pierce: shot.pierce,
+    bulletHp: playerBulletHp(shot.damage, shot.pierce),
+    clearPerSec: shotsPerSec * shot.count * playerBulletHp(shot.damage, shot.pierce),
     dps: shotsPerSec * shot.count * shot.damage,
     singleTargetDps: shotsPerSec * shot.damage,
     speed: shot.speed,

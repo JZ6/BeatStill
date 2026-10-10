@@ -4,6 +4,9 @@ import type { Enemy } from "../objects/enemies";
 import type { Asteroid } from "../objects/Asteroid";
 import type { Wall, WallHitResult } from "../objects/Wall";
 import { CHAIN_TIERS } from "./ChainSystem";
+import { BULLET_GRID_CELL, clashBullets, indexBullets, type BulletIndex } from "./bulletClash";
+import { UniformGrid } from "./spatialGrid";
+import { px } from "./GameConfig";
 
 const KILL_BURST_COUNTS = [20, 25, 30, 35, 35, 35];
 const KILL_BURST_COUNTS_2 = [10, 12, 15, 18, 18, 18];
@@ -54,7 +57,15 @@ function triangleCircleOverlap(
          edgeDist(cx, cy, ax, ay) < pr;
 }
 
+/** Radius (base px) of a circle around the ship that contains its hit triangle (vertices at ≤ 18.4). */
+const SHIP_HIT_RADIUS = 19;
+/** Particles per bullet clash (clashes are frequent now that every bullet can clash). */
+const CLASH_BURST = 4;
+
 export class CollisionSystem {
+  /** Enemy bullets by position, rebuilt every frame (broad phase for absorption and clashes). */
+  private readonly enemyBulletGrid = new UniformGrid<Bullet>(BULLET_GRID_CELL);
+
   constructor(private scene: GameScene) {}
 
   checkAll() {
@@ -64,11 +75,12 @@ export class CollisionSystem {
     const enemyArr = [...s.enemies.getChildren()] as Enemy[];
     const asteroidArr = [...s.asteroids.getChildren()] as Asteroid[];
     const wallArr = [...s.walls.getChildren()] as Wall[];
+    const enemyBulletIndex = indexBullets(this.enemyBulletGrid, enemyBullets);
 
     this.bulletsVsEnemies(playerBullets, enemyArr);
-    this.absorbEnemyBullets(enemyBullets, enemyArr);
+    this.absorbEnemyBullets(enemyBulletIndex, enemyArr);
     this.bulletsVsAsteroids(playerBullets, asteroidArr);
-    this.bulletVsBullet(playerBullets, enemyBullets);
+    this.bulletVsBullet(playerBullets, enemyBulletIndex);
     this.walls(wallArr, playerBullets, enemyBullets, enemyArr);
 
     if (!s.ship.isInvincible() && !s.godMode && !s.level?.isComplete) {
@@ -136,16 +148,15 @@ export class CollisionSystem {
     }
   }
 
-  private absorbEnemyBullets(enemyBullets: Bullet[], enemyArr: Enemy[]) {
-    for (const b of enemyBullets) {
-      if (!b.alive) continue;
-      for (const e of enemyArr) {
-        if (!e.active || e === b.sourceEnemy) continue;
-        if (circleOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) {
-          b.kill();
-          break;
-        }
-      }
+  /** Enemy bullets that touch an enemy other than the one that fired them are absorbed. */
+  private absorbEnemyBullets(index: BulletIndex<Bullet>, enemyArr: Enemy[]) {
+    if (index.grid.size === 0) return;
+    for (const e of enemyArr) {
+      if (!e.active) continue;
+      const reach = e.radius + index.maxRadius;
+      index.grid.query(e.x - reach, e.y - reach, e.x + reach, e.y + reach, (b) => {
+        if (b.alive && e !== b.sourceEnemy && circleOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) b.kill();
+      });
     }
   }
 
@@ -169,28 +180,31 @@ export class CollisionSystem {
     }
   }
 
-  private bulletVsBullet(playerBullets: Bullet[], enemyBullets: Bullet[]) {
+  /**
+   * Diep.io-style clashes (see bulletClash.ts): every player bullet trades HP with the enemy bullets
+   * it meets; bullets at 0 HP are destroyed. Each clash is announced (the music aggregates them per step).
+   */
+  private bulletVsBullet(playerBullets: Bullet[], index: BulletIndex<Bullet>) {
     const s = this.scene;
-    for (const pb of playerBullets) {
-      if (!pb.alive || !pb.canDestroyBullets) continue;
-      for (const eb of enemyBullets) {
-        if (!eb.alive) continue;
-        if (circleOverlap(pb.x, pb.y, pb.radius, eb.x, eb.y, eb.radius)) {
-          s.particles.burst(pb.x, pb.y, pb.bulletColor, 8, 50, 2);
-          s.gameEvents.emit("bulletClash", { x: pb.x, y: pb.y });
-          pb.kill();
-          eb.kill();
-          break;
-        }
-      }
-    }
+    clashBullets(playerBullets, index, (pb, eb) => {
+      s.particles.burst(eb.x, eb.y, pb.bulletColor, CLASH_BURST, 50, 2);
+      s.gameEvents.emit("bulletClash", { x: eb.x, y: eb.y });
+      if (!(eb.hp > 0)) eb.kill();
+      if (!(pb.hp > 0)) pb.kill();
+    });
   }
 
   private shipVsBullets(enemyBullets: Bullet[]): boolean {
     const s = this.scene;
     const [ax, ay, bx, by, cx, cy] = s.ship.getHitVertices();
+    const shipX = s.ship.x;
+    const shipY = s.ship.y;
+    // The hit triangle fits in this circle around the ship: cheap reject before the exact test.
+    // Same scale as Ship.getHitVertices (px(1) per base px).
+    const shipReach = SHIP_HIT_RADIUS * px(1);
     for (const b of enemyBullets) {
       if (!b.alive) continue;
+      if (!circleOverlap(shipX, shipY, shipReach, b.x, b.y, b.radius)) continue;
       if (triangleCircleOverlap(ax, ay, bx, by, cx, cy, b.x, b.y, b.radius)) {
         b.kill();
         s.progression.recordDamage();
