@@ -27,5 +27,10 @@ export function initDimensions(quality: number) {
   const { w, h } = computeDimensions(quality);
   GAME_W = w;
   GAME_H = h;
-  UI_SCALE = GAME_H / 720;
+  UI_SCALE = uiScaleFor(w, h);
+}
+
+/** UI scales with the short side, so portrait screens don't get oversized UI. */
+export function uiScaleFor(w: number, h: number): number {
+  return Math.min(w, h) / 720;
 }
