@@ -1,6 +1,6 @@
 import type { GameScene } from "../scenes/GameScene";
 import type { TickEvent } from "../core/Conductor";
-import { createEnemy } from "../objects/enemies";
+import { createEnemy, type Enemy } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import { Bullet } from "../objects/Bullet";
 import { Wall } from "../objects/Wall";
@@ -49,6 +49,21 @@ export class LevelRunner {
   update() {
     if (!this.schedule || this.isComplete || this.scene.enemies.getLength() > 0) return;
     this.schedule.onFieldClear(this.scene.conductor.currentTick + 1);
+  }
+
+  /**
+   * Dev "Skip Wave": queues the next wave (or, after the last one, the completion) on the next bar
+   * line and clears the current wave's enemies, enemy bullets and asteroids. Walls stay: they
+   * persist across waves by design. Returns false if there is nothing to skip.
+   */
+  skipWave(): boolean {
+    if (!this.schedule || this.isComplete) return false;
+    const s = this.scene;
+    if (!this.schedule.skip(s.conductor.currentTick + 1)) return false;
+    for (const e of [...s.enemies.getChildren()] as Enemy[]) e.destroy();
+    for (const b of [...s.enemyBullets.getChildren()] as Bullet[]) b.kill();
+    for (const a of [...s.asteroids.getChildren()] as Asteroid[]) a.destroy();
+    return true;
   }
 
   private spawnWave(index: number, t: TickEvent) {

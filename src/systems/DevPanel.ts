@@ -17,6 +17,15 @@ function makeTab(label: string): { tab: HTMLButtonElement; content: HTMLDivEleme
   return { tab, content };
 }
 
+/** "Wave: 3" in endless; "Wave: 2/5" in a level (the wave on the field). */
+function waveText(scene: GameScene): string {
+  const level = scene.level;
+  if (!level) return `Wave: ${scene.wave}`;
+  const total = level.levelDef.waves.length;
+  const status = level.isComplete ? " (complete)" : "";
+  return `Wave: ${Math.max(0, level.waveIndex + 1)}/${total}${status}`;
+}
+
 function buildGameTab(
   getScene: () => GameScene | null,
 ): { tab: HTMLButtonElement; content: HTMLDivElement; refresh: () => void } {
@@ -42,7 +51,8 @@ function buildGameTab(
   setWaveBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     const scene = getScene();
-    if (!scene || scene.gameOver) return;
+    // Endless only: a level's waves are fixed (use Skip Wave there).
+    if (!scene || scene.gameOver || scene.level) return;
     const target = parseInt(setWaveInput.value) - 1;
     if (target >= 0) {
       scene.wave = target;
@@ -59,9 +69,9 @@ function buildGameTab(
     e.stopPropagation();
     const scene = getScene();
     if (!scene || scene.gameOver) return;
-    scene.waves.clearField();
-    scene.waves.spawnEndlessWave();
-    waveLabel.textContent = `Wave: ${scene.wave}`;
+    // Endless: the next wave; a level: its next wave through the level runner (both on the next bar line).
+    scene.waves.skipWave();
+    waveLabel.textContent = waveText(scene);
   });
 
   waveRow.append(waveLabel, setWaveInput, setWaveBtn, skipWaveBtn);
@@ -152,7 +162,7 @@ function buildGameTab(
   function refresh() {
     const scene = getScene();
     if (!scene) return;
-    waveLabel.textContent = `Wave: ${scene.wave}`;
+    waveLabel.textContent = waveText(scene);
     syncGodModeBtn(scene.godMode);
     const c = scene.conductor;
     clockLabel.textContent = c

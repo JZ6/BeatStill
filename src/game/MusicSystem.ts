@@ -20,9 +20,10 @@ const DEATH_SINK_RATE = 1.5;
  */
 export class MusicSystem implements MusicControl {
   readonly director: MusicDirector;
-  /** The run's tempo before mutators: the palette's, or the level's override. */
-  readonly baseBpm: number;
   private readonly driver: MusicDriver;
+  private _baseBpm: number;
+  /** The mutators' tempo multiplier (setTempoScale), kept across palette switches. */
+  private tempoMult = 1;
   private readonly engine = getAudioEngine();
   private readonly cleanups: (() => void)[] = [];
   private frozen = false;
@@ -34,7 +35,7 @@ export class MusicSystem implements MusicControl {
     private readonly scene: GameScene,
     palette: Palette,
   ) {
-    this.baseBpm = palette.bpm;
+    this._baseBpm = palette.bpm;
     this.director = new MusicDirector(palette, scene.conductor);
     this.driver = new MusicDriver(this.director, this.engine);
     // Kept by the engine until audio starts; volume and drone level are re-applied on every run.
@@ -50,6 +51,11 @@ export class MusicSystem implements MusicControl {
 
   get conductor(): Conductor {
     return this.scene.conductor;
+  }
+
+  /** The run's tempo before mutators: the palette's (or the level's override); a palette switch replaces it. */
+  get baseBpm(): number {
+    return this._baseBpm;
   }
 
   /** Per live frame, after the conductor advanced and gameplay emitted this frame's events. */
@@ -71,8 +77,17 @@ export class MusicSystem implements MusicControl {
     this.syncPaused();
   }
 
+  /**
+   * Switches instruments, harmony and tempo at runtime (the dev panel). The mutators' section
+   * modifiers carry over: the key offset is re-applied to the new home key and the tempo
+   * multiplier to the new palette's tempo.
+   */
   setPalette(palette: Palette): void {
+    const keyOffset = this.director.keyOffset;
     this.driver.setPalette(palette, this.scene.conductor);
+    this._baseBpm = palette.bpm;
+    this.director.setKeyOffset(keyOffset);
+    this.setTempoScale(this.tempoMult);
   }
 
   /** Semitones the harmony sits above (or below) the run's home key. */
@@ -90,7 +105,8 @@ export class MusicSystem implements MusicControl {
    * every rhythm grid speeds up from here; the director reads the conductor and the delay follows.
    */
   setTempoScale(mult: number): void {
-    const bpm = this.baseBpm * (Number.isFinite(mult) && mult > 0 ? mult : 1);
+    this.tempoMult = Number.isFinite(mult) && mult > 0 ? mult : 1;
+    const bpm = this._baseBpm * this.tempoMult;
     this.scene.conductor.setBpm(bpm);
     this.engine.setTempo(bpm);
   }

@@ -125,3 +125,48 @@ describe("LevelSchedule", () => {
     expect(run(s, 5, TPB)).toEqual([{ tick: TPB, step: { kind: "complete" } }]);
   });
 });
+
+describe("LevelSchedule.skip", () => {
+  it("queues the next wave on the next bar line, ignoring the wave's minimum bars", () => {
+    const s = new LevelSchedule([4, undefined, undefined], TPB);
+    s.start(0);
+    run(s, 0, 10);
+    expect(s.waveIndex).toBe(0);
+    expect(s.skip(11)).toEqual({ kind: "wave", index: 1 });
+    expect(s.pendingTick).toBe(TPB); // not 4 bars after wave 0
+    expect(run(s, 11, TPB)).toEqual([{ tick: TPB, step: { kind: "wave", index: 1 } }]);
+  });
+
+  it("advances one wave per skip, past a wave that is still queued", () => {
+    const s = new LevelSchedule([undefined, undefined, undefined, undefined], TPB);
+    s.start(0);
+    run(s, 0, 0);
+    s.skip(1);
+    expect(s.pendingStep).toEqual({ kind: "wave", index: 1 });
+    s.skip(2);
+    expect(s.pendingStep).toEqual({ kind: "wave", index: 2 });
+    expect(run(s, 3, TPB)).toEqual([{ tick: TPB, step: { kind: "wave", index: 2 } }]);
+    expect(s.waveIndex).toBe(2);
+  });
+
+  it("replaces a normally scheduled next wave (no double spawn)", () => {
+    const s = new LevelSchedule([undefined, undefined, undefined], TPB);
+    s.start(0);
+    run(s, 0, 0);
+    s.onFieldClear(1); // wave 1 queued for bar 1
+    s.skip(2); // skips it: wave 2 instead
+    expect(run(s, 2, 3 * TPB)).toEqual([{ tick: TPB, step: { kind: "wave", index: 2 } }]);
+  });
+
+  it("skipping the last wave completes the level; nothing to skip after that or before the start", () => {
+    const s = new LevelSchedule([undefined], TPB);
+    expect(s.skip(0)).toBeNull();
+    s.start(0);
+    // Wave 0 is queued: skipping it moves straight to the completion.
+    expect(s.skip(0)).toEqual({ kind: "complete" });
+    expect(s.skip(1)).toBeNull();
+    expect(run(s, 0, 0)).toEqual([{ tick: 0, step: { kind: "complete" } }]);
+    expect(s.isComplete).toBe(true);
+    expect(s.skip(1)).toBeNull();
+  });
+});

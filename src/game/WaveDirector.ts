@@ -157,6 +157,17 @@ export class WaveDirector {
 
   // --- Dev helpers (DevPanel) ---
 
+  /**
+   * "Skip Wave": endless clears the field and queues the next wave on the next bar line; a level
+   * advances to its next wave through the LevelRunner (walls kept). Returns whether a wave was queued.
+   */
+  skipWave(): boolean {
+    const s = this.scene;
+    if (s.level) return s.level.skipWave();
+    this.clearField();
+    return this.spawnEndlessWave();
+  }
+
   clearField() {
     const s = this.scene;
     ([...s.enemies.getChildren()] as Enemy[]).forEach((e) => e.destroy());

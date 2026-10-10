@@ -65,6 +65,24 @@ export class LevelSchedule {
     return this.pending.schedule(at, step);
   }
 
+  /**
+   * Dev "Skip Wave": schedules the wave after the latest one (the one queued, else the one on the
+   * field), or the completion after the last wave, on the first bar line at or after `fromTick`,
+   * ignoring the minimum section length. Repeated skips advance one wave each. Returns the step
+   * scheduled, or null when the level is complete (or about to complete) or hasn't started.
+   */
+  skip(fromTick: number): LevelStep | null {
+    const queued = this.pending.what;
+    if (this.done || queued?.kind === "complete") return null;
+    const base = queued?.kind === "wave" ? queued.index : this.index;
+    if (base < 0 && !queued) return null;
+    const next = base + 1;
+    const step: LevelStep = next < this.waveBars.length ? { kind: "wave", index: next } : { kind: "complete" };
+    this.pending.cancel();
+    this.pending.schedule(nextBarLine(fromTick, this.ticksPerBar), step);
+    return step;
+  }
+
   /** Call on every conductor tick, in order: the step that is due on this tick (at most once), else null. */
   onTick(tick: number): LevelStep | null {
     const due = this.pending.take(tick);
