@@ -41,6 +41,11 @@ export class MusicDriver {
     }
   }
 
+  /** Re-voices the drone on the next update (after something else took over the engine, e.g. a theme preview). */
+  refreshDrone(): void {
+    this.droneVersion = -1;
+  }
+
   /** Applies Options → Audio Latency and Heartbeat to the director. */
   private syncOptions(): void {
     this.director.setLatency(latencySeconds(options.audioLatencyMs));

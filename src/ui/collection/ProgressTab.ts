@@ -1,8 +1,45 @@
 import { options, saveOptions } from "../../systems/GameOptions";
 import { ALL_UNLOCKS, isUnlocked, requirementText, SHIP_COLORS } from "../../systems/Unlocks";
 import { ALL_ACHIEVEMENTS, isAchievementUnlocked, getAchievementState } from "../../systems/Achievements";
-import { ALL_PALETTES, DEFAULT_PALETTE_ID, getPalette } from "../../music/palettes";
+import { ALL_PALETTES, DEFAULT_PALETTE_ID, getPalette, type Palette } from "../../music/palettes";
+import { ThemePreview, stopThemePreview, themePreviewId } from "../../audio/ThemePreview";
 import { hexColor, renderUnlockItem } from "../CollectionOverlay";
+
+const PREVIEW_ATTR = "data-theme-preview";
+
+/** Shows ■ on the button of the theme that is previewing and ▶ on the others. */
+function syncPreviewButtons() {
+  const playing = themePreviewId();
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(`button[${PREVIEW_ATTR}]`)) {
+    const on = btn.getAttribute(PREVIEW_ATTR) === playing;
+    btn.textContent = on ? "■" : "▶";
+    btn.classList.toggle("playing", on);
+    btn.title = on ? "Stop preview" : "Preview this theme";
+  }
+}
+
+/**
+ * A ▶ button that auditions `palette` (a 2-bar phrase); pressing it again, or another theme's,
+ * stops it. The click is the user gesture that may start audio.
+ */
+function makePreviewButton(palette: Palette): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.className = "col-preview";
+  btn.setAttribute(PREVIEW_ATTR, palette.id);
+  btn.setAttribute("aria-label", `Preview ${palette.name}`);
+  btn.addEventListener("click", (e) => {
+    // Previewing must not equip the theme.
+    e.stopPropagation();
+    if (themePreviewId() === palette.id) {
+      stopThemePreview();
+      syncPreviewButtons();
+      return;
+    }
+    ThemePreview.play(palette, syncPreviewButtons);
+    syncPreviewButtons();
+  });
+  return btn;
+}
 
 export function renderCustomize(container: HTMLDivElement, refresh: () => void) {
   // Ship colors
@@ -40,9 +77,12 @@ export function renderCustomize(container: HTMLDivElement, refresh: () => void) 
     const unlocked = isDefault || (!!unlock && isUnlocked(unlock.id));
     const desc = isDefault ? "Default theme" : !unlock ? "" : unlocked ? unlock.description : requirementText(unlock.requirement);
     const color = isDefault ? "#e8d5b0" : unlocked ? "#ffaa44" : "#333";
-    renderUnlockItem(container, palette.name, unlock?.icon ?? "♫", desc, unlocked, unlocked && playing === palette.id, true, color,
+    const item = renderUnlockItem(container, palette.name, unlock?.icon ?? "♫", desc, unlocked, unlocked && playing === palette.id, true, color,
       () => { options.themeId = palette.id; saveOptions(options); refresh(); });
+    // Only unlocked themes can be auditioned; the button sits before the EQUIP badge.
+    if (unlocked) item.insertBefore(makePreviewButton(palette), item.querySelector(".col-badge"));
   }
+  syncPreviewButtons();
 
   // Stat unlocks
   const statLabel = document.createElement("div");

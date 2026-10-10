@@ -3,6 +3,7 @@ import { MusicDirector, isHeartbeatTick } from "../music/MusicDirector";
 import type { Palette } from "../music/palettes";
 import { getAudioEngine } from "./AudioEngine";
 import { MusicDriver, type MusicControl } from "./MusicDriver";
+import { themePreviewActive } from "./ThemePreview";
 
 /**
  * The menu conductor never runs slower than this, so the idle heart beats every few seconds
@@ -23,6 +24,8 @@ export class MenuMusic implements MusicControl {
   readonly conductor: Conductor;
   readonly director: MusicDirector;
   private readonly driver: MusicDriver;
+  /** True while a theme preview (Collection) has the engine: the menu's notes are dropped. */
+  private yielded = false;
 
   constructor(
     palette: Palette,
@@ -42,6 +45,17 @@ export class MenuMusic implements MusicControl {
     for (const t of ticks) {
       this.director.onTick(t);
       if (isHeartbeatTick(t, this.conductor.beatsPerBar)) this.onHeartbeat(t);
+    }
+    // A theme preview owns the engine while it plays (its own heartbeat, no drone): the clock and
+    // the EKG keep going silently, and the drone comes back once the preview ends.
+    if (themePreviewActive()) {
+      this.director.drain();
+      this.yielded = true;
+      return;
+    }
+    if (this.yielded) {
+      this.yielded = false;
+      this.driver.refreshDrone();
     }
     this.driver.update(ts);
   }

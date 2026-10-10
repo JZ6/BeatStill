@@ -6,6 +6,7 @@ import { createHowToOverlay } from "../ui/HowToOverlay";
 import { createShopOverlay } from "../ui/ShopOverlay";
 import { getAudioEngine } from "../audio/AudioEngine";
 import { MenuMusic } from "../audio/MenuMusic";
+import { stopThemePreview } from "../audio/ThemePreview";
 import { MAX_REAL_DT } from "../core/Conductor";
 import { getPalette } from "../music/palettes";
 import { ENEMY_DEFS } from "../objects/enemies/registry";
@@ -249,6 +250,8 @@ export class StartScene extends Phaser.Scene {
   }
 
   private removeOverlays() {
+    // A theme preview started from the collection ends with it.
+    stopThemePreview();
     this.optionsOverlay?.remove();
     this.optionsOverlay = null;
     this.collectionOverlay?.remove();

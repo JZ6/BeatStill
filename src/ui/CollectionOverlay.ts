@@ -1,4 +1,5 @@
 import { getState } from "../systems/Unlocks";
+import { stopThemePreview } from "../audio/ThemePreview";
 import { renderWeapons } from "./collection/WeaponsTab";
 import { renderEnemies, renderRelics } from "./collection/InfoTab";
 import { renderCustomize, renderAchievements } from "./collection/ProgressTab";
@@ -110,6 +111,14 @@ function injectStyles() {
       width:5px;height:5px;border-radius:50%;background:#222;
     }
     .col-rhythm-beat .col-rhythm-dot:first-child { box-shadow:0 0 0 1px #2c2c2c; }
+    .col-preview {
+      width:28px;height:28px;flex-shrink:0;border-radius:50%;
+      background:transparent;border:1px solid #444;color:#887766;
+      font-family:monospace;font-size:11px;cursor:pointer;padding:0;
+      transition:border-color 0.15s,color 0.15s;
+    }
+    .col-preview:hover { border-color:#ffaa44;color:#e8d5b0; }
+    .col-preview.playing { border-color:#ffaa44;color:#ffaa44; }
     .col-boss-tag {
       font-size:9px;color:#ffaa22;border:1px solid #ffaa22;
       padding:1px 6px;border-radius:3px;letter-spacing:1px;flex-shrink:0;
@@ -150,6 +159,8 @@ export function createCollectionOverlay(onClose: () => void): HTMLDivElement {
   const tabBtns: HTMLButtonElement[] = [];
 
   const showCategory = (cat: string) => {
+    // A theme preview belongs to the Customize tab: switching tabs ends it (re-rendering Customize doesn't).
+    if (cat !== "customize") stopThemePreview();
     content.innerHTML = "";
     content.scrollTop = 0;
     tabBtns.forEach((b, i) => {
@@ -178,7 +189,11 @@ export function createCollectionOverlay(onClose: () => void): HTMLDivElement {
   const closeBtn = document.createElement("button");
   closeBtn.className = "col-close";
   closeBtn.textContent = "CLOSE";
-  closeBtn.addEventListener("click", (e) => { e.stopPropagation(); onClose(); });
+  closeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    stopThemePreview();
+    onClose();
+  });
   overlay.appendChild(closeBtn);
 
   for (const evt of ["pointerdown", "pointerup", "pointermove", "click", "keydown"] as const) {
@@ -213,7 +228,7 @@ export function renderUnlockItem(
   unlocked: boolean, equipped: boolean, equippable: boolean,
   iconColor: string,
   onEquip?: () => void,
-) {
+): HTMLDivElement {
   const item = document.createElement("div");
   item.className = `col-item${equipped ? " equipped" : ""}${!unlocked ? " locked" : ""}${equippable && unlocked ? " interactive" : ""}`;
 
@@ -250,4 +265,5 @@ export function renderUnlockItem(
   }
 
   container.appendChild(item);
+  return item;
 }
