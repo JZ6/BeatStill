@@ -148,6 +148,11 @@ export const ALL_UPGRADES: UpgradeDef[] = [
   } satisfies UpgradeDef)),
 ];
 
+/** Rapid Fire level: how many rungs up TICK_LADDER the weapon's note value has climbed. */
+export function fireRateLevel(stats: PlayerStats): number {
+  return ALL_UPGRADES.find((u) => u.id === "fireCooldown")?.level(stats) ?? 0;
+}
+
 /**
  * Picks a random pickup: 20% a weapon other than standard, otherwise a stat upgrade that
  * isn't maxed yet. Null when every stat upgrade is maxed and no weapon was rolled.

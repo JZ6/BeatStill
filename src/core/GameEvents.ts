@@ -10,7 +10,23 @@ export type AsteroidSize = "large" | "medium" | "small";
  * Positions are in game pixels at the moment of the event.
  */
 export interface GameEventMap {
-  playerFired: { weaponId: string; x: number; y: number; angle: number; bulletCount: number };
+  playerFired: {
+    weaponId: string;
+    x: number;
+    y: number;
+    angle: number;
+    bulletCount: number;
+    /**
+     * Absolute conductor tick the shot fired on (sent together with lateBy): a multiple of the
+     * weapon's interval while fire is held, or a 16th step for a first shot. Absent for shots fired
+     * off the grid (a responsive first shot).
+     */
+    tick?: number;
+    /** Real seconds between that tick and the end of the frame that emitted the event (TickEvent.lateBy). */
+    lateBy?: number;
+    /** True for the first shot of a press; every later shot while held is on the weapon's grid. */
+    first?: boolean;
+  };
   enemyFired: {
     enemyType: EnemyType;
     x: number;

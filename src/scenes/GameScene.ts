@@ -165,6 +165,8 @@ export class GameScene extends Phaser.Scene {
     this.particles = new ParticleSystem(this);
     this.ship = new Ship(this, shipX, shipY);
     this.ship.stats = this.stats;
+    // The player fires on the grid too: every tick reaches the ship's fire clock.
+    this.onTick((t) => this.ship.onTick(t));
     this.ship.hp = this.stats.maxHp;
     this.ship.maxHp = this.stats.maxHp;
 
@@ -232,8 +234,10 @@ export class GameScene extends Phaser.Scene {
     const input = this.ship.readInput(realDt);
     const ts = this.dilation.update(input, realDt);
     this.conductor.timeScale = ts;
-    const { ticks } = this.conductor.advance(realDt);
-    this.tickDispatcher.dispatch(ticks);
+    const advanced = this.conductor.advance(realDt);
+    // This frame's fire input and interval, before the ticks that may fire on the grid.
+    this.ship.beginFireFrame(advanced.realDt, this);
+    this.tickDispatcher.dispatch(advanced.ticks);
     this.progression.trackFreeze(ts, realDt);
 
     this.ship.update(delta, ts, this);

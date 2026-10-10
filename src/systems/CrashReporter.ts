@@ -46,7 +46,7 @@ function snapshotGameState(): Record<string, unknown> | null {
           hp: scene.ship.hp,
           maxHp: scene.ship.maxHp,
           invincible: scene.ship.isInvincible(),
-          fireCooldown: Math.round(scene.ship.fireCooldown),
+          fireInterval: scene.ship.fireInterval,
         }
       : null,
     timeScale: scene.dilation ? scene.timeScale : null,

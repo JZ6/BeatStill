@@ -1,14 +1,16 @@
 import Phaser from "phaser";
 import { Bullet } from "./Bullet";
 import type { GameScene } from "../scenes/GameScene";
-import { defaultStats, type PlayerStats } from "../systems/Upgrades";
+import { defaultStats, fireRateLevel, type PlayerStats } from "../systems/Upgrades";
 import { getWeapon } from "../systems/Weapons";
 import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 import { options } from "../systems/GameOptions";
 import type { TouchControls } from "../systems/TouchControls";
 import { AngularSpeedTracker, type DilationInput } from "../core/TimeDilation";
-import { TICKS_PER_BEAT } from "../core/Conductor";
+import type { TickEvent } from "../core/Conductor";
 import { keyboardVector } from "../core/InputMath";
+import { BASE_FIRE_GRACE, FireClock, type FireShot } from "../game/FireClock";
+import { fireIntervalTicks } from "../music/noteValues";
 
 const BASE = defaultStats();
 
@@ -30,7 +32,6 @@ interface FrameInput {
 
 export class Ship extends Phaser.GameObjects.Container {
   keys: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key } | null = null;
-  fireCooldown = 0;
   graphics: Phaser.GameObjects.Graphics;
   healthBar: Phaser.GameObjects.Graphics;
   hp = 5;
@@ -47,6 +48,10 @@ export class Ship extends Phaser.GameObjects.Container {
   private frameInput: FrameInput = { vx: 0, vy: 0, aimAngle: -Math.PI / 2, firing: false };
   /** Real ms since i-frames started; drives the blink so it doesn't slow down in slow motion. */
   private invincibleFlashElapsed = 0;
+  /** When the weapon fires: on the conductor grid at the weapon's note value (see FireClock). */
+  private readonly fireClock = new FireClock();
+  /** Shots that came due on this frame's ticks; fired in update() after moving and aiming. */
+  private dueShots: FireShot[] = [];
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -203,8 +208,34 @@ export class Ship extends Phaser.GameObjects.Container {
     return { move, aimSpeed, firing };
   }
 
+  /** Ticks between shots this frame (the interval the fire clock uses). */
+  get fireInterval(): number {
+    return this.fireClock.intervalTicks;
+  }
+
+  /** The weapon's note value after Rapid Fire (rungs up TICK_LADDER) and the Overclock relic. */
+  computeFireInterval(gameScene: GameScene): number {
+    const weapon = getWeapon(this.stats.weaponId);
+    return fireIntervalTicks(weapon.noteTicks, fireRateLevel(this.stats), gameScene.relics.hasRelic("overclock"));
+  }
+
+  /**
+   * Starts this frame for the fire clock. Call once per live frame after readInput() and before
+   * the frame's conductor ticks are dispatched, with the conductor's real delta (seconds).
+   */
+  beginFireFrame(realDt: number, gameScene: GameScene) {
+    this.dueShots = [];
+    this.fireClock.beginFrame(this.frameInput.firing, this.computeFireInterval(gameScene), realDt);
+  }
+
+  /** Every conductor tick, in order (GameScene.onTick): queues a shot that comes due on it. */
+  onTick(t: TickEvent) {
+    const shot = this.fireClock.onTick(t);
+    if (shot) this.dueShots.push(shot);
+  }
+
   update(delta: number, timeScale: number, gameScene: GameScene) {
-    const { vx, vy, aimAngle, firing } = this.frameInput;
+    const { vx, vy, aimAngle } = this.frameInput;
 
     // The player runs at half speed when time is frozen, so it can still act.
     const playerTimeScale = timeScale * 0.5 + 0.5;
@@ -229,13 +260,18 @@ export class Ship extends Phaser.GameObjects.Container {
       this.graphics.setAlpha(1);
     }
 
-    this.fireCooldown -= delta * timeScale;
-    if (firing && this.fireCooldown <= 0) {
-      this.fireCooldown = this.fire(aimAngle, gameScene);
-    }
+    // After moving and aiming, so shots leave from this frame's position along this frame's aim.
+    const first = this.fireClock.endFrame(gameScene.conductor, BASE_FIRE_GRACE);
+    const shots = first ? [...this.dueShots, first] : this.dueShots;
+    this.dueShots = [];
+    for (const shot of shots) this.fire(aimAngle, gameScene, shot);
   }
 
-  fire(angle: number, gameScene: GameScene): number {
+  /**
+   * Spawns one shot's bullets around `angle` and announces it (playerFired). A shot timed on a
+   * conductor tick carries that tick and its lateBy, so its note sounds at the exact grid time.
+   */
+  fire(angle: number, gameScene: GameScene, shot: FireShot = { kind: "immediate", first: true }) {
     const weapon = getWeapon(this.stats.weaponId);
 
     const count = weapon.baseBulletCount + (this.stats.bulletCount - BASE.bulletCount);
@@ -271,12 +307,15 @@ export class Ship extends Phaser.GameObjects.Container {
       );
       gameScene.playerBullets.add(bullet);
     }
-    gameScene.gameEvents.emit("playerFired", { weaponId: weapon.id, x: this.x, y: this.y, angle, bulletCount: count });
-
-    const cooldownReduction = BASE.fireCooldown - this.stats.fireCooldown;
-    const noteMs = gameScene.conductor.beatsToGameSeconds(weapon.noteTicks / TICKS_PER_BEAT) * 1000;
-    const cd = Math.max(noteMs - cooldownReduction, 30);
-    return gameScene.relics.hasRelic("overclock") ? Math.max(cd / 2, 20) : cd;
+    gameScene.gameEvents.emit("playerFired", {
+      weaponId: weapon.id,
+      x: this.x,
+      y: this.y,
+      angle,
+      bulletCount: count,
+      first: shot.first,
+      ...(shot.tick !== undefined ? { tick: shot.tick, lateBy: shot.lateBy ?? 0 } : {}),
+    });
   }
 
 }
