@@ -9,6 +9,7 @@ import {
   LEGACY_WEAPONS,
   REFERENCE_BPM,
   allEnemyMetrics,
+  dilationResponse,
   heldLoadout,
   relativeChange,
   weaponMetrics,
@@ -65,6 +66,20 @@ describe("enemy targets", () => {
   it("keeps Bullet Storm at the old double density, at a later wave too", () => {
     for (const m of allEnemyMetrics(REFERENCE_BPM, 12)) {
       expect(Math.abs(relativeChange(m.stormBulletsPerSec, m.legacyStormBulletsPerSec)), `${m.type} p${m.phase}`).toBeLessThanOrEqual(0.15);
+    }
+  });
+});
+
+describe("time dilation targets", () => {
+  it("lets keyboard play (move + hold fire) reach full speed, and idling stop time within half a second", () => {
+    for (const fps of [30, 60, 144]) {
+      const d = dilationResponse(1 / fps);
+      expect(d.moveFireTarget, `${fps} fps`).toBe(1);
+      expect(d.secondsTo99, `${fps} fps`).toBeLessThanOrEqual(0.5);
+      expect(d.idleSecondsBelow01, `${fps} fps`).toBeLessThanOrEqual(0.5);
+      // Moving alone must not saturate (the old WASD bug), but still clearly speeds time up.
+      expect(d.moveOnlyTarget, `${fps} fps`).toBeGreaterThan(0.5);
+      expect(d.moveOnlyTarget, `${fps} fps`).toBeLessThan(0.9);
     }
   });
 });
