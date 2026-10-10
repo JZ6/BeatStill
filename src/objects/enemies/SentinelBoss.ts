@@ -10,7 +10,6 @@ import { GAME_W, GAME_H } from "../../systems/GameConfig";
 const MINION_FIRST_DELAY = 3000;
 
 export class SentinelBoss extends Enemy {
-  readonly enemyType = "sentinel" as const;
   private phase = 1;
   private innerAngle = 0;
   private minionTimer = MINION_FIRST_DELAY;
@@ -18,7 +17,7 @@ export class SentinelBoss extends Enemy {
   private phaseTimer = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 30, 8, 2000, 0xffaa22, 36);
+    super(scene, x, y, "sentinel", 2000);
     this.draw(this.color);
   }
 

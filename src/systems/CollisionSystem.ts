@@ -91,7 +91,7 @@ export class CollisionSystem {
         const hpBefore = e.hp;
         const killed = e.takeDamage(b.damage);
         if (killed) {
-          const isBoss = e.enemyType === "sentinel" || e.enemyType === "phantom";
+          const isBoss = e.def.isBoss;
           const tier = s.chain.chainTier;
           const pCount = atTier(KILL_BURST_COUNTS, tier);
           const pCount2 = atTier(KILL_BURST_COUNTS_2, tier);

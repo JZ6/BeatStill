@@ -3,15 +3,9 @@ import { radial, aimed } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 
 export class TankEnemy extends Enemy {
-  readonly enemyType = "tank" as const;
-
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 6, 15, 2800, 0xff4444, 24);
+    super(scene, x, y, "tank", 2800);
     this.draw(this.color);
-  }
-
-  protected drawShape(color: number) {
-    this.drawPolygon(color, 8);
   }
 
   protected updateMovement(delta: number, timeScale: number) {

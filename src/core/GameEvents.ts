@@ -1,4 +1,4 @@
-import type { EnemyType } from "../objects/enemies";
+import type { EnemyType } from "../objects/enemies/registry";
 import { EventBus } from "./EventBus";
 
 export type BulletOwner = "player" | "enemy";

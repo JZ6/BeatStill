@@ -22,6 +22,7 @@
 import { TICKS_PER_BEAT, TICKS_PER_STEP } from "../core/Conductor";
 import type { TickEvent } from "../core/Conductor";
 import type { GameEventMap } from "../core/GameEvents";
+import { ENEMY_DEFS } from "../objects/enemies/registry";
 import { Harmony, chordFromNumeral } from "./Harmony";
 import type { Chord } from "./Harmony";
 import { isPitched, registerMidi } from "./palettes";
@@ -63,20 +64,10 @@ export interface MusicDirectorOptions {
   maxQuantizeWait?: number;
 }
 
-/** Enemy type → musical role. Phase 4 moves this into the enemy registry. */
-export const ENEMY_ROLES: Readonly<Record<EnemyKind, Role>> = Object.freeze({
-  basic: "pad",
-  tracker: "stab",
-  sniper: "snare",
-  spiral: "arp",
-  tank: "bass",
-  swarm: "hat",
-  snake: "melody",
-  circler: "bell",
-  sentinel: "boss",
-  phantom: "boss",
-  phantom_decoy: "bell",
-});
+/** Enemy type → musical role, from the enemy registry. */
+export const ENEMY_ROLES: Readonly<Record<EnemyKind, Role>> = Object.freeze(
+  Object.fromEntries(ENEMY_DEFS.map((d) => [d.type, d.role])) as Record<EnemyKind, Role>,
+);
 
 /** Role for an enemy type; unknown types fall back to "perc". */
 export function roleForEnemy(type: string): Role {

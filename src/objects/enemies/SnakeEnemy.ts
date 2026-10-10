@@ -16,14 +16,13 @@ const WEAVE_FADE_DIST = 80;
 const FORWARD_FACTOR = 0.912;
 
 export class SnakeEnemy extends Enemy {
-  readonly enemyType = "snake" as const;
   private snakePhase = 0;
   /** Lateral offset applied last frame; x/y = path position + this offset. */
   private offsetX = 0;
   private offsetY = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 2, 50, 2400, 0x44ddff, 14);
+    super(scene, x, y, "snake", 2400);
     this.draw(this.color);
   }
 

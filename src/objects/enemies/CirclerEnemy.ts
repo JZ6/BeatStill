@@ -9,17 +9,12 @@ const EDGE_MARGIN = 40;
 const MIN_INWARD = 0.4;
 
 export class CirclerEnemy extends Enemy {
-  readonly enemyType = "circler" as const;
   private driftAngle: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 3, 20, 2200, 0x44ff88, 16);
+    super(scene, x, y, "circler", 2200);
     this.driftAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     this.draw(this.color);
-  }
-
-  protected drawShape(color: number) {
-    this.drawPolygon(color, 6);
   }
 
   protected updateMovement(delta: number, timeScale: number) {

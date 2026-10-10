@@ -4,18 +4,21 @@ import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
 import { gameEventsOf, type GameEventMap } from "../../core/GameEvents";
 import { GAME_W, GAME_H, px } from "../../systems/GameConfig";
+import { enemyDef, type EnemyDef, type EnemyType } from "./registry";
 
-export type EnemyType = "basic" | "tracker" | "sniper" | "spiral" | "tank" | "swarm" | "snake" | "circler" | "sentinel" | "phantom" | "phantom_decoy";
+export type { EnemyType } from "./registry";
 
 const HIT_FLASH_MS = 80;
 const HIT_FLASH_COLOR = 0xffffff;
 
 export abstract class Enemy extends Phaser.GameObjects.Graphics {
+  readonly enemyType: EnemyType;
+  /** This type's registry entry (stats, visuals, role, rhythm). */
+  readonly def: EnemyDef;
   hp: number;
   maxHp: number;
   speed: number;
   fireRate: number;
-  abstract readonly enemyType: EnemyType;
   radius: number;
   fireCooldown: number;
   targetX!: number;
@@ -25,16 +28,19 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
   /** Remaining hit-flash time in real ms (not time-scaled). */
   private flashTimer = 0;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, hp: number, speed: number, fireRate: number, color: number, radius: number) {
+  /** Stats come from the enemy registry entry for `type`. */
+  constructor(scene: Phaser.Scene, x: number, y: number, type: EnemyType, fireRate: number) {
     super(scene, { x, y });
     scene.add.existing(this);
     this.setDepth(5);
-    this.hp = hp;
-    this.maxHp = hp;
-    this.speed = speed;
+    this.enemyType = type;
+    this.def = enemyDef(type);
+    this.hp = this.def.hp;
+    this.maxHp = this.def.hp;
+    this.speed = this.def.speed;
     this.fireRate = fireRate;
-    this.color = color;
-    this.radius = px(radius);
+    this.color = this.def.color;
+    this.radius = px(this.def.radius);
     this.fireCooldown = Phaser.Math.Between(500, 1500);
     this.pickNewTarget();
   }
@@ -89,7 +95,12 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
     this.draw(this.color);
   }
 
-  protected abstract drawShape(color: number): void;
+  /** Draws the registry shape (polygon or circle); classes with a special body override this. */
+  protected drawShape(color: number): void {
+    const shape = this.def.shape;
+    if (shape.kind === "polygon") this.drawPolygon(color, shape.sides);
+    else this.drawCircleShape(color);
+  }
 
   protected drawPolygon(color: number, sides: number) {
     const r = this.radius;

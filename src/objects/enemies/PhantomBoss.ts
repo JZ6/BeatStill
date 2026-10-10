@@ -10,7 +10,6 @@ const TELEPORT_INTERVALS = [0, 4000, 3000, 2000];
 const MAX_DECOYS = 2;
 
 export class PhantomBoss extends Enemy {
-  readonly enemyType = "phantom" as const;
   private phase = 1;
   private chargeCounter = 0;
   private teleportTimer = 4000;
@@ -27,7 +26,7 @@ export class PhantomBoss extends Enemy {
   private readonly decoys = new Set<PhantomDecoy>();
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 40, 40, 2500, 0x4488ff, 28);
+    super(scene, x, y, "phantom", 2500);
     this.draw(this.color);
   }
 

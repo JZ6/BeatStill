@@ -4,12 +4,11 @@ import type { BulletConfig } from "../BulletPattern";
 import type { PhantomBoss } from "./PhantomBoss";
 
 export class PhantomDecoy extends Enemy {
-  readonly enemyType = "phantom_decoy" as const;
   private flickerTimer = 0;
   private owner: PhantomBoss | null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, owner: PhantomBoss | null = null) {
-    super(scene, x, y, 1, 0, 99999, 0x4488ff, 28);
+    super(scene, x, y, "phantom_decoy", 99999);
     this.owner = owner;
     this.draw(this.color);
   }
