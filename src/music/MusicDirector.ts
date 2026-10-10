@@ -7,8 +7,9 @@
  * Timing
  * - Tick-driven sounds (heartbeat, bar-line stingers, warning pulses): when = max(0, latency − lateBy).
  * - Events that happened on a conductor tick carry its `tick` and `lateBy` (enemy volleys fire on
- *   16th steps, boss phases change on bar lines): they play at exactly that moment,
- *   when = max(0, latency − lateBy), with that tick's chord, and are never re-quantized.
+ *   16th steps, player shots on their weapon's grid, boss phases change on bar lines): they play at
+ *   exactly that moment, when = max(0, latency − lateBy), with that tick's chord, and are never
+ *   re-quantized.
  * - Other event sounds snap to the next 16th if it is at most `maxQuantizeWait` real seconds away;
  *   otherwise (deep slow-mo) they play at once (when = latency). playerDied never waits.
  * - Durations are in beats: seconds = beats·60/bpm / max(timeScale, 0.35), so slow-mo stretches a
@@ -26,6 +27,7 @@ import { TICKS_PER_BEAT, TICKS_PER_STEP } from "../core/Conductor";
 import type { TickEvent } from "../core/Conductor";
 import type { GameEventMap } from "../core/GameEvents";
 import { ENEMY_DEFS } from "../objects/enemies/registry";
+import { ALL_WEAPONS } from "../systems/Weapons";
 import { Harmony, chordFromNumeral } from "./Harmony";
 import type { Chord } from "./Harmony";
 import { isPitched, registerMidi } from "./palettes";
@@ -77,19 +79,10 @@ export function roleForEnemy(type: string): Role {
   return (ENEMY_ROLES as Readonly<Record<string, Role>>)[type] ?? "perc";
 }
 
-/** Per-weapon note length (beats) and velocity for player shots. Phase 5 moves this into the weapon registry. */
-export const WEAPON_ARTICULATION: Readonly<Record<string, { beats: number; velocity: number }>> = Object.freeze({
-  standard: { beats: 0.25, velocity: 0.5 },
-  shotgun: { beats: 0.4, velocity: 0.6 },
-  laser: { beats: 0.15, velocity: 0.4 },
-  cannon: { beats: 0.6, velocity: 0.7 },
-  homing: { beats: 0.3, velocity: 0.45 },
-  nova: { beats: 0.5, velocity: 0.65 },
-  railgun: { beats: 0.2, velocity: 0.55 },
-  nuke: { beats: 1, velocity: 0.8 },
-  swarm: { beats: 0.3, velocity: 0.45 },
-  minigun: { beats: 0.12, velocity: 0.35 },
-});
+/** Per-weapon note length (beats) and velocity for player shots, from the weapon registry. */
+export const WEAPON_ARTICULATION: Readonly<Record<string, { beats: number; velocity: number }>> = Object.freeze(
+  Object.fromEntries(ALL_WEAPONS.map((w) => [w.id, { ...w.articulation }])),
+);
 const DEFAULT_ARTICULATION = { beats: 0.25, velocity: 0.5 };
 
 export const MERGE_WINDOW = 0.005;
@@ -395,6 +388,11 @@ export class MusicDirector {
     return spec !== undefined && isPitched(spec);
   }
 
+  private maxVoices(role: Role): number {
+    const v = this._palette.instruments[role]?.maxVoices;
+    return v !== undefined && Number.isFinite(v) ? Math.max(1, Math.floor(v)) : 1;
+  }
+
   private chord(bar: number): Chord {
     return this._harmony.chordAtBar(bar);
   }
@@ -633,17 +631,29 @@ export class MusicDirector {
     };
   }
 
-  /** Lead contour: walks chord tones up then down across shots; spread weapons add chord tones below. */
+  /**
+   * The player's shots are the lead line. A shot timed on a conductor tick (held fire on the
+   * weapon's grid, or a first shot on a 16th) sounds at exactly that tick, with that tick's chord;
+   * an off-grid first shot takes the normal event path. The melody walks chord tones up then down
+   * across shots (safe scale tones off the beat). bulletCount sets the voicing within the lead's
+   * maxVoices: 1 = the melody note, 2 = a dyad, 3+ = that many chord tones.
+   */
   private playerFired(p: GameEventMap["playerFired"]): void {
-    const slot = this.eventSlot();
+    const slot = this.tickSlot(p) ?? this.eventSlot();
     const art = WEAPON_ARTICULATION[p.weaponId] ?? DEFAULT_ARTICULATION;
     const [main] = this.once("lead", slot, () => [this.walk(this.leadCursor, slot, "lead")]);
-    const extra = p.bulletCount >= 5 ? 2 : p.bulletCount >= 3 ? 1 : 0;
-    const below = this.tones(slot.bar, "lead")
-      .filter((n) => n < main)
-      .reverse()
-      .slice(0, extra);
-    this.push("lead", [main, ...below], slot.when, art.beats, art.velocity);
+    const bullets = Number.isFinite(p.bulletCount) ? Math.floor(p.bulletCount) : 1;
+    const voices = clamp(bullets, 1, this.maxVoices("lead"));
+    this.push("lead", [main, ...this.harmonize(slot.bar, "lead", main, voices - 1)], slot.when, art.beats, art.velocity);
+  }
+
+  /** `count` chord tones to sound with `main`: the nearest ones below it, then above if the register runs out. */
+  private harmonize(bar: number, role: Role, main: number, count: number): number[] {
+    if (!(count > 0)) return [];
+    const tones = this.tones(bar, role);
+    const below = tones.filter((n) => n < main).reverse();
+    const above = tones.filter((n) => n > main);
+    return [...below, ...above].slice(0, count);
   }
 
   /**

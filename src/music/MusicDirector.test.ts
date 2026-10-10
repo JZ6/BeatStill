@@ -201,6 +201,44 @@ describe("timing", () => {
     expect(d.drain()[0].when).toBe(0);
   });
 
+  it("plays a player shot fired on the grid at latency − lateBy, never re-quantized", () => {
+    const { d } = setup(getPalette("synth"), 13.5); // 120 bpm, between steps 12 and 18
+    d.handleEvent("playerFired", { ...shot(), tick: 12, lateBy: 0.02 });
+    const [timed] = d.drain();
+    expect(timed.role).toBe("lead");
+    expect(timed.when).toBeCloseTo(0.03, 9);
+    // An off-grid first shot (no tick) takes the event path: the next 16th.
+    d.handleEvent("playerFired", { ...shot(), first: true });
+    expect(d.drain()[0].when).toBeCloseTo(0.05 + 4.5 / 48, 6);
+    d.handleEvent("playerFired", { ...shot(), tick: 12, lateBy: 0.09 });
+    expect(d.drain()[0].when).toBe(0);
+  });
+
+  it("pitches a grid shot with the chord of its own tick, chord tones on the beat", () => {
+    const palette = getPalette("theremin"); // i VI VII iv in E: bar 1 = C, bar 2 = D
+    const note = (tick: number) => {
+      const { d } = setup(palette, 2 * TPB + 3);
+      d.handleEvent("playerFired", { ...shot(), tick, lateBy: 0.01 });
+      return d.drain()[0].midi[0];
+    };
+    const { d } = setup(palette);
+    const c = d.harmony.chordAtBar(1).pcs;
+    const dMajor = d.harmony.chordAtBar(2).pcs;
+    expect(pitchClass(note(2 * TPB - 24))).toBe(0); // beat 4 of bar 1: C, the lowest chord tone
+    expect(c).toContain(pitchClass(note(2 * TPB - 24)));
+    expect(pitchClass(note(2 * TPB))).toBe(2); // downbeat of bar 2: D
+    expect(dMajor).toContain(pitchClass(note(2 * TPB)));
+  });
+
+  it("gives shots landing on one grid tick one shared melody note", () => {
+    const { d } = setup(getPalette("piano"), 30);
+    d.handleEvent("playerFired", { ...shot(), tick: 24, lateBy: 0.01 });
+    d.handleEvent("playerFired", { ...shot(), tick: 24, lateBy: 0.01 });
+    const reqs = d.drain();
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0].midi).toHaveLength(1);
+  });
+
   it("pitches a timed volley with the chord of its own tick", () => {
     const { d } = setup(getPalette("theremin"), TPB + 3);
     d.handleEvent("enemyFired", { ...fired("tank"), tick: TPB - 6, lateBy: 0.06 });
@@ -307,6 +345,8 @@ describe("aggregation", () => {
 function fireEverything(d: MusicDirector, tick = 0): void {
   d.handleEvent("playerFired", shot(1));
   d.handleEvent("playerFired", shot(5, "shotgun"));
+  d.handleEvent("playerFired", { ...shot(2, "swarm"), tick, lateBy: 0.01 });
+  d.handleEvent("playerFired", { ...shot(9, "nova"), tick, lateBy: 0.01 });
   for (const t of ENEMY_TYPES) {
     d.handleEvent("enemyFired", fired(t));
     d.handleEvent("enemyFired", fired(t, true));
@@ -379,16 +419,27 @@ describe("harmony", () => {
     expect(notes).toEqual([64, 67, 71, 76, 79, 83, 79, 76, 71, 67, 64]); // Em in C4–C6
   });
 
-  it("adds chord tones below the lead for spread weapons", () => {
-    const { clock, d } = setup(variant("theremin", { progression: "i" }));
+  it("voices bulletCount: 1 = melody note, 2 = dyad, 3+ = chord tones, capped at the lead's maxVoices", () => {
+    const palette = variant("theremin", { progression: "i" });
+    expect(palette.instruments.lead.maxVoices).toBe(4);
+    const { clock, d } = setup(palette);
     const fire = (k: number, bullets: number) => {
       clock.pos = 24 * k - 1;
       d.handleEvent("playerFired", shot(bullets));
       return d.drain()[0].midi;
     };
-    [1, 2].forEach((k) => fire(k, 1)); // E4, G4
-    expect(fire(3, 3)).toEqual([67, 71]); // B4 + G4
-    expect(fire(4, 5)).toEqual([67, 71, 76]); // E5 + B4 + G4
+    expect(fire(1, 1)).toEqual([64]); // E4
+    expect(fire(2, 2)).toEqual([64, 67]); // G4 + E4
+    expect(fire(3, 3)).toEqual([64, 67, 71]); // B4 + G4 + E4
+    expect(fire(4, 9)).toEqual([64, 67, 71, 76]); // E5 + three below, capped at 4 voices
+    expect(fire(5, 0)).toEqual([79]); // no bullets still plays the melody note
+  });
+
+  it("takes chord tones above when the melody note is at the bottom of the register", () => {
+    const { clock, d } = setup(variant("theremin", { progression: "i" }));
+    clock.pos = 23;
+    d.handleEvent("playerFired", shot(3));
+    expect(d.drain()[0].midi).toEqual([64, 67, 71]); // E4 is the lowest chord tone: G4, B4 above
   });
 
   it("walks each spiral's arp up and down the chord tones by its volley index", () => {

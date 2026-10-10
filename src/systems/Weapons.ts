@@ -8,6 +8,8 @@ export interface WeaponDef {
    * 12 = 1/8, 8 = 1/8 triplet. Must be on TICK_LADDER (src/music/noteValues.ts); Rapid Fire climbs it.
    */
   noteTicks: number;
+  /** How each shot's lead note sounds: length in beats and velocity (0..1). */
+  articulation: { beats: number; velocity: number };
   baseBulletCount: number;
   baseBulletSpread: number;
   baseBulletSpeed: number;
@@ -27,6 +29,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "---",
     description: "Balanced all-rounder",
     noteTicks: 12, // 1/8
+    articulation: { beats: 0.25, velocity: 0.5 },
     baseBulletCount: 1,
     baseBulletSpread: 0.15,
     baseBulletSpeed: 450,
@@ -44,6 +47,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "|||",
     description: "Wide burst, deadly up close, short range",
     noteTicks: 24, // 1/4
+    articulation: { beats: 0.4, velocity: 0.6 },
     baseBulletCount: 3,
     baseBulletSpread: 0.5,
     baseBulletSpeed: 380,
@@ -61,6 +65,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "===",
     description: "Rapid needles that pierce through enemies",
     noteTicks: 6, // 1/16
+    articulation: { beats: 0.15, velocity: 0.4 },
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 900,
@@ -78,6 +83,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "(O)",
     description: "Slow heavy slugs that devastate on hit",
     noteTicks: 24, // 1/4
+    articulation: { beats: 0.6, velocity: 0.7 },
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 260,
@@ -95,6 +101,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "@>@",
     description: "Bullets seek enemies, never miss",
     noteTicks: 12, // 1/8
+    articulation: { beats: 0.3, velocity: 0.45 },
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 300,
@@ -114,6 +121,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "***",
     description: "360° burst of destruction",
     noteTicks: 24, // 1/4
+    articulation: { beats: 0.5, velocity: 0.65 },
     baseBulletCount: 5,
     baseBulletSpread: Math.PI * 2,
     baseBulletSpeed: 380,
@@ -132,6 +140,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: ">>|",
     description: "Hypersonic beam pierces everything",
     noteTicks: 8, // 1/8 triplet
+    articulation: { beats: 0.2, velocity: 0.55 },
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 1500,
@@ -150,6 +159,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "(X)",
     description: "Massive slug of annihilation",
     noteTicks: 48, // 1/2
+    articulation: { beats: 1, velocity: 0.8 },
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 150,
@@ -168,6 +178,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: ">>@",
     description: "Homing missile barrage",
     noteTicks: 12, // 1/8
+    articulation: { beats: 0.3, velocity: 0.45 },
     baseBulletCount: 2,
     baseBulletSpread: 0.8,
     baseBulletSpeed: 320,
@@ -186,6 +197,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     icon: "|||",
     description: "Relentless bullet stream",
     noteTicks: 3, // 1/32
+    articulation: { beats: 0.12, velocity: 0.35 },
     baseBulletCount: 1,
     baseBulletSpread: 0.2,
     baseBulletSpeed: 530,
