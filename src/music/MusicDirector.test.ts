@@ -178,6 +178,17 @@ describe("timing", () => {
     expect(d.drain()[0].when).toBeCloseTo(0.03 + 5.9 / 48, 6);
   });
 
+  it("reports its queue and scheduled counts for diagnostics", () => {
+    const { d } = setup();
+    expect(d.queueLength).toBe(0);
+    d.onTick(tickEvent(0));
+    expect(d.queueLength).toBe(1);
+    d.handleEvent("bossWarning", { bossType: "sentinel" });
+    expect(d.scheduledCount).toBe(4);
+    d.drain();
+    expect(d.queueLength).toBe(0);
+  });
+
   it("setLatency changes later requests, clamped to 0..MAX_LATENCY", () => {
     const { d } = setup();
     expect(d.latencySeconds).toBeCloseTo(0.05);

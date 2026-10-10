@@ -91,6 +91,6 @@ function getActiveMusic(): MusicControl | null {
   return null;
 }
 
-initCrashReporter(getGameScene);
+initCrashReporter(getGameScene, getActiveMusic);
 
 createDevPanel(getGameScene, getActiveMusic);

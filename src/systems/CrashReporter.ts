@@ -1,5 +1,7 @@
 import type { GameScene } from "../scenes/GameScene";
 import { getAudioEngine } from "../audio/AudioEngine";
+import type { MusicControl } from "../audio/MusicDriver";
+import { musicSnapshot, safeSection } from "./crashSnapshot";
 
 interface CrashReport {
   timestamp: string;
@@ -15,58 +17,64 @@ const reports: CrashReport[] = [];
 let totalCrashes = 0;
 
 let getScene: (() => GameScene | null) | null = null;
+let getMusic: (() => MusicControl | null) | null = null;
 let overlayEl: HTMLDivElement | null = null;
 let installed = false;
 
+/** The run's state, section by section (each wrapped: the scene may be half torn down while crashing). */
+function runSnapshot(scene: GameScene): Record<string, unknown> {
+  return {
+    sceneActive: safeSection(() => scene.scene.isActive()),
+    run: safeSection(() => ({
+      mode: scene.level ? "level" : "endless",
+      levelId: scene.level?.levelDef.id ?? null,
+      wave: scene.wave,
+      score: scene.score,
+      gameOver: scene.gameOver,
+      paused: scene.pauseMenu?.isActive ?? false,
+      godMode: scene.godMode,
+      tutorialStep: scene.tutorial?.stepId ?? null,
+    })),
+    chain: safeSection(() => ({
+      count: scene.chain?.chainCount ?? 0,
+      tier: scene.chain?.chainTier ?? 0,
+      timerBeats: scene.chain?.chainTimer ?? 0,
+    })),
+    player: safeSection(() =>
+      scene.ship
+        ? {
+            x: Math.round(scene.ship.x),
+            y: Math.round(scene.ship.y),
+            hp: scene.ship.hp,
+            maxHp: scene.ship.maxHp,
+            invincible: scene.ship.isInvincible(),
+            weapon: scene.stats?.weaponId ?? null,
+            fireIntervalTicks: scene.ship.fireInterval,
+          }
+        : null,
+    ),
+    dilation: safeSection(() => (scene.dilation ? { scale: scene.dilation.scale, target: scene.dilation.target } : null)),
+    counts: safeSection(() => ({
+      enemies: scene.enemies?.getLength() ?? 0,
+      playerBullets: scene.playerBullets?.getLength() ?? 0,
+      enemyBullets: scene.enemyBullets?.getLength() ?? 0,
+      asteroids: scene.asteroids?.getLength() ?? 0,
+    })),
+  };
+}
+
 function snapshotGameState(): Record<string, unknown> | null {
   if (!getScene) return null;
-  const audio = getAudioEngine().stats();
-  const scene = getScene();
-  if (!scene) return { status: "no active scene", audio };
-  const director = scene.music?.director;
-
-  const enemies = scene.enemies?.getChildren() ?? [];
-  const playerBullets = scene.playerBullets?.getChildren() ?? [];
-  const enemyBullets = scene.enemyBullets?.getChildren() ?? [];
-  const asteroids = scene.asteroids?.getChildren() ?? [];
-
+  const engine = getAudioEngine();
+  const scene = safeSection(() => getScene?.() ?? null);
+  const music = safeSection(() => getMusic?.() ?? null);
+  const playing = music && !("error" in music) ? music : null;
+  const sceneOk = scene && !("error" in scene) ? scene : null;
+  // The music that is playing (the run's or the menu's) carries the conductor and the harmony.
+  const source = playing ? (sceneOk && playing === sceneOk.music ? "game" : "menu") : null;
   return {
-    wave: scene.wave,
-    score: scene.score,
-    gameOver: scene.gameOver,
-    paused: scene.pauseMenu?.isActive ?? false,
-    godMode: scene.godMode,
-    chainCount: scene.chain?.chainCount ?? 0,
-    chainTier: scene.chain?.chainTier ?? 0,
-    chainTimer: scene.chain?.chainTimer ?? 0,
-    player: scene.ship
-      ? {
-          x: Math.round(scene.ship.x),
-          y: Math.round(scene.ship.y),
-          hp: scene.ship.hp,
-          maxHp: scene.ship.maxHp,
-          invincible: scene.ship.isInvincible(),
-          fireInterval: scene.ship.fireInterval,
-        }
-      : null,
-    timeScale: scene.dilation ? scene.timeScale : null,
-    conductor: scene.conductor
-      ? {
-          bpm: scene.conductor.bpm,
-          beat: Math.round(scene.conductor.beat * 1000) / 1000,
-          bar: scene.conductor.bar,
-          paused: scene.conductor.paused,
-          chord: director ? director.harmony.chordAtBar(scene.conductor.bar).symbol : null,
-        }
-      : null,
-    palette: director?.palette.id ?? null,
-    audio,
-    counts: {
-      enemies: enemies.length,
-      playerBullets: playerBullets.length,
-      enemyBullets: enemyBullets.length,
-      asteroids: asteroids.length,
-    },
+    ...(sceneOk ? runSnapshot(sceneOk) : { status: scene && "error" in scene ? scene : "no game scene" }),
+    ...musicSnapshot(playing, engine, source),
   };
 }
 
@@ -223,10 +231,15 @@ function showOverlay(report: CrashReport) {
   overlayEl.style.display = "flex";
 }
 
-export function initCrashReporter(sceneGetter: () => GameScene | null) {
+/**
+ * Installs the global error hooks. `musicGetter` returns the music that is playing (the run's or
+ * the menu's), whose conductor and harmony go into every report.
+ */
+export function initCrashReporter(sceneGetter: () => GameScene | null, musicGetter?: () => MusicControl | null) {
   if (installed) return;
   installed = true;
   getScene = sceneGetter;
+  getMusic = musicGetter ?? null;
 
   const prevOnError = window.onerror;
   window.onerror = (_msg, _src, _line, _col, err) => {

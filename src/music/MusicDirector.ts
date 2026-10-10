@@ -238,6 +238,16 @@ export class MusicDirector {
     this.heartbeatOn = on;
   }
 
+  /** Requests waiting for the next drain() (diagnostics, e.g. crash reports). */
+  get queueLength(): number {
+    return this.queue.length;
+  }
+
+  /** Sounds scheduled for a future tick (e.g. boss warning pulses), for diagnostics. */
+  get scheduledCount(): number {
+    return this.scheduled.length;
+  }
+
   /** Increments whenever droneChord() changes (checked on bar ticks) and on palette changes. */
   get droneVersion(): number {
     return this._droneVersion;
