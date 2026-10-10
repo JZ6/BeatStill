@@ -117,6 +117,16 @@ export function lowpassCutoff(timeScale: number): number {
   return 700 * Math.pow(18000 / 700, (ts - 0.03) / 0.97);
 }
 
+/** Ticks within the bar where the heartbeat's "lub" falls: beats 1 and 3 (just beat 1 in bars under 3 beats). */
+export function heartbeatLubTicks(beatsPerBar = 4): number[] {
+  return beatsPerBar >= 3 ? [0, 2 * TICKS_PER_BEAT] : [0];
+}
+
+/** True on a heartbeat "lub" tick, so visuals can pulse exactly with the sound. */
+export function isHeartbeatTick(t: TickEvent, beatsPerBar = 4): boolean {
+  return heartbeatLubTicks(beatsPerBar).includes(t.tickInBar);
+}
+
 /** Lowest MIDI note with pitch class `pc` at or above `from`. */
 function atOrAbove(pc: number, from: number): number {
   return from + mod(pc - pitchClass(from), 12);
@@ -468,7 +478,7 @@ export class MusicDirector {
 
   /** Lub on beats 1 and 3, dub a 16th later and softer. Louder as time slows. */
   private heartbeat(t: TickEvent, slot: Slot): void {
-    const lubs = this.beatsPerBar >= 3 ? [0, 2 * TICKS_PER_BEAT] : [0];
+    const lubs = heartbeatLubTicks(this.beatsPerBar);
     const lub = 0.45 + 0.3 * (1 - unitScale(this.clock.timeScale));
     for (const at of lubs) {
       if (t.tickInBar === at) {

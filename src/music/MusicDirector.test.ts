@@ -3,7 +3,16 @@ import { Conductor } from "../core/Conductor";
 import type { TickEvent } from "../core/Conductor";
 import type { GameEventMap } from "../core/GameEvents";
 import { chordFromNumeral } from "./Harmony";
-import { ENEMY_ROLES, MIN_STRETCH, MusicDirector, droneLevel, lowpassCutoff, roleForEnemy } from "./MusicDirector";
+import {
+  ENEMY_ROLES,
+  MIN_STRETCH,
+  MusicDirector,
+  droneLevel,
+  heartbeatLubTicks,
+  isHeartbeatTick,
+  lowpassCutoff,
+  roleForEnemy,
+} from "./MusicDirector";
 import type { DirectorClock, NoteRequest } from "./MusicDirector";
 import { ALL_PALETTES, getPalette, isPitched } from "./palettes";
 import type { InstrumentSpec, Palette, Role } from "./palettes";
@@ -456,6 +465,14 @@ describe("heartbeat", () => {
     clock.timeScale = 0.05;
     d.onTick(tickEvent(TPB));
     expect(d.drain()[0].velocity).toBeGreaterThan(fast);
+  });
+
+  it("isHeartbeatTick marks exactly the lub ticks", () => {
+    const lubs: number[] = [];
+    for (let tick = 0; tick < TPB; tick++) if (isHeartbeatTick(tickEvent(tick))) lubs.push(tick);
+    expect(lubs).toEqual([0, 48]);
+    expect(heartbeatLubTicks(2)).toEqual([0]);
+    expect(heartbeatLubTicks(3)).toEqual([0, 48]);
   });
 });
 

@@ -5,7 +5,8 @@ import { createCollectionOverlay } from "../ui/CollectionOverlay";
 import { createHowToOverlay } from "../ui/HowToOverlay";
 import { createShopOverlay } from "../ui/ShopOverlay";
 import { getAudioEngine } from "../audio/AudioEngine";
-import type { MusicControl } from "../audio/MusicDriver";
+import { MenuMusic } from "../audio/MenuMusic";
+import { MAX_REAL_DT } from "../core/Conductor";
 import { getPalette } from "../music/palettes";
 import { options, saveOptions } from "../systems/GameOptions";
 import { ALL_WEAPONS } from "../systems/Weapons";
@@ -59,8 +60,9 @@ export class StartScene extends Phaser.Scene {
   private collectionOverlay: HTMLDivElement | null = null;
   private howToOverlay: HTMLDivElement | null = null;
   private shopOverlay: HTMLDivElement | null = null;
-  /** The menu's own heartbeat-and-drone music (null until audio has been unlocked here). */
-  menuMusic: MusicControl | null = null;
+  /** The menu's own clock and heartbeat-and-drone music; drives the EKG too. Recreated each visit. */
+  menuMusic: MenuMusic | null = null;
+  private menuAudioHidden = false;
 
   private bgGraphics!: Phaser.GameObjects.Graphics;
   private fxGraphics!: Phaser.GameObjects.Graphics;
@@ -85,10 +87,8 @@ export class StartScene extends Phaser.Scene {
   private ekgPoints: number[] = [];
   private ekgTimer = 0;
   private ekgAccum = 0;
-  private ekgBeatInterval = 2000;
   private ekgPhase = 0;
 
-  private heartbeatTimer = 0;
   private titlePulse = 0;
 
   private menuButtons: MenuButton[] = [];
@@ -175,12 +175,47 @@ export class StartScene extends Phaser.Scene {
       delay: 2500,
     });
 
-    this.input.once("pointerdown", () => this.ensureAudio());
+    // The heartbeat (sound and EKG) follows the menu's own conductor.
+    this.menuMusic = new MenuMusic(getPalette(options.themeId), () => this.triggerHeartbeat());
+    this.bindMenuAudio();
 
     this.events.once("shutdown", () => {
       this.removeOverlays();
-      getAudioEngine().releaseAll();
+      this.stopMenuMusic();
     });
+  }
+
+  /** Audio unlock on the first pointer or key press, and silence while the tab is hidden. */
+  private bindMenuAudio() {
+    this.input.once("pointerdown", () => this.ensureAudio());
+    // Native, so resume() runs inside the key event (Phaser handles keys on the next frame).
+    const onKey = () => this.ensureAudio();
+    window.addEventListener("keydown", onKey);
+    const engine = getAudioEngine();
+    const onHidden = () => {
+      this.menuAudioHidden = true;
+      engine.setPaused(true);
+    };
+    const onVisible = () => {
+      this.menuAudioHidden = false;
+      engine.setPaused(false);
+    };
+    this.game.events.on(Phaser.Core.Events.HIDDEN, onHidden);
+    this.game.events.on(Phaser.Core.Events.VISIBLE, onVisible);
+    this.events.once("shutdown", () => {
+      window.removeEventListener("keydown", onKey);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, onHidden);
+      this.game.events.off(Phaser.Core.Events.VISIBLE, onVisible);
+    });
+  }
+
+  private stopMenuMusic() {
+    this.menuMusic?.stop();
+    this.menuMusic = null;
+    const engine = getAudioEngine();
+    engine.releaseAll();
+    if (this.menuAudioHidden) engine.setPaused(false);
+    this.menuAudioHidden = false;
   }
 
   /**
@@ -195,6 +230,8 @@ export class StartScene extends Phaser.Scene {
     this.secondaryTexts = [];
 
     this.removeOverlays();
+    this.menuMusic?.stop();
+    this.menuMusic = null;
 
     this.titleBaseY = 0;
     this.titleDriftAngle = 0;
@@ -207,7 +244,6 @@ export class StartScene extends Phaser.Scene {
     this.ekgAccum = 0;
     this.ekgPhase = 0;
 
-    this.heartbeatTimer = 0;
     this.titlePulse = 0;
   }
 
@@ -445,13 +481,12 @@ export class StartScene extends Phaser.Scene {
 
   // ── Heartbeat System ─────────────────────────────────────────
 
+  /**
+   * Advances the menu conductor at the menu's time scale (clamped to 0.03–1 by MenuMusic). Its
+   * heartbeat ticks (beats 1 and 3) call triggerHeartbeat(), the same ticks the sound plays on.
+   */
   private updateHeartbeat(delta: number) {
-    this.heartbeatTimer += delta;
-    if (this.heartbeatTimer >= this.ekgBeatInterval) {
-      this.heartbeatTimer -= this.ekgBeatInterval;
-      this.triggerHeartbeat();
-    }
-
+    this.menuMusic?.update(Math.min(delta / 1000, MAX_REAL_DT), this.timeScale);
     this.titlePulse *= 0.92;
   }
 
@@ -775,15 +810,25 @@ export class StartScene extends Phaser.Scene {
     return !!(this.optionsOverlay || this.collectionOverlay || this.howToOverlay || this.shopOverlay);
   }
 
-  /** Starts the shared audio engine with the selected palette (call from a user gesture). */
+  /** Starts the shared audio engine with the menu's palette (call from a user gesture). */
   private ensureAudio() {
     const engine = getAudioEngine();
-    engine.setPalette(getPalette(options.themeId));
-    engine.setVolume(options.masterVolume / 100);
     if (engine.started) return;
-    engine.start().catch((err: unknown) => {
-      console.warn("[StartScene] audio did not start:", err instanceof Error ? err.message : err);
-    });
+    engine.setPalette(this.menuMusic?.director.palette ?? getPalette(options.themeId));
+    engine.setVolume(options.masterVolume / 100);
+    engine
+      .start()
+      // Beat right away, so the first press is answered by the heart.
+      .then(() => this.menuMusic?.restart())
+      .catch((err: unknown) => {
+        console.warn("[StartScene] audio did not start:", err instanceof Error ? err.message : err);
+      });
+  }
+
+  /** After the theme was changed (Collection), the menu switches to it at once. */
+  private syncMenuPalette() {
+    const palette = getPalette(options.themeId);
+    if (this.menuMusic && this.menuMusic.director.palette.id !== palette.id) this.menuMusic.setPalette(palette);
   }
 
   private startGame() {
@@ -820,6 +865,7 @@ export class StartScene extends Phaser.Scene {
     const overlay = createCollectionOverlay(() => {
       overlay.remove();
       this.collectionOverlay = null;
+      this.syncMenuPalette();
     });
     this.collectionOverlay = overlay;
     document.body.appendChild(overlay);
