@@ -28,6 +28,7 @@ export const ALL_UNLOCKS: UnlockDef[] = [
   { id: "theme_bell", name: "Bell", icon: "♪", description: "Crystalline bell tones", category: "theme", requirement: { shards: 25, highWave: 4 } },
   { id: "theme_synth", name: "Synth", icon: "◈", description: "Electronic synth waves", category: "theme", requirement: { shards: 40, highScore: 30000 } },
   { id: "theme_ethereal", name: "Ethereal", icon: "✧", description: "Dreamy ambient pads", category: "theme", requirement: { shards: 60, highWave: 10 } },
+  { id: "theme_piano", name: "Piano", icon: "♩", description: "Felt piano and soft strings", category: "theme", requirement: { shards: 75, highScore: 40000 } },
 
   // Stat upgrades
   { id: "upgrade_pierce", name: "Penetration", icon: "-->", description: "Bullets pass through", category: "upgrade", requirement: { shards: 8, highWave: 3 } },
