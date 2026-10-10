@@ -29,6 +29,10 @@ const game = new Phaser.Game({
   input: {
     touch: true,
   },
+  // All audio goes through Tone.js; stop Phaser from creating a second AudioContext.
+  audio: {
+    noAudio: true,
+  },
 });
 
 registerGame(game);
