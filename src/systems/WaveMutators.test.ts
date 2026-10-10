@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ALL_MUTATORS, MutatorSystem } from "./WaveMutators";
+import { ALL_MUTATORS, MutatorSystem, isMutatorWave } from "./WaveMutators";
+
+describe("isMutatorWave", () => {
+  it("rolls on wave 6 and every 5 waves after", () => {
+    const waves = Array.from({ length: 40 }, (_, i) => i + 1).filter(isMutatorWave);
+    expect(waves).toEqual([6, 11, 16, 21, 26, 31, 36]);
+  });
+});
 
 function byId(id: string) {
   const m = ALL_MUTATORS.find((x) => x.id === id);

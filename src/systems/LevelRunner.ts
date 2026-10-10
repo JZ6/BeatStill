@@ -5,7 +5,7 @@ import { Bullet } from "../objects/Bullet";
 import { Wall } from "../objects/Wall";
 import { UpgradePickup } from "../objects/Shard";
 import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, isCampaignLevel, type LevelDef } from "./Levels";
-import { addShards, getState } from "./Unlocks";
+import { addShards } from "./Unlocks";
 import { addPickup } from "./Achievements";
 import { GAME_W, GAME_H, px } from "./GameConfig";
 
@@ -19,7 +19,7 @@ export class LevelRunner {
   spawnWave(index: number) {
     if (index >= this.levelDef.waves.length) return;
     this.waveIndex = index;
-    this.scene.waveTimer = 0;
+    this.scene.waves.resetTimer();
     const wave = this.levelDef.waves[index];
 
     for (const e of wave.enemies) {
@@ -69,20 +69,20 @@ export class LevelRunner {
 
     for (const p of [...s.shards.getChildren()] as UpgradePickup[]) {
       if (p.alive) {
-        s.applyUpgrade(p.upgrade);
+        s.pickups.applyUpgrade(p.upgrade);
         addShards(1);
         addPickup();
         s.particles.burst(p.x, p.y, p.pickupColor, 8, 50, 2);
         p.kill();
       }
     }
-    s.shardText.setText(`◆ ${getState().shards}`);
+    s.hud.refreshShards();
 
-    s.processUnlocks();
-    s.processAchievements(false, true);
+    s.progression.processUnlocks();
+    s.progression.processAchievements(false, true);
 
-    s.gameOverText.setColor("#ffaa44");
-    s.gameOverText.setText("LEVEL COMPLETE");
+    s.hud.gameOverText.setColor("#ffaa44");
+    s.hud.gameOverText.setText("LEVEL COMPLETE");
 
     const nextLevel = isCampaign ? ALL_LEVELS.find((l) => l.id === this.levelDef.id + 1) : undefined;
     const hasNext = nextLevel && isLevelUnlocked(nextLevel.id);

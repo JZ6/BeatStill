@@ -59,9 +59,9 @@ export class EndlessMode {
 
   private spawnBossWave() {
     const s = this.scene;
-    s.bossActive = true;
-    s.bossFightDamageTaken = 0;
-    s.waveText.setText(`WAVE ${s.wave} — BOSS`);
+    s.waves.bossActive = true;
+    s.progression.startBossFight();
+    s.hud.setWaveLabel(`WAVE ${s.wave} — BOSS`);
 
     const warningText = s.add.text(GAME_W / 2, GAME_H / 2, "WARNING", {
       fontFamily: "monospace", fontSize: `${px(42)}px`, color: "#ff4444", align: "center",
@@ -95,7 +95,7 @@ export class EndlessMode {
     return pool;
   }
 
-  private randomEdgePosition(margin = 30): { x: number; y: number } {
+  randomEdgePosition(margin = 30): { x: number; y: number } {
     const edge = Phaser.Math.Between(0, 3);
     if (edge === 0) return { x: Phaser.Math.Between(0, GAME_W), y: -margin };
     if (edge === 1) return { x: GAME_W + margin, y: Phaser.Math.Between(0, GAME_H) };

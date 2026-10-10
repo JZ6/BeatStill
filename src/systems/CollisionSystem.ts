@@ -104,8 +104,8 @@ export class CollisionSystem {
             s.ship.drawHealthBar();
             s.particles.burst(s.ship.x, s.ship.y, 0x44ff44, 8, 40, 2);
           }
-          if (isBoss) s.onBossKill(e.x, e.y);
-          if (e.isElite && !isBoss) s.offerRelicChoice();
+          if (isBoss) s.waves.onBossKilled(e.x, e.y);
+          if (e.isElite && !isBoss) s.relicFlow.offer();
         } else {
           s.particles.burst(b.x, b.y, b.bulletColor, 6, 40, 2);
           s.audioManager.onEnemyHit();
@@ -138,8 +138,7 @@ export class CollisionSystem {
         // The snapshot can hold asteroids already split this frame.
         if (!a.active) continue;
         if (!circleOverlap(b.x, b.y, b.radius, a.x, a.y, a.radius)) continue;
-        s.score += 25;
-        s.scoreText.setText(`SCORE: ${s.score}`);
+        s.addScore(25);
         s.particles.burst(a.x, a.y, b.bulletColor, 8, 70, 2);
         s.particles.burst(a.x, a.y, 0xcc8866, 8, 50, 2);
         a.split(s);
@@ -174,10 +173,10 @@ export class CollisionSystem {
       if (!b.alive) continue;
       if (triangleCircleOverlap(ax, ay, bx, by, cx, cy, b.x, b.y, b.radius)) {
         b.kill();
-        s.recordDamage();
+        s.progression.recordDamage();
         s.particles.burst(s.ship.x, s.ship.y, 0xff4422, 15, 80, 3);
         if (s.ship.takeDamage(1)) {
-          s.triggerGameOver();
+          s.gameOverFlow.trigger();
           return true;
         }
         s.audioManager.onPlayerHit();
@@ -193,10 +192,10 @@ export class CollisionSystem {
     for (const a of asteroidArr) {
       if (!a.active) continue;
       if (triangleCircleOverlap(ax, ay, bx, by, cx, cy, a.x, a.y, a.radius)) {
-        s.recordDamage();
+        s.progression.recordDamage();
         s.particles.burst(s.ship.x, s.ship.y, 0xff4422, 15, 80, 3);
         if (s.ship.takeDamage(1)) {
-          s.triggerGameOver();
+          s.gameOverFlow.trigger();
           return;
         }
         s.audioManager.onPlayerHit();

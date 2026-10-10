@@ -148,6 +148,21 @@ export const ALL_UPGRADES: UpgradeDef[] = [
   } satisfies UpgradeDef)),
 ];
 
+/**
+ * Picks a random pickup: 20% a weapon other than standard, otherwise a stat upgrade that
+ * isn't maxed yet. Null when every stat upgrade is maxed and no weapon was rolled.
+ */
+export function rollDrop(stats: PlayerStats, rng: () => number = Math.random): UpgradeDef | null {
+  const isWeaponDrop = rng() < 0.2;
+  if (isWeaponDrop) {
+    const weapons = ALL_UPGRADES.filter((u) => u.isWeapon && u.id !== "weapon_standard");
+    if (weapons.length > 0) return weapons[Math.floor(rng() * weapons.length)];
+  }
+  const eligible = ALL_UPGRADES.filter((u) => !u.isWeapon && u.level(stats) < u.maxLevel);
+  if (eligible.length === 0) return null;
+  return eligible[Math.floor(rng() * eligible.length)];
+}
+
 export const UPGRADE_COLORS: Record<string, number> = {
   bulletCount: 0xff8844,
   bulletSpread: 0xffcc44,

@@ -45,6 +45,11 @@ const EXCLUSIVE_MUTATORS: [string, string][] = [
   ["fragile", "armored"],
 ];
 
+/** Endless waves that roll a new mutator: wave 6, then every 5 waves (11, 16, 21, …). */
+export function isMutatorWave(wave: number): boolean {
+  return wave === 6 || (wave > 6 && (wave - 1) % 5 === 0);
+}
+
 function areExclusive(a: string, b: string): boolean {
   return EXCLUSIVE_MUTATORS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
 }

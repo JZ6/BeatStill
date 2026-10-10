@@ -238,7 +238,7 @@ export class TutorialManager {
       onComplete: () => this.destroy(),
     });
 
-    this.scene.spawnWave();
+    this.scene.waves.spawnEndlessWave();
   }
 
   update(delta: number) {

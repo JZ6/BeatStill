@@ -1,5 +1,4 @@
 import type { GameScene } from "../scenes/GameScene";
-import { UpgradePickup } from "../objects/Shard";
 import { addWeaponKill } from "./Unlocks";
 import { addKill } from "./Achievements";
 import { getLuckyStarBonus } from "./Shop";
@@ -93,20 +92,20 @@ export class ChainSystem {
 
     const basePoints = isBoss ? 500 : 100;
     const points = Math.floor(basePoints * tier.mult);
-    s.score += points;
-    s.scoreText.setText(`SCORE: ${s.score}`);
+    s.addScore(points);
 
     if (this.chainTier > 0) {
+      const chainText = s.hud.chainText;
       s.audioManager.onChainKill(this.chainCount, this.chainTier);
-      s.chainText.setText(`${tier.name} x${this.chainCount}`);
-      s.chainText.setColor(tier.textColor);
-      s.chainText.setAlpha(1);
+      chainText.setText(`${tier.name} x${this.chainCount}`);
+      chainText.setColor(tier.textColor);
+      chainText.setAlpha(1);
       this.spawnPopup(x, y, `+${points}`, tier.textColor);
 
       if (this.chainTier > prevTier && tier.name) {
         this.spawnPopup(x, y - px(20), tier.name, tier.textColor, px(24));
         s.tweens.add({
-          targets: s.chainText,
+          targets: chainText,
           scaleX: { from: 1.4, to: 1 },
           scaleY: { from: 1.4, to: 1 },
           duration: 200,
@@ -129,19 +128,13 @@ export class ChainSystem {
       addWeaponKill(s.stats.weaponId);
     }
 
-    s.runKills++;
+    s.progression.recordKill();
     addKill();
 
     const dropRate = (DROP_RATES[this.chainTier] ?? 0.12) + getLuckyStarBonus();
-    if (Math.random() < dropRate) {
-      const upgrade = s.rollDrop();
-      if (upgrade) {
-        const pickup = new UpgradePickup(s, x, y, upgrade);
-        s.shards.add(pickup);
-      }
-    }
+    if (Math.random() < dropRate) s.pickups.spawnDrop(x, y);
 
-    s.processAchievements(false, false);
+    s.progression.processAchievements(false, false);
   }
 
   update(delta: number, ts: number) {
@@ -160,7 +153,7 @@ export class ChainSystem {
         }
         this.chainCount = 0;
         this.chainTier = 0;
-        this.scene.tweens.add({ targets: this.scene.chainText, alpha: 0, duration: 300 });
+        this.scene.tweens.add({ targets: this.scene.hud.chainText, alpha: 0, duration: 300 });
       }
     }
 

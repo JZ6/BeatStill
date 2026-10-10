@@ -44,8 +44,8 @@ function buildGameTab(
     const target = parseInt(setWaveInput.value) - 1;
     if (target >= 0) {
       scene.wave = target;
-      scene.clearEnemies();
-      scene.spawnWave();
+      scene.waves.clearField();
+      scene.waves.spawnEndlessWave();
       waveLabel.textContent = `Wave: ${scene.wave}`;
     }
   });
@@ -57,8 +57,8 @@ function buildGameTab(
     e.stopPropagation();
     const scene = getScene();
     if (!scene || scene.gameOver) return;
-    scene.clearEnemies();
-    scene.spawnWave();
+    scene.waves.clearField();
+    scene.waves.spawnEndlessWave();
     waveLabel.textContent = `Wave: ${scene.wave}`;
   });
 
@@ -74,9 +74,9 @@ function buildGameTab(
   spawnRow.className = "dp-ctrl-row";
 
   const btns: [string, (s: GameScene) => void][] = [
-    ["+10 Enemies", (s) => s.devSpawnEnemies(10)],
-    ["+3 Asteroids", (s) => s.devSpawnAsteroids(3)],
-    ["Clear All", (s) => s.clearEnemies()],
+    ["+10 Enemies", (s) => s.waves.devSpawnEnemies(10)],
+    ["+3 Asteroids", (s) => s.waves.devSpawnAsteroids(3)],
+    ["Clear All", (s) => s.waves.clearField()],
   ];
   for (const [label, fn] of btns) {
     const btn = document.createElement("button");

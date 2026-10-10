@@ -1,44 +1,44 @@
 import Phaser from "phaser";
 import { Ship } from "../objects/Ship";
-import { Enemy, createEnemy } from "../objects/enemies";
-import { Asteroid } from "../objects/Asteroid";
-import { Bullet } from "../objects/Bullet";
+import type { Enemy } from "../objects/enemies";
+import type { Asteroid } from "../objects/Asteroid";
+import type { Bullet } from "../objects/Bullet";
 import { Conductor, type TickEvent } from "../core/Conductor";
 import { TimeDilation } from "../core/TimeDilation";
-import { TickDispatcher } from "../game/TickDispatcher";
-import { Backdrop } from "../game/Backdrop";
 import { AudioManager } from "../systems/AudioManager";
 import { ParticleSystem } from "../systems/Particles";
-import { theremin, allThemes } from "../sounds";
-import { defaultStats, ALL_UPGRADES, type PlayerStats, type UpgradeDef } from "../systems/Upgrades";
+import { theremin, allThemes, type SoundTheme } from "../sounds";
+import { defaultStats, type PlayerStats } from "../systems/Upgrades";
 import { options } from "../systems/GameOptions";
-import { getWeapon } from "../systems/Weapons";
 import { TutorialManager, isTutorialDone } from "../systems/Tutorial";
 import { GAME_W, GAME_H, isMobile, px } from "../systems/GameConfig";
 import { TouchControls } from "../systems/TouchControls";
-import { UpgradePickup } from "../objects/Shard";
-import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, updateBestChain, addWeaponPickup, addWeaponKill, getState } from "../systems/Unlocks";
-import { type LevelDef } from "../systems/Levels";
-import { Wall } from "../objects/Wall";
-import { checkAchievements, addBossDefeat, addPickup, recordWeaponUsed, recordThemeUsed, flushAchievements, type AchievementContext } from "../systems/Achievements";
-import type { EnemyType } from "../objects/enemies";
-import { EndlessMode } from "../systems/EndlessMode";
-import { ChainSystem, MAGNET_SPEEDS } from "../systems/ChainSystem";
-import { checkEvolution } from "../systems/Evolutions";
-import { recordEvolution } from "../systems/Unlocks";
+import type { LevelDef } from "../systems/Levels";
+import { recordThemeUsed } from "../systems/Achievements";
+import { ChainSystem } from "../systems/ChainSystem";
 import { CollisionSystem } from "../systems/CollisionSystem";
 import { LevelRunner } from "../systems/LevelRunner";
 import { PauseMenu } from "../systems/PauseMenu";
-import { RelicSystem, type RelicDef } from "../systems/Relics";
-import { createRelicSelectOverlay } from "../ui/RelicSelectOverlay";
+import { RelicSystem } from "../systems/Relics";
 import { MutatorSystem } from "../systems/WaveMutators";
-import { DeathAnimation } from "../systems/DeathAnimation";
+import { Backdrop } from "../game/Backdrop";
+import { GameOverFlow } from "../game/GameOverFlow";
+import { Hud } from "../game/Hud";
+import { PickupSystem } from "../game/PickupSystem";
+import { RelicFlow } from "../game/RelicFlow";
+import { RunProgression } from "../game/RunProgression";
+import { FREEZE_THRESHOLD } from "../game/RunStats";
+import { TickDispatcher } from "../game/TickDispatcher";
+import { ToastQueue } from "../game/ToastQueue";
+import { WaveDirector } from "../game/WaveDirector";
 
 /** Longer frames (tab switch, GC hitch) are clamped so entities and the clock never jump. */
 const MAX_FRAME_MS = 100;
-/** Below this time scale the world counts as frozen (time_lord achievement). */
-const FREEZE_THRESHOLD = 0.15;
 
+/**
+ * The in-run scene. Owns the clock (Conductor + TimeDilation), the entity groups and the
+ * per-frame update order, and orchestrates the focused modules in src/game/.
+ */
 export class GameScene extends Phaser.Scene {
   ship!: Ship;
   /** The single musical game clock. Recreated each run. */
@@ -46,6 +46,7 @@ export class GameScene extends Phaser.Scene {
   /** Player activity → time scale. Recreated each run. */
   dilation!: TimeDilation;
   audioManager!: AudioManager;
+  audioStarted = false;
   particles!: ParticleSystem;
 
   playerBullets!: Phaser.GameObjects.Group;
@@ -56,54 +57,29 @@ export class GameScene extends Phaser.Scene {
   shards!: Phaser.GameObjects.Group;
 
   chain!: ChainSystem;
-  private collisions!: CollisionSystem;
-  private endlessMode!: EndlessMode;
   pauseMenu!: PauseMenu;
   level: LevelRunner | null = null;
   relics!: RelicSystem;
   mutators!: MutatorSystem;
+  touchControls: TouchControls | null = null;
+
+  hud!: Hud;
+  toasts!: ToastQueue;
+  pickups!: PickupSystem;
+  progression!: RunProgression;
+  waves!: WaveDirector;
+  relicFlow!: RelicFlow;
+  gameOverFlow!: GameOverFlow;
 
   stats!: PlayerStats;
   score = 0;
   wave = 0;
-  waveTimer = 0;
-  waveDelay = 1500;
   gameOver = false;
   godMode = false;
-  bossActive = false;
-  runKills = 0;
 
-  scoreText!: Phaser.GameObjects.Text;
-  waveText!: Phaser.GameObjects.Text;
-  chainText!: Phaser.GameObjects.Text;
-  gameOverText!: Phaser.GameObjects.Text;
-  shardText!: Phaser.GameObjects.Text;
-  weaponText!: Phaser.GameObjects.Text;
-  fpsText!: Phaser.GameObjects.Text;
+  private collisions!: CollisionSystem;
   private backdrop!: Backdrop;
-
-  private escKey: Phaser.Input.Keyboard.Key | null = null;
-  private restartKey: Phaser.Input.Keyboard.Key | null = null;
-  audioStarted = false;
   private tutorial: TutorialManager | null = null;
-  private touchControls: TouchControls | null = null;
-  private pauseBtn: Phaser.GameObjects.Text | null = null;
-  private menuBtn: Phaser.GameObjects.Text | null = null;
-  private toastText!: Phaser.GameObjects.Text;
-  private toastQueue: string[] = [];
-  private toastActive = false;
-  private relicOverlay: HTMLDivElement | null = null;
-  relicSelectActive = false;
-  private pendingRelicOffers = 0;
-  private relicHudText!: Phaser.GameObjects.Text;
-  private runDamageTaken = 0;
-  bossFightDamageTaken = 0;
-  private freezeTime = 0;
-  private fpsTimer = 0;
-  private fpsFrames = 0;
-  private deathAnim: DeathAnimation | null = null;
-  private deathOverlay: Phaser.GameObjects.Graphics | null = null;
-  private gameOverReady = false;
   private frozen = false;
   private readonly tickDispatcher = new TickDispatcher();
 
@@ -129,41 +105,25 @@ export class GameScene extends Phaser.Scene {
     const isLevel = data?.mode === "level" && !!data.levelDef;
     this.level = isLevel ? new LevelRunner(this, data!.levelDef!) : null;
 
-    // Phaser reuses this instance on restart, so reset every per-run field.
-    // audioManager/audioStarted intentionally persist across restarts.
+    // Phaser reuses this instance on restart, so reset every per-run field; the modules
+    // below are recreated. audioManager/audioStarted intentionally persist across restarts.
     this.score = 0;
     this.wave = 0;
-    this.waveTimer = 0;
-    this.waveDelay = 1500;
     this.gameOver = false;
     this.godMode = false;
-    this.bossActive = false;
-    this.toastQueue = [];
-    this.toastActive = false;
-    this.fpsTimer = 0;
-    this.fpsFrames = 0;
     this.tutorial = null;
-    this.runKills = 0;
-    this.runDamageTaken = 0;
-    this.bossFightDamageTaken = 0;
-    this.freezeTime = 0;
     this.relics = new RelicSystem();
     this.mutators = new MutatorSystem();
-    this.relicSelectActive = false;
-    this.pendingRelicOffers = 0;
-    this.relicOverlay?.remove();
-    this.relicOverlay = null;
-    this.deathAnim = null;
-    this.deathOverlay = null;
-    this.gameOverReady = false;
-    this.escKey = null;
-    this.restartKey = null;
-    this.pauseBtn = null;
-    this.menuBtn = null;
     // Scene Clock.paused is not reset by Phaser on shutdown/start (tweens and physics are).
     this.frozen = false;
     this.time.paused = false;
     this.tickDispatcher.clear();
+
+    const selectedTheme = allThemes.find((t) => t.name.toLowerCase() === options.themeId) ?? theremin;
+    recordThemeUsed(selectedTheme.name.toLowerCase());
+    this.conductor = new Conductor({ bpm: selectedTheme.bpm });
+    this.dilation = new TimeDilation();
+    this.conductor.timeScale = this.dilation.scale;
 
     this.backdrop = new Backdrop(this);
     this.onTick((t) => this.backdrop.onTick(t));
@@ -178,7 +138,11 @@ export class GameScene extends Phaser.Scene {
     this.asteroids = this.add.group();
     this.shards = this.add.group();
     this.walls = this.add.group();
-    this.endlessMode = new EndlessMode(this);
+
+    this.progression = new RunProgression(this);
+    this.pickups = new PickupSystem(this);
+    this.waves = new WaveDirector(this);
+    this.relicFlow = new RelicFlow(this);
 
     const shipX = this.level?.levelDef.shipRx != null ? GAME_W * this.level.levelDef.shipRx : GAME_W / 2;
     const shipY = this.level?.levelDef.shipRy != null ? GAME_H * this.level.levelDef.shipRy : GAME_H / 2;
@@ -191,12 +155,6 @@ export class GameScene extends Phaser.Scene {
     this.ship.hp = this.stats.maxHp;
     this.ship.maxHp = this.stats.maxHp;
 
-    const selectedTheme = allThemes.find((t) => t.name.toLowerCase() === options.themeId) ?? theremin;
-    recordThemeUsed(selectedTheme.name.toLowerCase());
-    // Fresh clock and dilation every run (Phaser reuses this scene instance on restart).
-    this.conductor = new Conductor({ bpm: selectedTheme.bpm });
-    this.dilation = new TimeDilation();
-    this.conductor.timeScale = this.dilation.scale;
     if (!this.audioManager) {
       this.audioManager = new AudioManager();
     } else {
@@ -210,9 +168,10 @@ export class GameScene extends Phaser.Scene {
       this.ship.touchControls = this.touchControls;
     }
 
-    this.createHUD();
+    this.hud = new Hud(this);
+    this.toasts = new ToastQueue(this);
 
-    this.pauseMenu = new PauseMenu(this, () => this.goToMenu(), {
+    this.pauseMenu = new PauseMenu(this, () => this.gameOverFlow.goToMenu(), {
       onOpen: () => this.syncFrozen(),
       onClose: () => {
         this.syncFrozen();
@@ -220,79 +179,28 @@ export class GameScene extends Phaser.Scene {
       },
     });
     this.pauseMenu.create();
+    this.gameOverFlow = new GameOverFlow(this);
 
-    const kb = this.input.keyboard;
-    if (kb) {
-      this.restartKey = kb.addKey("R");
-      const escKey = kb.addKey("ESC");
-      this.escKey = escKey;
-      const onEsc = () => {
-        if (!this.gameOver && !this.relicSelectActive) this.pauseMenu.toggle();
-      };
-      escKey.on("down", onEsc);
-      // KeyboardPlugin destroys its Keys on shutdown in Phaser 3.90; remove explicitly anyway
-      // so a restart can never stack a second ESC listener.
-      this.events.once("shutdown", () => escKey.off("down", onEsc));
-    }
-
-    if (isMobile()) {
-      this.pauseBtn = this.add
-        .text(GAME_W - px(16), px(16), "❚❚", { fontFamily: "monospace", fontSize: `${px(24)}px`, color: "#887766" })
-        .setOrigin(1, 0)
-        // Above the pause dim overlay (depth 200) so it can still be tapped to resume.
-        .setDepth(202)
-        .setInteractive({ useHandCursor: true })
-        .on("pointerdown", (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
-          event.stopPropagation();
-          if (!this.gameOver && !this.relicSelectActive) this.pauseMenu.toggle();
-        });
-    }
-
-    // Auto-pause when the tab is hidden.
-    const onHidden = () => {
-      if (this.gameOver || this.pauseMenu.isActive || this.relicSelectActive || this.level?.isComplete) return;
-      this.pauseMenu.open();
-    };
-    this.game.events.on(Phaser.Core.Events.HIDDEN, onHidden);
-    this.events.once("shutdown", () => this.game.events.off(Phaser.Core.Events.HIDDEN, onHidden));
-
-    this.input.on("pointerdown", () => {
-      if (!this.audioStarted) {
-        this.audioStarted = true;
-        this.audioManager
-          .start()
-          .then(() => {
-            this.audioManager.loadTheme(selectedTheme);
-            this.audioManager.setVolume(options.masterVolume / 100);
-          })
-          .catch(() => {
-            this.audioStarted = false;
-          });
-      }
-    });
+    this.bindPauseControls();
+    this.bindAudioUnlock(selectedTheme);
 
     this.events.once("shutdown", () => {
       this.tickDispatcher.clear();
-      this.toastQueue.length = 0;
-      this.toastActive = false;
+      this.toasts.clear();
       this.pauseMenu.cleanup();
-      this.relicOverlay?.remove();
-      this.relicOverlay = null;
-      this.relicSelectActive = false;
-      this.deathAnim?.stop();
-      this.deathAnim = null;
-      this.deathOverlay = null;
+      this.relicFlow.cleanup();
+      this.gameOverFlow.cleanup();
       this.frozen = false;
       this.time.paused = false;
     });
 
     if (this.level) {
-      this.waveText.setText(this.level.levelDef.name.toUpperCase());
+      this.hud.setWaveLabel(this.level.levelDef.name.toUpperCase());
       this.level.spawnWave(0);
     } else if (!isTutorialDone()) {
       this.tutorial = new TutorialManager(this);
     } else {
-      this.spawnWave();
+      this.waves.spawnEndlessWave();
     }
   }
 
@@ -304,15 +212,12 @@ export class GameScene extends Phaser.Scene {
     const realDt = delta / 1000;
     this.backdrop.update(realDt);
     if (this.gameOver) {
-      if (this.deathAnim) {
-        if (this.deathAnim.update(delta)) this.deathAnim = null;
-      }
-      if (this.gameOverReady && this.restartKey?.isDown) this.restartGame();
+      this.gameOverFlow.update(delta);
       this.particles.update(delta, 0.3);
       return;
     }
 
-    if (this.pauseMenu.isActive || this.relicSelectActive) return;
+    if (this.pauseMenu.isActive || this.relicFlow.active) return;
 
     this.touchControls?.update();
 
@@ -321,16 +226,14 @@ export class GameScene extends Phaser.Scene {
     this.conductor.timeScale = ts;
     const { ticks } = this.conductor.advance(realDt);
     this.tickDispatcher.dispatch(ticks);
-    // Real seconds spent with time nearly frozen.
-    if (ts < FREEZE_THRESHOLD) this.freezeTime += realDt;
+    this.progression.trackFreeze(ts, realDt);
 
     this.ship.update(delta, ts, this);
 
     if (this.tutorial?.isActive) this.tutorial.update(delta);
 
     // Copy: enemies can be destroyed or spawned (splits, decoys, summons) while iterating.
-    const enemyArr = [...this.enemies.getChildren()] as Enemy[];
-    for (const enemy of enemyArr) {
+    for (const enemy of [...this.enemies.getChildren()] as Enemy[]) {
       if (enemy.active) enemy.update(delta, ts, this);
     }
 
@@ -339,38 +242,15 @@ export class GameScene extends Phaser.Scene {
     this.updateBullets(delta, ts, [...this.enemies.getChildren()] as Enemy[]);
 
     this.collisions.checkAll();
-    this.collectPickups();
-    this.updatePickupMagnets(delta, ts);
+    this.pickups.collect();
+    this.pickups.update(delta, ts);
     this.particles.update(delta, ts);
     this.chain.update(delta, ts);
-
-    this.waveTimer += delta * ts;
-    if (this.enemies.getLength() === 0 && this.waveTimer > this.waveDelay && !this.level?.isComplete) {
-      if (this.level) {
-        this.level.advance();
-      } else {
-        this.spawnWave();
-      }
-    }
+    this.waves.update(delta, ts);
 
     if (this.audioStarted) this.audioManager.updateTimeScale(ts);
 
-    this.fpsTimer += delta;
-    this.fpsFrames++;
-    if (this.fpsTimer > 500) {
-      // Measured from scene updates: with fps.limit set, loop.actualFps counts every RAF tick
-      // (TimeStep.stepLimitFPS), so it would show the display rate instead of the capped rate.
-      const fps = (this.fpsFrames * 1000) / this.fpsTimer;
-      this.fpsTimer = 0;
-      this.fpsFrames = 0;
-      if (options.showFps) {
-        this.fpsText.setText(`FPS: ${Math.round(fps)}`);
-        this.fpsText.setVisible(true);
-      } else {
-        this.fpsText.setVisible(false);
-      }
-      this.weaponText.setText(getWeapon(this.stats.weaponId).name.toUpperCase());
-    }
+    this.hud.update(rawDelta, this.stats.weaponId);
   }
 
   private updateBullets(delta: number, ts: number, enemyArr: Enemy[]) {
@@ -390,186 +270,18 @@ export class GameScene extends Phaser.Scene {
       b.update(delta, ts);
     }
 
-    const enemyTs = (this.relics.hasRelic("timewarp") && ts < 0.15) ? ts * 0.1 : ts;
+    const enemyTs = (this.relics.hasRelic("timewarp") && ts < FREEZE_THRESHOLD) ? ts * 0.1 : ts;
     for (const b of [...this.enemyBullets.getChildren()] as Bullet[]) b.update(delta, enemyTs);
   }
 
-  private updatePickupMagnets(delta: number, ts: number) {
-    const hasMagnetism = this.relics.hasRelic("magnetism");
-    const magnetSpd = hasMagnetism ? MAGNET_SPEEDS[5] : (MAGNET_SPEEDS[this.chain.chainTier] ?? 0);
-    for (const p of [...this.shards.getChildren()] as UpgradePickup[]) {
-      if (!p.alive) continue;
-      if (hasMagnetism || (magnetSpd > 0 && this.chain.chainTimer > 0)) {
-        p.magnetTarget = this.ship;
-        p.magnetSpeed = magnetSpd;
-      } else {
-        p.magnetTarget = null;
-        p.magnetSpeed = 0;
-      }
-      p.update(delta, ts);
-    }
+  addScore(points: number) {
+    this.score += points;
+    this.hud.setScore(this.score);
   }
 
-  private createHUD() {
-    this.scoreText = this.add
-      .text(px(16), px(16), "SCORE: 0", { fontFamily: "monospace", fontSize: `${px(20)}px`, color: "#e8d5b0" })
-      .setDepth(100);
-
-    this.weaponText = this.add
-      .text(px(16), px(42), "STANDARD", { fontFamily: "monospace", fontSize: `${px(13)}px`, color: "#666" })
-      .setDepth(100);
-
-    this.waveText = this.add
-      .text(GAME_W - px(16), px(16), "WAVE 0", {
-        fontFamily: "monospace", fontSize: `${px(20)}px`, color: "#e8d5b0", align: "right",
-      })
-      .setOrigin(1, 0)
-      .setDepth(100);
-
-    this.chainText = this.add
-      .text(px(16), px(78), "", { fontFamily: "monospace", fontSize: `${px(18)}px`, color: "#ffaa44" })
-      .setDepth(100)
-      .setAlpha(0);
-
-    this.gameOverText = this.add
-      .text(GAME_W / 2, GAME_H / 2, "", {
-        fontFamily: "monospace", fontSize: `${px(48)}px`, color: "#ff6644", align: "center",
-      })
-      .setOrigin(0.5)
-      .setDepth(100);
-
-    this.fpsText = this.add
-      .text(GAME_W - px(16), px(40), "", { fontFamily: "monospace", fontSize: `${px(14)}px`, color: "#666" })
-      .setOrigin(1, 0)
-      .setDepth(100);
-
-    this.shardText = this.add
-      .text(px(16), px(60), "", { fontFamily: "monospace", fontSize: `${px(13)}px`, color: "#ffaa44" })
-      .setDepth(100);
-
-    this.toastText = this.add
-      .text(GAME_W / 2, px(50), "", {
-        fontFamily: "monospace", fontSize: `${px(22)}px`, color: "#ffaa44",
-        align: "center", stroke: "#0a0806", strokeThickness: px(4),
-      })
-      .setOrigin(0.5)
-      .setDepth(400)
-      .setAlpha(0);
-
-    this.relicHudText = this.add
-      .text(px(16), GAME_H - px(20), "", {
-        fontFamily: "monospace", fontSize: `${px(12)}px`, color: "#887766",
-      })
-      .setDepth(100);
-  }
-
-  // --- Wave Spawning ---
-
-  spawnWave() {
-    this.wave++;
-    this.waveTimer = 0;
-    this.waveText.setText(`WAVE ${this.wave}`);
-    updateHighWave(this.wave);
-    this.processUnlocks();
-    this.processAchievements(false, false);
-
-    if (this.wave === 6 || (this.wave > 6 && (this.wave - 1) % 5 === 0)) {
-      const mutator = this.mutators.rollMutator();
-      if (mutator) {
-        this.mutators.addMutator(mutator);
-        const mutText = this.add
-          .text(GAME_W / 2, GAME_H / 2, mutator.name.toUpperCase(), {
-            fontFamily: "monospace", fontSize: `${px(28)}px`, color: "#ff6644", align: "center",
-          })
-          .setOrigin(0.5)
-          .setDepth(100)
-          .setAlpha(0);
-        this.tweens.add({
-          targets: mutText,
-          alpha: { from: 0, to: 1 },
-          duration: 400,
-          yoyo: true,
-          hold: 1200,
-          onComplete: () => mutText.destroy(),
-        });
-      }
-    }
-
-    this.endlessMode.spawnWave();
-  }
-
-  // --- Boss ---
-
-  onBossKill(x: number, y: number) {
-    this.bossActive = false;
-    addBossDefeat();
-    this.processAchievements(true, false);
-
-    this.particles.burst(x, y, 0xffaa22, 40, 150, 5);
-    this.particles.burst(x, y, 0xffcc66, 40, 120, 4);
-    this.particles.burst(x, y, 0xffffff, 30, 100, 3);
-    this.cameras.main.shake(300, 0.02);
-
-    if (this.audioStarted) this.audioManager.onBossDeath();
-    this.offerRelicChoice();
-
-    ([...this.enemies.getChildren()] as Enemy[]).forEach((e) => {
-      if (e.enemyType === "phantom_decoy") e.destroy();
-    });
-
-    for (let i = 0; i < 4; i++) {
-      const upgrade = this.rollDrop();
-      if (upgrade) {
-        const pickup = new UpgradePickup(this, x + (i - 1.5) * 40, y - 20 + Math.random() * 40, upgrade);
-        this.shards.add(pickup);
-      }
-    }
-
-    const defeatedText = this.add
-      .text(GAME_W / 2, GAME_H / 2, "BOSS DEFEATED", {
-        fontFamily: "monospace", fontSize: `${px(32)}px`, color: "#ffaa44", align: "center",
-      })
-      .setOrigin(0.5)
-      .setDepth(100)
-      .setAlpha(0);
-
-    this.tweens.add({
-      targets: defeatedText,
-      alpha: { from: 0, to: 1 },
-      duration: 500,
-      yoyo: true,
-      hold: 1500,
-      onComplete: () => defeatedText.destroy(),
-    });
-  }
-
-  // --- Relics ---
-
-  offerRelicChoice() {
-    if (this.relicSelectActive) {
-      // One overlay at a time (e.g. boss + elite killed in the same frame): offer the next
-      // choice after this one is picked instead of stacking overlays.
-      this.pendingRelicOffers++;
-      return;
-    }
-    const choices = this.relics.pickChoices(3);
-    // The overlay has no close path, so opening it with nothing to pick would softlock.
-    if (choices.length === 0) return;
-    this.relicSelectActive = true;
-    this.syncFrozen();
-    const overlay = createRelicSelectOverlay(choices, (relic) => {
-      this.relicOverlay = null;
-      this.relicSelectActive = false;
-      this.syncFrozen();
-      this.ship.suppressFireUntilRelease();
-      this.applyRelic(relic);
-      if (this.pendingRelicOffers > 0) {
-        this.pendingRelicOffers--;
-        this.offerRelicChoice();
-      }
-    });
-    this.relicOverlay = overlay;
-    document.body.appendChild(overlay);
+  /** Opens or closes the pause menu: ESC, the mobile pause button and the smoke test use this. */
+  togglePause() {
+    if (!this.gameOver && !this.relicFlow.active) this.pauseMenu.toggle();
   }
 
   /** Freezes or resumes the conductor, scene tweens, timers and arcade physics. */
@@ -589,269 +301,64 @@ export class GameScene extends Phaser.Scene {
     if (!frozen) this.ship?.resetAimTracking();
   }
 
+  /** The scene stays frozen while either the pause menu or the relic picker is open. */
+  syncFrozen() {
+    this.setFrozen(this.pauseMenu.isActive || this.relicFlow.active);
+  }
+
   /** The musical clock runs only while the run is live: not frozen and not over. */
   private syncConductor() {
     if (this.frozen || this.gameOver) this.conductor.pause();
     else this.conductor.resume();
   }
 
-  /** The scene stays frozen while either the pause menu or the relic picker is open. */
-  private syncFrozen() {
-    this.setFrozen(this.pauseMenu.isActive || this.relicSelectActive);
-  }
-
-  private applyRelic(relic: RelicDef) {
-    this.relics.addRelic(relic.id);
-    this.toastQueue.push(`RELIC: ${relic.name}`);
-    if (!this.toastActive) this.showNextToast();
-    this.updateRelicHud();
-
-    if (relic.id === "glass") {
-      this.ship.maxHp = 1;
-      this.ship.hp = 1;
-      this.ship.drawHealthBar();
-      this.ship.damageMultiplier = 3;
-    }
-  }
-
-  private updateRelicHud() {
-    const icons = this.relics.getActive().map((r) => r.icon).join(" ");
-    this.relicHudText.setText(icons);
-  }
-
-  // --- Pickups ---
-
-  private collectPickups() {
-    for (const p of [...this.shards.getChildren()] as UpgradePickup[]) {
-      if (!p.alive) continue;
-      const dx = p.x - this.ship.x;
-      const dy = p.y - this.ship.y;
-      if (dx * dx + dy * dy < px(40) * px(40)) {
-        this.applyUpgrade(p.upgrade);
-        if (p.upgrade.isWeapon) {
-          const wId = p.upgrade.id.replace("weapon_", "");
-          addWeaponPickup(wId);
-          recordWeaponUsed(wId);
-        }
-        addShards(1);
-        addPickup();
-        this.particles.burst(p.x, p.y, p.pickupColor, 10, 50, 2);
-        p.kill();
-        this.shardText.setText(`◆ ${getState().shards}`);
-        this.chain.spawnPopup(p.x, p.y, p.upgrade.name, `#${p.pickupColor.toString(16).padStart(6, "0")}`);
-        this.processUnlocks();
-      }
-    }
-  }
-
-  applyUpgrade(upg: UpgradeDef) {
-    const wasMaxHp = this.stats.maxHp;
-    upg.apply(this.stats);
-    if (this.stats.maxHp > wasMaxHp) {
-      this.ship.maxHp = this.stats.maxHp;
-      this.ship.hp = Math.min(this.ship.hp + 1, this.ship.maxHp);
-      this.ship.drawHealthBar();
+  private bindPauseControls() {
+    const kb = this.input.keyboard;
+    if (kb) {
+      const escKey = kb.addKey("ESC");
+      const onEsc = () => this.togglePause();
+      escKey.on("down", onEsc);
+      // KeyboardPlugin destroys its Keys on shutdown in Phaser 3.90; remove explicitly anyway
+      // so a restart can never stack a second ESC listener.
+      this.events.once("shutdown", () => escKey.off("down", onEsc));
     }
 
-    const evo = checkEvolution(this.stats);
-    if (evo) {
-      this.stats.weaponId = evo.evolvedWeaponId;
-      recordEvolution(evo.evolvedWeaponId);
-      this.particles.burst(this.ship.x, this.ship.y, 0xffaa22, 50, 200, 6);
-      this.particles.burst(this.ship.x, this.ship.y, 0xffffff, 30, 150, 4);
-      this.cameras.main.shake(400, 0.03);
-      this.toastQueue.push(`EVOLVED: ${getWeapon(evo.evolvedWeaponId).name.toUpperCase()}`);
-      if (!this.toastActive) this.showNextToast();
-      if (this.audioStarted) this.audioManager.onBossDeath();
+    if (isMobile()) {
+      this.add
+        .text(GAME_W - px(16), px(16), "❚❚", { fontFamily: "monospace", fontSize: `${px(24)}px`, color: "#887766" })
+        .setOrigin(1, 0)
+        // Above the pause dim overlay (depth 200) so it can still be tapped to resume.
+        .setDepth(202)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+          event.stopPropagation();
+          this.togglePause();
+        });
     }
-  }
 
-  rollDrop(): UpgradeDef | null {
-    const isWeaponDrop = Math.random() < 0.2;
-    if (isWeaponDrop) {
-      const weapons = ALL_UPGRADES.filter((u) => u.isWeapon && u.id !== "weapon_standard");
-      if (weapons.length > 0) return weapons[Math.floor(Math.random() * weapons.length)];
-    }
-    const eligible = ALL_UPGRADES.filter((u) => !u.isWeapon && u.level(this.stats) < u.maxLevel);
-    if (eligible.length === 0) return null;
-    return eligible[Math.floor(Math.random() * eligible.length)];
-  }
-
-  // --- Unlocks & Achievements ---
-
-  processUnlocks() {
-    const newUnlocks = checkNewUnlocks();
-    for (const u of newUnlocks) this.toastQueue.push(`UNLOCKED: ${u.name}`);
-    if (!this.toastActive && this.toastQueue.length > 0) this.showNextToast();
-  }
-
-  processAchievements(bossJustKilled: boolean, levelJustCompleted: boolean) {
-    const ctx: AchievementContext = {
-      runKills: this.runKills,
-      wave: this.wave,
-      score: this.score,
-      bestChain: this.chain.bestChain,
-      hp: this.ship.hp,
-      maxHp: this.ship.maxHp,
-      freezeTime: this.freezeTime,
-      bossFightDamageTaken: this.bossFightDamageTaken,
-      levelDamageTaken: this.level?.damageTaken ?? 0,
-      bossJustKilled,
-      levelJustCompleted,
+    // Auto-pause when the tab is hidden.
+    const onHidden = () => {
+      if (this.gameOver || this.pauseMenu.isActive || this.relicFlow.active || this.level?.isComplete) return;
+      this.pauseMenu.open();
     };
-    flushAchievements();
-    const newAchievements = checkAchievements(ctx);
-    for (const a of newAchievements) this.toastQueue.push(`★ ${a.name} (+${a.reward}◆)`);
-    if (newAchievements.length > 0) this.shardText.setText(`◆ ${getState().shards}`);
-    if (!this.toastActive && this.toastQueue.length > 0) this.showNextToast();
+    this.game.events.on(Phaser.Core.Events.HIDDEN, onHidden);
+    this.events.once("shutdown", () => this.game.events.off(Phaser.Core.Events.HIDDEN, onHidden));
   }
 
-  private showNextToast() {
-    if (this.toastQueue.length === 0 || !this.toastText?.active) { this.toastActive = false; return; }
-    this.toastActive = true;
-    const msg = this.toastQueue.shift()!;
-    this.toastText.setText(msg);
-    this.tweens.add({
-      targets: this.toastText,
-      alpha: { from: 0, to: 1 },
-      duration: 400,
-      yoyo: true,
-      hold: 2000,
-      onComplete: () => this.showNextToast(),
+  /** Browsers only allow audio after a user gesture: start it on the first press. */
+  private bindAudioUnlock(theme: SoundTheme) {
+    this.input.on("pointerdown", () => {
+      if (this.audioStarted) return;
+      this.audioStarted = true;
+      this.audioManager
+        .start()
+        .then(() => {
+          this.audioManager.loadTheme(theme);
+          this.audioManager.setVolume(options.masterVolume / 100);
+        })
+        .catch(() => {
+          this.audioStarted = false;
+        });
     });
-  }
-
-  // --- Damage ---
-
-  recordDamage() {
-    this.runDamageTaken++;
-    this.bossFightDamageTaken++;
-    if (this.level) this.level.damageTaken++;
-  }
-
-  // --- Game Over ---
-
-  triggerGameOver() {
-    this.gameOver = true;
-    this.syncConductor();
-    this.gameOverReady = false;
-    this.touchControls?.disable();
-    this.particles.burst(this.ship.x, this.ship.y, 0xff4422, 40, 150, 4);
-    this.particles.burst(this.ship.x, this.ship.y, 0xffcc66, 20, 100, 3);
-    this.ship.setVisible(false);
-
-    updateHighScore(this.score);
-    updateHighWave(this.wave);
-    updateBestChain(this.chain.bestChain);
-    this.processUnlocks();
-    this.processAchievements(false, false);
-    if (this.audioStarted) this.audioManager.onPlayerDeath();
-
-    this.deathAnim = new DeathAnimation(this, this.ship.x, this.ship.y, this.ship.shipColor, () => {
-      this.showGameOverScreen();
-    });
-  }
-
-  private showGameOverScreen() {
-    if (!this.deathOverlay) {
-      this.deathOverlay = this.add.graphics();
-      this.deathOverlay.fillStyle(0x0a0806, 0.75);
-      this.deathOverlay.fillRect(0, 0, GAME_W, GAME_H);
-      this.deathOverlay.setDepth(99);
-    }
-
-    const mobile = isMobile();
-    const isLevel = !!this.level;
-    let controls: string;
-    if (isLevel) {
-      controls = mobile ? "TAP TO RETRY" : "R — retry   ESC — campaign";
-    } else {
-      controls = mobile ? "TAP TO RESTART" : "R — restart   ESC — menu";
-    }
-
-    const scoreLine = isLevel ? "" : `\nSCORE: ${this.score}  |  WAVE: ${this.wave}\n`;
-    this.gameOverText.setText(`GAME OVER\n${scoreLine}\n${controls}`);
-
-    this.time.delayedCall(300, () => { this.gameOverReady = true; });
-
-    if (mobile) this.createMobileGameOverUI(isLevel);
-
-    this.escKey?.once("down", () => {
-      if (this.gameOver) this.goToMenu();
-    });
-  }
-
-  private createMobileGameOverUI(isLevel: boolean) {
-    this.menuBtn = this.add
-      .text(GAME_W / 2, GAME_H / 2 + px(120), isLevel ? "CAMPAIGN" : "MENU", {
-        fontFamily: "monospace", fontSize: `${px(20)}px`, color: "#887766",
-      })
-      .setOrigin(0.5)
-      .setDepth(101)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerdown", (p: Phaser.Input.Pointer) => {
-        p.event.stopPropagation();
-        this.goToMenu();
-      });
-
-    this.time.delayedCall(500, () => {
-      this.input.once("pointerdown", (_p: Phaser.Input.Pointer, targets: Phaser.GameObjects.GameObject[]) => {
-        if (this.gameOver && this.gameOverReady && !targets.includes(this.menuBtn!)) this.restartGame();
-      });
-    });
-  }
-
-  private goToMenu() {
-    if (this.level) {
-      this.scene.start("LevelSelectScene");
-    } else {
-      this.scene.start("StartScene");
-    }
-  }
-
-  restartGame() {
-    if (this.level) {
-      this.scene.restart({ mode: "level", levelDef: this.level.levelDef });
-    } else {
-      this.scene.restart({ mode: "endless" });
-    }
-  }
-
-  // --- Dev Helpers ---
-
-  clearEnemies() {
-    ([...this.enemies.getChildren()] as Enemy[]).forEach((e) => e.destroy());
-    ([...this.enemyBullets.getChildren()] as Bullet[]).forEach((b) => b.kill());
-    ([...this.asteroids.getChildren()] as Asteroid[]).forEach((a) => a.destroy());
-    ([...this.walls.getChildren()] as Wall[]).forEach((w) => w.destroy());
-  }
-
-  buildEnemyPool(wave: number): EnemyType[] {
-    return this.endlessMode.buildEnemyPool(wave);
-  }
-
-  devSpawnEnemies(count: number) {
-    const pool = this.buildEnemyPool(this.wave);
-    for (let i = 0; i < count; i++) {
-      const { x, y } = this.randomEdgePosition();
-      const type = pool[Math.floor(Math.random() * pool.length)];
-      this.enemies.add(createEnemy(this, x, y, type));
-    }
-  }
-
-  devSpawnAsteroids(count: number) {
-    for (let i = 0; i < count; i++) {
-      const ax = Math.random() < 0.5 ? -40 : GAME_W + 40;
-      const ay = Phaser.Math.Between(80, GAME_H - 80);
-      this.asteroids.add(new Asteroid(this, ax, ay, "large"));
-    }
-  }
-
-  private randomEdgePosition(margin = 30): { x: number; y: number } {
-    const edge = Phaser.Math.Between(0, 3);
-    if (edge === 0) return { x: Phaser.Math.Between(0, GAME_W), y: -margin };
-    if (edge === 1) return { x: GAME_W + margin, y: Phaser.Math.Between(0, GAME_H) };
-    if (edge === 2) return { x: Phaser.Math.Between(0, GAME_W), y: GAME_H + margin };
-    return { x: -margin, y: Phaser.Math.Between(0, GAME_H) };
   }
 }
