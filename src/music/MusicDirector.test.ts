@@ -679,6 +679,28 @@ describe("drone", () => {
     expect(d.droneVersion).toBe(v0 + 1);
   });
 
+  it("setKeyOffset transposes the harmony, re-voices the drone at once, and setPalette resets it", () => {
+    const { d } = setup(); // E aeolian
+    const v0 = d.droneVersion;
+    expect(d.keyOffset).toBe(0);
+    d.setKeyOffset(2);
+    expect(d.keyOffset).toBe(2);
+    expect(d.harmony.keyPc).toBe(6); // F#
+    expect(d.harmony.chordAtBar(0).rootPc).toBe(6);
+    expect(d.droneChord()).toEqual([54, 61, 66]); // F#3 C#4 F#4
+    expect(d.droneVersion).toBe(v0 + 1);
+    d.onTick(tickEvent(0));
+    expect(pitchClass(byRole(d.drain(), "heart")[0].midi[0])).toBe(6);
+    d.setKeyOffset(-5);
+    expect(d.harmony.keyPc).toBe(11); // B: home E − 5
+    d.setKeyOffset(-5);
+    d.setKeyOffset(1.5);
+    expect(d.keyOffset).toBe(-5);
+    d.setPalette(getPalette("theremin"));
+    expect(d.keyOffset).toBe(0);
+    expect(d.harmony.keyPc).toBe(4);
+  });
+
   it("setPalette swaps harmony and bumps the version; reset clears pending work", () => {
     const { d } = setup();
     const v0 = d.droneVersion;

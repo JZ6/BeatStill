@@ -190,6 +190,7 @@ export class MusicDirector {
   private droneBar = 0;
   private droneKey = "";
   private _droneVersion = 0;
+  private _keyOffset = 0;
   private readonly handlers: Handlers;
 
   constructor(palette: Palette, clock: DirectorClock, options: MusicDirectorOptions = {}) {
@@ -214,8 +215,27 @@ export class MusicDirector {
     return this._droneVersion;
   }
 
+  /** Semitones the harmony is transposed from the palette's key (section modulations); 0 after setPalette. */
+  get keyOffset(): number {
+    return this._keyOffset;
+  }
+
+  /**
+   * Transposes the harmony to `offset` semitones from the palette's key (a section change). Every
+   * later note, chord and the drone (re-voiced at once) follow the new key. Non-integers are ignored.
+   */
+  setKeyOffset(offset: number): void {
+    if (!Number.isInteger(offset) || offset === this._keyOffset) return;
+    this._harmony.modulate(offset - this._keyOffset);
+    this._keyOffset = offset;
+    // Notes cached for the current slot were picked in the old key.
+    this.perSlot.clear();
+    this.updateDrone(this.currentBar());
+  }
+
   setPalette(palette: Palette): void {
     this._palette = palette;
+    this._keyOffset = 0;
     this._harmony = new Harmony({ key: palette.key, mode: palette.mode, progression: palette.progression });
     this.registers.clear();
     for (const role of Object.keys(palette.instruments) as Role[]) {

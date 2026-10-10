@@ -20,6 +20,8 @@ const DEATH_SINK_RATE = 1.5;
  */
 export class MusicSystem implements MusicControl {
   readonly director: MusicDirector;
+  /** The run's tempo before mutators: the palette's, or the level's override. */
+  readonly baseBpm: number;
   private readonly driver: MusicDriver;
   private readonly engine = getAudioEngine();
   private readonly cleanups: (() => void)[] = [];
@@ -32,6 +34,7 @@ export class MusicSystem implements MusicControl {
     private readonly scene: GameScene,
     palette: Palette,
   ) {
+    this.baseBpm = palette.bpm;
     this.director = new MusicDirector(palette, scene.conductor);
     this.driver = new MusicDriver(this.director, this.engine);
     // Kept by the engine until audio starts; volume is re-applied on every run.
@@ -69,6 +72,26 @@ export class MusicSystem implements MusicControl {
 
   setPalette(palette: Palette): void {
     this.driver.setPalette(palette, this.scene.conductor);
+  }
+
+  /** Semitones the harmony sits above (or below) the run's home key. */
+  get keyOffset(): number {
+    return this.director.keyOffset;
+  }
+
+  /** A section change: the harmony moves to `offset` semitones from the home key, from this moment. */
+  setKeyOffset(offset: number): void {
+    this.director.setKeyOffset(offset);
+  }
+
+  /**
+   * Tempo = base × `mult` (the double_time mutator). The conductor keeps its musical position, so
+   * every rhythm grid speeds up from here; the director reads the conductor and the delay follows.
+   */
+  setTempoScale(mult: number): void {
+    const bpm = this.baseBpm * (Number.isFinite(mult) && mult > 0 ? mult : 1);
+    this.scene.conductor.setBpm(bpm);
+    this.engine.setTempo(bpm);
   }
 
   /** Scene shutdown: stop listening and release sounding notes. The engine itself lives on. */

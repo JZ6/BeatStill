@@ -5,17 +5,18 @@ import { createEnemy, type Enemy, type EnemyType } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import type { Bullet } from "../objects/Bullet";
 import type { Wall } from "../objects/Wall";
-import { PendingSpawn, nextBarLine } from "../core/barSchedule";
+import { PendingSpawn, nextBarLine, nextPhraseBoundary } from "../core/barSchedule";
 import { EndlessMode } from "../systems/EndlessMode";
-import { isMutatorWave } from "../systems/WaveMutators";
+import { MUTATOR_PHRASE_BARS, isMutatorWave, nextKeyOffset, type SpawnParams } from "../systems/WaveMutators";
 import { updateHighWave } from "../systems/Unlocks";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
 
 /**
  * Song structure for both modes: waves are sections that start on bar lines. Level waves follow
  * the LevelRunner; endless waves are 8-bar sections that spawn continuously (EndlessMode), each
- * starting on the bar line after the previous one is spent and cleared. Also: endless mutators,
- * boss kills and dev spawning helpers.
+ * starting on the bar line after the previous one is spent and cleared. Endless mutators are
+ * section modifiers that switch on at phrase boundaries with a key change. Also: boss kills and
+ * dev spawning helpers.
  */
 export class WaveDirector {
   bossActive = false;
@@ -48,7 +49,11 @@ export class WaveDirector {
       return;
     }
     if (this.nextWave.take(t.tick)) this.startEndlessWave(t);
-    if (t.isBar) this.endless.onBar(t);
+    if (t.isBar) {
+      // A mutator switching on at this phrase boundary applies to this downbeat's group too.
+      this.activateMutators(t);
+      this.endless.onBar(t);
+    }
   }
 
   /** Per live frame: once the field is clear, queues the next level wave, or the next endless wave once the section is spent. */
@@ -87,15 +92,44 @@ export class WaveDirector {
     s.progression.processAchievements(false, false);
 
     if (isMutatorWave(s.wave)) {
+      // A section modifier: it switches on at the next 4-bar phrase boundary (this bar line if it is one).
       const mutator = s.mutators.rollMutator();
-      if (mutator) {
-        s.mutators.addMutator(mutator);
-        s.hud.announce(mutator.name.toUpperCase(), { fontSize: 28, color: "#ff6644", duration: 400, hold: 1200 });
-      }
+      if (mutator) s.mutators.queueMutator(mutator, nextPhraseBoundary(t.tick, s.conductor.ticksPerBar, MUTATOR_PHRASE_BARS));
     }
 
     s.gameEvents.emit("waveStarted", { wave: s.wave, mode: "endless", tick: t.tick, lateBy: t.lateBy });
     this.endless.startSection(t);
+  }
+
+  /**
+   * On a bar line: mutators due at this phrase boundary switch on. Each is announced and modulates
+   * the harmony up a whole step (wrapping near home); the tempo follows double_time, and live
+   * enemies take on the new speed and fire density (HP changes only affect new spawns).
+   */
+  private activateMutators(t: TickEvent) {
+    const s = this.scene;
+    const before = s.mutators.getActiveParams();
+    const activated = s.mutators.activateDue(t.tick);
+    if (activated.length === 0) return;
+    const after = s.mutators.getActiveParams();
+    for (const m of activated) {
+      s.hud.announce(m.name.toUpperCase(), { fontSize: 28, color: "#ff6644", duration: 400, hold: 1200 });
+      s.music.setKeyOffset(nextKeyOffset(s.music.keyOffset));
+    }
+    if (after.tempoMult !== before.tempoMult) s.music.setTempoScale(after.tempoMult);
+    this.retuneLiveEnemies(before, after);
+  }
+
+  /** Applies a change in speed or fire density to the enemies already on the field (not bosses). */
+  private retuneLiveEnemies(before: SpawnParams, after: SpawnParams) {
+    const speedRatio = before.enemySpeedMult > 0 ? after.enemySpeedMult / before.enemySpeedMult : 1;
+    const densityChanged = after.enemyRhythmDensity !== before.enemyRhythmDensity;
+    if (speedRatio === 1 && !densityChanged) return;
+    for (const e of [...this.scene.enemies.getChildren()] as Enemy[]) {
+      if (!e.active || e.def.isBoss || e.def.hidden) continue;
+      if (speedRatio !== 1) e.speed *= speedRatio;
+      if (densityChanged) e.setRhythmDensity(after.enemyRhythmDensity);
+    }
   }
 
   onBossKilled(x: number, y: number, bossType: EnemyType) {

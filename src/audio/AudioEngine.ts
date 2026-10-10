@@ -100,6 +100,8 @@ export class AudioEngine {
   private startPromise: Promise<void> | null = null;
   private kit: Kit | null = null;
   private wantedPalette: Palette | null = null;
+  /** Beats per minute the delay follows (the palette's unless setTempo changed it). */
+  private tempo: number | null = null;
   private timeScale = 1;
   private paused = false;
   private volume = 1;
@@ -139,11 +141,20 @@ export class AudioEngine {
     return promise;
   }
 
-  /** Switches instruments to `palette` (kept until start() if not started yet). */
+  /** Switches instruments to `palette` (kept until start() if not started yet). The tempo becomes the palette's. */
   setPalette(palette: Palette): void {
     this.wantedPalette = palette;
-    if (!this.graph || this.kit?.palette.id === palette.id) return;
-    this.buildKit(palette);
+    this.tempo = palette.bpm;
+    if (!this.graph) return;
+    if (this.kit?.palette.id === palette.id) this.applyTempo(this.graph);
+    else this.buildKit(palette);
+  }
+
+  /** The tempo the delay follows (a dotted 8th), e.g. a level's tempo or a mutator's tempo change. */
+  setTempo(bpm: number): void {
+    if (!Number.isFinite(bpm) || bpm <= 0) return;
+    this.tempo = bpm;
+    if (this.graph) this.applyTempo(this.graph);
   }
 
   /** Schedules a director request at `currentTime + req.when`. */
@@ -317,8 +328,7 @@ export class AudioEngine {
         this.fail(`build:${role}`, err);
       }
     }
-    // A dotted 8th at the palette tempo.
-    g.delay.delayTime.rampTo(clamp((0.75 * 60) / palette.bpm, 0.05, 0.9), 0.05, this.now());
+    this.applyTempo(g);
 
     const old = this.kit;
     this.kit = { palette, voices, drone };
@@ -357,6 +367,12 @@ export class AudioEngine {
         }
       }
     }, delayMs);
+  }
+
+  /** The delay is a dotted 8th at the current tempo. */
+  private applyTempo(g: Graph): void {
+    const bpm = this.tempo ?? this.kit?.palette.bpm ?? this.wantedPalette?.bpm ?? 100;
+    g.delay.delayTime.rampTo(clamp((0.75 * 60) / bpm, 0.05, 0.9), 0.05, this.now());
   }
 
   private applyTimeScale(g: Graph, immediate: boolean): void {
