@@ -37,6 +37,9 @@ const game = new Phaser.Game({
 
 registerGame(game);
 
+// Debug/test hook: used by scripts/smoke.mjs and for manual console inspection.
+(window as unknown as { __BEATSTILL__?: { game: Phaser.Game } }).__BEATSTILL__ = { game };
+
 const canvas = game.canvas;
 if (canvas) {
   canvas.style.touchAction = "none";
