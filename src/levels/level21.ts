@@ -11,7 +11,7 @@ export const level21: LevelDef = {
       enemies: Array.from({ length: 8 }, (_, i) => ({
         type: "swarm" as EnemyType,
         rx: 0.15 + (i % 4) * 0.22,
-        ry: -0.04,
+        ry: -0.04 - Math.floor(i / 4) * 0.04,
       })),
       walls: [
         { rx: 0.25, ry: 0.7, rw: 0.2, rh: 0.02, type: "glass", hp: 3 },

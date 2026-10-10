@@ -10,8 +10,9 @@ export const level25: LevelDef = {
     {
       enemies: Array.from({ length: 12 }, (_, i) => ({
         type: "swarm" as EnemyType,
-        rx: 0.15 + (i % 4) * 0.22,
-        ry: -0.04,
+        // 4 columns x 3 rows inside the corridor (side walls cover x < 0.25 and x > 0.75).
+        rx: 0.32 + (i % 4) * 0.12,
+        ry: -0.04 - Math.floor(i / 4) * 0.04,
       })),
       walls: [
         { rx: 0.0, ry: 0.0, rw: 0.25, rh: 1.0, type: "solid" },
@@ -44,11 +45,11 @@ export const level25: LevelDef = {
     },
     {
       enemies: [
-        { type: "tank", rx: 0.35, ry: 0.15 },
-        { type: "tank", rx: 0.65, ry: 0.15 },
-        { type: "snake", rx: 0.3, ry: 0.4 },
-        { type: "snake", rx: 0.5, ry: 0.35 },
-        { type: "snake", rx: 0.7, ry: 0.4 },
+        { type: "tank", rx: 0.35, ry: 0.18 },
+        { type: "tank", rx: 0.65, ry: 0.18 },
+        { type: "snake", rx: 0.36, ry: 0.4 },
+        { type: "snake", rx: 0.46, ry: 0.35 },
+        { type: "snake", rx: 0.64, ry: 0.4 },
       ],
       walls: [
         { rx: 0.3, ry: 0.25, rw: 0.02, rh: 0.3, type: "solid" },
@@ -58,7 +59,7 @@ export const level25: LevelDef = {
     },
     {
       enemies: [
-        { type: "sentinel", rx: 0.5, ry: 0.15 },
+        { type: "sentinel", rx: 0.5, ry: 0.13 },
       ],
     },
   ],

@@ -18,8 +18,8 @@ export const level17: LevelDef = {
       walls: [
         { rx: 0.1, ry: 0.08, rw: 0.3, rh: 0.02, type: "bounce" },
         { rx: 0.6, ry: 0.08, rw: 0.3, rh: 0.02, type: "bounce" },
-        { rx: 0.08, ry: 0.1, rw: 0.02, rh: 0.8, type: "bounce" },
-        { rx: 0.9, ry: 0.1, rw: 0.02, rh: 0.8, type: "bounce" },
+        { rx: 0.08, ry: 0.08, rw: 0.02, rh: 0.82, type: "bounce" },
+        { rx: 0.9, ry: 0.08, rw: 0.02, rh: 0.82, type: "bounce" },
       ],
     },
     {

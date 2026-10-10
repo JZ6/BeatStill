@@ -3,7 +3,7 @@ import type { LevelDef } from "../systems/Levels";
 export const level27: LevelDef = {
   id: 27,
   name: "Storm",
-  description: "Every enemy, all at once",
+  description: "Every non-boss enemy, all at once",
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {
@@ -21,7 +21,7 @@ export const level27: LevelDef = {
         { type: "swarm", rx: 0.85, ry: -0.04 },
         { type: "snake", rx: 0.35, ry: 0.6 },
         { type: "snake", rx: 0.65, ry: 0.6 },
-        { type: "circler", rx: 0.5, ry: 0.45 },
+        { type: "circler", rx: 0.5, ry: 0.85 },
       ],
       walls: [
         { rx: 0.35, ry: 0.4, rw: 0.08, rh: 0.06, type: "glass", hp: 2 },

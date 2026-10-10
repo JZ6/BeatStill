@@ -17,7 +17,7 @@ export const level14: LevelDef = {
       ],
       walls: [
         { rx: 0.49, ry: 0.05, rw: 0.02, rh: 0.35, type: "bounce" },
-        { rx: 0.49, ry: 0.6, rw: 0.02, rh: 0.35, type: "bounce" },
+        { rx: 0.49, ry: 0.6, rw: 0.02, rh: 0.14, type: "bounce" },
         { rx: 0.49, ry: 0.4, rw: 0.02, rh: 0.2, type: "glass", hp: 2 },
       ],
     },

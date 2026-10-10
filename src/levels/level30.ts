@@ -12,7 +12,7 @@ export const level30: LevelDef = {
         ...Array.from({ length: 6 }, (_, i) => ({
           type: "swarm" as EnemyType,
           rx: 0.15 + (i % 3) * 0.3,
-          ry: -0.04,
+          ry: -0.04 - Math.floor(i / 3) * 0.04,
         })),
         { type: "tracker" as EnemyType, rx: 0.2, ry: 0.2 },
         { type: "tracker" as EnemyType, rx: 0.8, ry: 0.2 },

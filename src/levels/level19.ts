@@ -17,10 +17,11 @@ export const level19: LevelDef = {
       ],
       initialBullets: (() => {
         const bullets: { rx: number; ry: number; angle: number; speed: number }[] = [];
-        for (let x = 0.08; x <= 0.92; x += 0.06) {
-          if (x > 0.42 && x < 0.58) continue;
-          for (let y = 0.05; y <= 0.7; y += 0.1) {
-            bullets.push({ rx: x, ry: y, angle: Math.PI / 2, speed: 40 });
+        // Integer steps in hundredths: x 0.08..0.92 step 0.06 (gap 0.42-0.58), y 0.05..0.65 step 0.1.
+        for (let xi = 8; xi <= 92; xi += 6) {
+          if (xi > 42 && xi < 58) continue;
+          for (let yi = 5; yi <= 70; yi += 10) {
+            bullets.push({ rx: xi / 100, ry: yi / 100, angle: Math.PI / 2, speed: 40 });
           }
         }
         return bullets;

@@ -37,8 +37,8 @@ export const level23: LevelDef = {
     },
     {
       enemies: [
-        { type: "tank", rx: 0.4, ry: 0.2 },
-        { type: "tank", rx: 0.6, ry: 0.2 },
+        { type: "tank", rx: 0.4, ry: 0.23 },
+        { type: "tank", rx: 0.6, ry: 0.23 },
         { type: "tracker", rx: 0.5, ry: 0.4 },
         { type: "tracker", rx: 0.35, ry: 0.55 },
         { type: "sniper", rx: 0.65, ry: 0.55 },
