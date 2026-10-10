@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phases 0–4 complete. Phase 5 (player as instrument) in progress.
+- **Status:** Phases 0–5 complete. Phase 6 (song structure) in progress.
 
 ## 1. Vision
 
@@ -464,9 +464,11 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Follow-up: the bosses' phase-3 spiral angles still rotate continuously. Bullet density shifted: sniper −33%, tracker −17%, tank +17%. Retune in Phase 8.
 
 ### Phase 5 — Player as instrument
-- [ ] Weapon note values; fire on grid with a late-grace window; aim computed at spawn time
-- [ ] Rework upgrades, shop, relics and evolutions per §5; chain window in beats
-- [ ] On-beat feedback (visual pulse; metronome relic bonus)
+- [x] Weapon `noteTicks` + `TICK_LADDER` (96…3). `FireClock.ts` handles held fire on the absolute grid. A fresh press uses grace (0.06 s + Quick Draw); otherwise it fires on the next slot if ≤ 0.15 s, else the next 16th if ≤ 0.15 s, else immediately. One shot per slot.
+- [x] Lead notes are scheduled at grid time; voicing follows bullet count.
+- [x] Rapid Fire is 3 ladder rungs (id unchanged). Chain window is 1.5 beats (+0.5 per Chain Sustain level, +0.25 per Chain Link level), with 0.75 beat of grace, counted in conductor time. Shop bonuses no longer consume upgrade levels. Quick Draw adds +40 ms first-shot grace per level.
+- [x] Overclock halves the interval (min 3 ticks). Metronome is now an on-beat kill bonus (±0.125 beat → +1 chain, ×1.5 score). A ring pulses when a shot lands on the beat. A stale-text test guards the ms wording.
+- [ ] Follow-up (Phase 8): standard ⅛ at 100 bpm (300 ms) is slower than the old 220 ms. Shop bonuses can now exceed the old stat caps. The smoke resume check is occasionally marginal because of the fire-suppression-on-resume rule.
 
 ### Phase 6 — Song structure
 - [ ] Waves spawn on bar lines; LevelRunner pending-spawn guard; wave timer in bars
