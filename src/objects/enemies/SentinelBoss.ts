@@ -6,6 +6,7 @@ import { SwarmEnemy } from "./SwarmEnemy";
 import { TrackerEnemy } from "./TrackerEnemy";
 import type { BulletConfig } from "../BulletPattern";
 import { sentinelVolley } from "./volleys";
+import { SENTINEL_SPIRAL_STEP_ANGLE, spiralAngle } from "./rhythm";
 import type { GameScene } from "../../scenes/GameScene";
 import { STEPS_PER_BEAT, TICKS_PER_STEP, type TickEvent } from "../../core/Conductor";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
@@ -25,6 +26,7 @@ const SUMMON_BARS = [2, 3];
  * Minions arrive on bar lines.
  */
 export class SentinelBoss extends Enemy {
+  /** The inner square's angle: the phase-3 spiral's arm angle at the conductor's position. */
   private innerAngle = 0;
   private readonly phases = new BossPhases({
     thresholds: PHASE_THRESHOLDS,
@@ -83,7 +85,8 @@ export class SentinelBoss extends Enemy {
   }
 
   protected updateMovement(delta: number, timeScale: number, gameScene: GameScene) {
-    this.innerAngle += delta * timeScale * 0.003;
+    // Turns with the music, so it points where the next phase-3 volley's arms will be.
+    this.innerAngle = spiralAngle(gameScene.conductor.tickPosition / TICKS_PER_STEP, 0, SENTINEL_SPIRAL_STEP_ANGLE);
 
     if (!this.phases.transitioning) {
       const playerDist = Phaser.Math.Distance.Between(this.x, this.y, gameScene.ship.x, gameScene.ship.y);
@@ -135,8 +138,10 @@ export class SentinelBoss extends Enemy {
     return !this.phases.transitioning;
   }
 
-  protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return sentinelVolley(this.phase, angleToPlayer, this.innerAngle);
+  /** Phase 3's spiral arms advance per step (like the Spiral enemy), not per frame. */
+  protected getFirePattern(angleToPlayer: number, _gameScene: GameScene, at?: TickEvent): BulletConfig[] {
+    const step = at ? at.tick / TICKS_PER_STEP : 0;
+    return sentinelVolley(this.phase, angleToPlayer, spiralAngle(step, 0, SENTINEL_SPIRAL_STEP_ANGLE));
   }
 
   takeDamage(amount: number): boolean {

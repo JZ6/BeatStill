@@ -37,12 +37,22 @@ export function pickOffset(length: number, offsetStep: number, randomInt: (n: nu
 
 const TAU = Math.PI * 2;
 
-/** Spiral arms turn this much per 16th step: 3π/16 per 8th, the old 2 rad/s look at 100 bpm. */
+/**
+ * Spiral arms turn this much per 16th step: 3π/16 per 8th, the old 2 rad/s look at 100 bpm. The
+ * Phantom's phase-3 arms turned at the same 2 rad/s and use it too.
+ */
 export const SPIRAL_STEP_ANGLE = (3 * Math.PI) / 32;
 
-/** The spiral's arm angle on `step` (radians in [0, 2π)), from its per-instance `phase`. */
-export function spiralAngle(step: number, phase: number): number {
-  return mod(phase + step * SPIRAL_STEP_ANGLE, TAU);
+/** The Sentinel's phase-3 arms (and inner square) per 16th step: its old 3 rad/s at 100 bpm (9 turns per 8 bars). */
+export const SENTINEL_SPIRAL_STEP_ANGLE = (9 * Math.PI) / 64;
+
+/**
+ * A spiral's arm angle on `step` (radians in [0, 2π)), from its `phase`, turning `stepAngle` per
+ * step. Locked to the grid: the same step always gives the same angle, whatever the frame rate.
+ * Fractional steps (the conductor's position between steps) turn smoothly, for drawing.
+ */
+export function spiralAngle(step: number, phase: number, stepAngle: number = SPIRAL_STEP_ANGLE): number {
+  return mod(phase + step * stepAngle, TAU);
 }
 
 /** The snake's weave, locked to the beat: one cycle per beat, shifted by `phase` (beats). In [-1, 1]. */

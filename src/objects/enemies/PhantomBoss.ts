@@ -5,6 +5,7 @@ import { rhythmHits } from "./registry";
 import { BossPhases, GridTimer } from "./bossPhases";
 import type { BulletConfig } from "../BulletPattern";
 import { phantomTeleportVolley, phantomVolley } from "./volleys";
+import { spiralAngle } from "./rhythm";
 import type { GameScene } from "../../scenes/GameScene";
 import { STEPS_PER_BEAT, TICKS_PER_STEP, type TickEvent } from "../../core/Conductor";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
@@ -37,7 +38,6 @@ export class PhantomBoss extends Enemy {
   private teleportToY = 0;
   private prevPositions: { x: number; y: number }[] = [];
   private trailTimer = 0;
-  private spiralAngle = 0;
   private readonly decoys = new Set<PhantomDecoy>();
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -116,10 +116,6 @@ export class PhantomBoss extends Enemy {
     // Charges in REAL time while the world is nearly frozen: it punishes camping in slow-mo.
     if (gameScene.timeScale < 0.15) {
       this.chargeCounter = Math.min(this.chargeCounter + delta, 1800);
-    }
-
-    if (this.phase >= 3) {
-      this.spiralAngle = (this.spiralAngle + delta * timeScale * 0.002) % (Math.PI * 2);
     }
 
     this.trailTimer -= delta * timeScale;
@@ -216,11 +212,12 @@ export class PhantomBoss extends Enemy {
     return !this.teleporting;
   }
 
-  protected getFirePattern(angleToPlayer: number): BulletConfig[] {
+  /** Phase 3's spiral arms advance per step (like the Spiral enemy), not per frame. */
+  protected getFirePattern(angleToPlayer: number, _gameScene: GameScene, at?: TickEvent): BulletConfig[] {
     const chargeBonus = Math.min(Math.floor(this.chargeCounter / 300), 6);
     this.chargeCounter = 0;
-
-    return phantomVolley(this.phase, angleToPlayer, chargeBonus, this.spiralAngle);
+    const step = at ? at.tick / TICKS_PER_STEP : 0;
+    return phantomVolley(this.phase, angleToPlayer, chargeBonus, spiralAngle(step, 0));
   }
 
   takeDamage(amount: number): boolean {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parsePattern } from "../../music/patterns";
 import {
   EnemyRhythm,
+  SENTINEL_SPIRAL_STEP_ANGLE,
   SPAWN_GRACE_STEPS,
   SPIRAL_STEP_ANGLE,
   densityDoublings,
@@ -60,6 +61,19 @@ describe("motion locked to the grid", () => {
       const a = spiralAngle(step, 5);
       expect(a >= 0 && a < Math.PI * 2).toBe(true);
     }
+  });
+
+  it("locks the bosses' phase-3 spirals to the step at their old turn rates", () => {
+    // Old: Sentinel 3 rad/s, Phantom 2 rad/s of game time; a step is 150 ms at 100 bpm.
+    expect(Math.abs(SENTINEL_SPIRAL_STEP_ANGLE / 0.15 - 3) / 3).toBeLessThan(0.02);
+    expect(Math.abs(SPIRAL_STEP_ANGLE / 0.15 - 2) / 2).toBeLessThan(0.02);
+    // Same step, same angle; one step later, one step angle further.
+    expect(spiralAngle(12, 0, SENTINEL_SPIRAL_STEP_ANGLE)).toBe(spiralAngle(12, 0, SENTINEL_SPIRAL_STEP_ANGLE));
+    expect(spiralAngle(7, 0, SENTINEL_SPIRAL_STEP_ANGLE) - spiralAngle(6, 0, SENTINEL_SPIRAL_STEP_ANGLE)).toBeCloseTo(SENTINEL_SPIRAL_STEP_ANGLE);
+    // Nine full turns per 8 bars (128 steps): the pattern realigns with the phrase.
+    expect(spiralAngle(128, 0, SENTINEL_SPIRAL_STEP_ANGLE)).toBeCloseTo(0);
+    // Fractional steps turn smoothly between grid angles (the inner square's drawing).
+    expect(spiralAngle(6.5, 0, SENTINEL_SPIRAL_STEP_ANGLE)).toBeCloseTo(6.5 * SENTINEL_SPIRAL_STEP_ANGLE);
   });
 
   it("weaves the snake once per beat and offers the swing as a pitch hint", () => {
