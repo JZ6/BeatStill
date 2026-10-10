@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phase 0 complete. Phase 1 (bug sweep) is next.
+- **Status:** Phases 0–1 complete. Phase 2 (clock + time dilation) in progress.
 
 ## 1. Vision
 
@@ -393,11 +393,30 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Follow-up: `npm audit` reports 4 high-severity issues in dev tooling (vite ≤6.4.2, postcss, nanoid, source-map-js); fix via `npm audit fix`
 
 ### Phase 1 — Bug sweep
-- [ ] Engine/scene bugs (§7): StartScene reset, GameScene field resets, ESC stacking, live-array iteration, pause freezing tweens/timers/physics, particle damping, FPS cap via `fps.limit`
-- [ ] Gameplay object bugs: asteroid split guard, bullet ricochet and `hit()` guard, wall ricochet direction / inside push-out, boss hit flash, % HP thresholds, circler jitter, snake shape
-- [ ] Progression: route Shop through Unlocks, add a save normaliser, fix `collector`, flush kills on visibility change, Fragile clamp, relic empty-choice guard, LevelRunner idempotence
-- [ ] Editor: deep copy, a structured-clone round-trip that preserves unknown fields, stable id, description, `innerHTML` → `textContent`, import validation
-- [ ] Level data fixes (L3, L14, L19, duplicate swarms, L27 description/circler; verify L8)
+- [x] Engine/scene bugs (§7): StartScene reset, GameScene field resets, ESC stacking, live-array iteration, pause freezing tweens/timers/physics, particle damping, FPS cap via `fps.limit`
+  - ENDLESS now passes `{ mode: "endless" }`.
+  - Auto-pause when the tab is hidden.
+  - Fire is suppressed until the mouse is released after resuming.
+  - Options are validated (`normalizeOptions`).
+- [x] Gameplay object bugs: asteroid split guard, bullet ricochet and `hit()` guard, wall ricochet direction / inside push-out, boss hit flash, % HP thresholds, circler jitter, snake shape
+  - `Wall.handleBullet` returns a `WallHitResult`.
+  - Enemies get a `canFire()` hook, so no volleys are lost.
+  - Decoys belong to an owner.
+  - Piercing bullets hit each enemy only once.
+- [x] Progression: route Shop through Unlocks, add a save normaliser, fix `collector`, flush kills on visibility change, Fragile clamp, relic empty-choice guard, LevelRunner idempotence
+  - New modules: `storage.ts` and `saveSchemas.ts`.
+  - `collector` now counts a new `totalPickups` field.
+  - Custom levels no longer mark campaign progress.
+  - Endless waves are capped at 150 enemies.
+- [x] Editor: deep copy, a structured-clone round-trip that preserves unknown fields, stable id, description, `innerHTML` → `textContent`, import validation
+  - Imports are checked by `LevelValidation.normalizeLevelDef`.
+  - Custom-level ids are never reused (new key `beatstill_custom_next_id`).
+  - Imported levels get a fresh id.
+- [x] Level data fixes:
+  - L8 was confirmed unwinnable; windows were cut into its bounce walls.
+  - Also fixed: L3, L10, L14, L17, L19, L21, L23, L25, L27, L28, L29, L30.
+  - A verification script checked all 30 levels with 0 failures.
+- [ ] Follow-up: the snake weave frequency (2.4 Hz, ±22 px) may feel too twitchy. It gets beat-locked in Phase 4.
 
 ### Phase 2 — Clock + time dilation
 - [ ] `Conductor` (pure core + audio-clock adapter), step/bar events, multi-step crossing
