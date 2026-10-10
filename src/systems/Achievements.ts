@@ -1,5 +1,5 @@
 import { isWeaponMastered, addShards } from "./Unlocks";
-import { allThemes } from "../sounds";
+import { ALL_PALETTES } from "../music/palettes";
 import { loadJSON, saveJSON } from "./storage";
 import { normalizeAchievementState, type AchievementState } from "./saveSchemas";
 
@@ -146,7 +146,7 @@ export const ALL_ACHIEVEMENTS: AchievementDef[] = [
     id: "virtuoso", name: "Virtuoso", icon: "♫♫",
     description: "Play with every music theme",
     category: "discovery", reward: 20,
-    check: () => state.themesUsed.length >= allThemes.length,
+    check: () => state.themesUsed.length >= ALL_PALETTES.length,
   },
 ];
 

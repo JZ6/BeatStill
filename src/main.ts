@@ -8,8 +8,12 @@ import { initCrashReporter } from "./systems/CrashReporter";
 import { options, registerGame, saveOptions } from "./systems/GameOptions";
 import { initDimensions, GAME_W, GAME_H } from "./systems/GameConfig";
 import { ALL_LEVELS, type LevelDef } from "./systems/Levels";
+import { getAudioEngine, type AudioEngineStats } from "./audio/AudioEngine";
+import type { MusicControl } from "./audio/MusicDriver";
 
 initDimensions(options.resolution);
+const engine = getAudioEngine();
+engine.setVolume(options.masterVolume / 100);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -42,9 +46,17 @@ const game = new Phaser.Game({
 registerGame(game);
 
 // Debug/test hook: used by scripts/smoke.mjs and for manual console inspection.
-(window as unknown as { __BEATSTILL__?: { game: Phaser.Game; levels: readonly LevelDef[] } }).__BEATSTILL__ = {
+interface DebugHook {
+  game: Phaser.Game;
+  levels: readonly LevelDef[];
+  audio: () => AudioEngineStats;
+  audioDrops: () => Record<string, number>;
+}
+(window as unknown as { __BEATSTILL__?: DebugHook }).__BEATSTILL__ = {
   game,
   levels: ALL_LEVELS,
+  audio: () => engine.stats(),
+  audioDrops: () => engine.dropBreakdown(),
 };
 
 const canvas = game.canvas;
@@ -57,11 +69,7 @@ slider.value = String(options.masterVolume);
 // Also fired programmatically by OptionsOverlay's volume slider.
 slider.addEventListener("input", () => {
   options.masterVolume = parseInt(slider.value);
-  const scene = game.scene.getScene("GameScene") as GameScene;
-  if (scene?.audioManager) {
-    scene.audioManager.setVolume(options.masterVolume / 100);
-  }
-  (game.scene.getScene("StartScene") as StartScene | null)?.applyMasterVolume();
+  engine.setVolume(options.masterVolume / 100);
 });
 // Persist once the drag ends rather than on every input tick.
 slider.addEventListener("change", () => saveOptions(options));
@@ -73,12 +81,13 @@ for (const evt of ["pointerdown", "pointerup", "pointermove", "click"] as const)
 
 const getGameScene = () => game.scene.getScene("GameScene") as GameScene ?? null;
 
+/** The music that is playing: the run's while GameScene is active, else the menu's (if any). */
+function getActiveMusic(): MusicControl | null {
+  if (game.scene.isActive("GameScene")) return getGameScene()?.music ?? null;
+  if (game.scene.isActive("StartScene")) return (game.scene.getScene("StartScene") as StartScene).menuMusic;
+  return null;
+}
+
 initCrashReporter(getGameScene);
 
-createDevPanel(
-  getGameScene,
-  () => {
-    const scene = game.scene.getScene("GameScene") as GameScene;
-    return scene?.audioManager ?? null;
-  },
-);
+createDevPanel(getGameScene, getActiveMusic);

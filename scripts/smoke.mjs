@@ -170,8 +170,8 @@ function readGameState(cdp) {
         clockPaused: !!s.time?.paused,
         tweensPaused: !!s.tweens?.paused,
         levelId: s.level ? s.level.levelDef.id : null,
-        audioStarted: !!s.audioStarted,
-        audioReady: !!s.audioManager?.isStarted,
+        audioStarted: !!window.__BEATSTILL__.audio().started,
+        audioReady: window.__BEATSTILL__.audio().contextState === "running",
         gameOver: !!s.gameOver,
       };
     })()`,

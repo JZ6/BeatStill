@@ -34,6 +34,8 @@ export interface EngineInstrument {
   readonly channel: Tone.Gain;
   /** Seconds a note keeps sounding after its release starts. */
   readonly releaseTail: number;
+  /** Notes that can sound at once (1 = a single monophonic voice). */
+  readonly polyphony: number;
   /** Schedules notes (Hz; empty for unpitched) at AudioContext time `time`; `now` is the current context time. */
   play(freqs: readonly number[], duration: number, time: number, velocity: number, now: number): PlayResult;
   releaseAll(time: number): void;
@@ -149,6 +151,7 @@ function attach(node: Voiced, spec: InstrumentSpec, channel: Tone.Gain): void {
 class PolyInstrument implements HeldInstrument {
   readonly channel = new Tone.Gain(1);
   readonly releaseTail: number;
+  readonly polyphony: number;
   private readonly ledger: VoiceLedger;
 
   constructor(
@@ -158,6 +161,7 @@ class PolyInstrument implements HeldInstrument {
   ) {
     this.releaseTail = releaseOf(spec);
     this.ledger = new VoiceLedger(capacity);
+    this.polyphony = this.ledger.capacity;
     attach(voices, spec, this.channel);
   }
 
@@ -195,6 +199,7 @@ class PolyInstrument implements HeldInstrument {
 class MonoInstrument implements EngineInstrument {
   readonly channel = new Tone.Gain(1);
   readonly releaseTail: number;
+  readonly polyphony = 1;
   private lastStart = -Infinity;
 
   constructor(
@@ -228,11 +233,13 @@ class MonoInstrument implements EngineInstrument {
 class PoolInstrument implements EngineInstrument {
   readonly channel = new Tone.Gain(1);
   readonly releaseTail: number;
+  readonly polyphony: number;
   private readonly slots: { voice: PoolVoice; lastStart: number; busyUntil: number }[];
 
   constructor(kind: "noise" | "pluck", spec: InstrumentSpec) {
     this.releaseTail = releaseOf(spec);
     const count = Math.max(1, Math.floor(spec.maxVoices));
+    this.polyphony = count;
     this.slots = [];
     for (let i = 0; i < count; i++) {
       const voice = makePoolVoice(kind, cloneOptions(spec.options));

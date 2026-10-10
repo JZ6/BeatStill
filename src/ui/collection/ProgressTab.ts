@@ -1,6 +1,7 @@
 import { options, saveOptions } from "../../systems/GameOptions";
 import { ALL_UNLOCKS, isUnlocked, requirementText, SHIP_COLORS } from "../../systems/Unlocks";
 import { ALL_ACHIEVEMENTS, isAchievementUnlocked, getAchievementState } from "../../systems/Achievements";
+import { ALL_PALETTES, DEFAULT_PALETTE_ID, getPalette } from "../../music/palettes";
 import { hexColor, renderUnlockItem } from "../CollectionOverlay";
 
 export function renderCustomize(container: HTMLDivElement, refresh: () => void) {
@@ -29,17 +30,18 @@ export function renderCustomize(container: HTMLDivElement, refresh: () => void) 
   themeLabel.textContent = "SOUND THEMES";
   container.appendChild(themeLabel);
 
-  renderUnlockItem(container, "Theremin", "♫", "Default theme", true,
-    options.themeId === "theremin", true, "#e8d5b0",
-    () => { options.themeId = "theremin"; saveOptions(options); refresh(); });
-
-  for (const unlock of ALL_UNLOCKS.filter((u) => u.category === "theme")) {
-    const unlocked = isUnlocked(unlock.id);
-    const themeKey = unlock.id.replace("theme_", "");
-    const equipped = unlocked && options.themeId === themeKey;
-    const desc = unlocked ? unlock.description : requirementText(unlock.requirement);
-    renderUnlockItem(container, unlock.name, unlock.icon, desc, unlocked, equipped, true, unlocked ? "#ffaa44" : "#333",
-      () => { options.themeId = themeKey; saveOptions(options); refresh(); });
+  // One entry per palette: the default is always available, the others unlock as "theme_<id>".
+  // A palette without an unlock entry isn't offered.
+  const playing = getPalette(options.themeId).id;
+  for (const palette of ALL_PALETTES) {
+    const isDefault = palette.id === DEFAULT_PALETTE_ID;
+    const unlock = ALL_UNLOCKS.find((u) => u.category === "theme" && u.id === `theme_${palette.id}`);
+    if (!isDefault && !unlock) continue;
+    const unlocked = isDefault || (!!unlock && isUnlocked(unlock.id));
+    const desc = isDefault ? "Default theme" : !unlock ? "" : unlocked ? unlock.description : requirementText(unlock.requirement);
+    const color = isDefault ? "#e8d5b0" : unlocked ? "#ffaa44" : "#333";
+    renderUnlockItem(container, palette.name, unlock?.icon ?? "♫", desc, unlocked, unlocked && playing === palette.id, true, color,
+      () => { options.themeId = palette.id; saveOptions(options); refresh(); });
   }
 
   // Stat unlocks

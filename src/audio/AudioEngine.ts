@@ -19,7 +19,7 @@ import { droneLevel, lowpassCutoff } from "../music/MusicDirector";
 import type { NoteRequest } from "../music/MusicDirector";
 import { createHeldInstrument, createInstrument } from "./Instruments";
 import type { EngineInstrument, HeldInstrument } from "./Instruments";
-import { midiToHz } from "./voiceMath";
+import { HitMerger, midiToHz } from "./voiceMath";
 
 export interface AudioEngineStats {
   started: boolean;
@@ -28,6 +28,8 @@ export interface AudioEngineStats {
   scheduled: number;
   /** Notes not played (voice caps, late starts, missing instruments, not started). */
   dropped: number;
+  /** Requested notes already triggered at the same moment (aggregated, not lost). */
+  merged: number;
   /** Unexpected exceptions while building or playing. */
   errors: number;
   palette: string | null;
@@ -43,6 +45,12 @@ const PAUSE_RAMP = 0.08;
 const VOLUME_RAMP = 0.05;
 /** Volume 0 ramps to this (inaudible) instead of -Infinity, which can't be ramped. */
 const MUTE_DB = -120;
+/**
+ * Requests for one role starting within this many seconds of each other merge into one trigger.
+ * The director merges within a frame; this catches the same 16th requested from different frames
+ * (their absolute times differ by audio-clock and frame jitter of a few ms).
+ */
+const MERGE_WINDOW = 0.012;
 const REVERB_RETURN = 0.7;
 const DELAY_RETURN = 0.6;
 /** A retired palette is disposed this long after its release starts (covers notes scheduled ahead). */
@@ -61,6 +69,7 @@ interface Graph {
 
 interface Voice {
   instrument: EngineInstrument;
+  merger: HitMerger;
   sends: Tone.Gain[];
   pitched: boolean;
   /** Played by pitched voices when a request has no notes. */
@@ -99,6 +108,8 @@ export class AudioEngine {
   private scheduled = 0;
   private dropped = 0;
   private errors = 0;
+  private merged = 0;
+  private readonly dropsByKind = new Map<string, number>();
   private readonly reported = new Set<string>();
 
   /** True once the graph is built and the AudioContext has been resumed. */
@@ -146,12 +157,22 @@ export class AudioEngine {
     }
     try {
       const now = this.now();
-      const time = now + (Number.isFinite(req.when) ? Math.max(0, req.when) : 0);
-      const midi = voice.pitched ? req.midi.filter((n) => Number.isFinite(n)) : [];
-      const freqs = voice.pitched ? (midi.length > 0 ? midi : [voice.fallbackMidi]).map(midiToHz) : [];
+      const wanted = now + (Number.isFinite(req.when) ? Math.max(0, req.when) : 0);
+      const midi = voice.pitched ? uniqueNotes(req.midi) : [];
+      const notes = voice.pitched && midi.length === 0 ? [voice.fallbackMidi] : midi;
+      // Requests drained in different frames for the same 16th become one trigger.
+      const claim = voice.merger.claim(wanted, notes, now);
+      if (claim.joined && voice.instrument.polyphony === 1) {
+        // A single voice can't add notes to a hit it is already playing.
+        this.merged += Math.max(1, notes.length);
+        return;
+      }
+      this.merged += claim.merged;
+      if (!claim.play) return;
       const duration = Number.isFinite(req.duration) && req.duration > 0 ? req.duration : 0.1;
       const velocity = Number.isFinite(req.velocity) ? clamp(req.velocity, 0, 1) : 0.5;
-      const result = voice.instrument.play(freqs, duration, time, velocity, now);
+      const time = Math.max(now, claim.time);
+      const result = voice.instrument.play(claim.notes.map(midiToHz), duration, time, velocity, now);
       this.scheduled += result.scheduled;
       if (result.dropped > 0) this.drop(`voices:${req.role}`, result.dropped);
     } catch (err) {
@@ -214,6 +235,7 @@ export class AudioEngine {
       scheduled: this.scheduled,
       dropped: this.dropped,
       errors: this.errors,
+      merged: this.merged,
       palette: this.palette?.id ?? null,
     };
   }
@@ -272,7 +294,7 @@ export class AudioEngine {
         const sends: Tone.Gain[] = [];
         if (spec.reverb && spec.reverb > 0) sends.push(this.send(instrument.channel, spec.reverb, g.reverb));
         if (spec.delay && spec.delay > 0) sends.push(this.send(instrument.channel, spec.delay, g.delay));
-        voices.set(role, { instrument, sends, pitched: isPitched(spec), fallbackMidi });
+        voices.set(role, { instrument, merger: new HitMerger(MERGE_WINDOW), sends, pitched: isPitched(spec), fallbackMidi });
       } catch (err) {
         this.fail(`build:${role}`, err);
       }
@@ -364,8 +386,14 @@ export class AudioEngine {
     return Tone.getContext().currentTime;
   }
 
+  /** Dropped notes per reason (e.g. "voices:pad"), for diagnostics. */
+  dropBreakdown(): Record<string, number> {
+    return Object.fromEntries(this.dropsByKind);
+  }
+
   private drop(kind: string, count: number): void {
     this.dropped += count;
+    this.dropsByKind.set(kind, (this.dropsByKind.get(kind) ?? 0) + count);
     this.reportOnce(`drop ${kind}`, `${count} note(s) dropped`);
   }
 

@@ -6,9 +6,8 @@ import type { Bullet } from "../objects/Bullet";
 import { Conductor, type TickEvent } from "../core/Conductor";
 import { createGameEvents, type GameEvents } from "../core/GameEvents";
 import { TimeDilation } from "../core/TimeDilation";
-import { AudioManager } from "../systems/AudioManager";
+import { getPalette } from "../music/palettes";
 import { ParticleSystem } from "../systems/Particles";
-import { theremin, allThemes, type SoundTheme } from "../sounds";
 import { defaultStats, type PlayerStats } from "../systems/Upgrades";
 import { options } from "../systems/GameOptions";
 import { TutorialManager, isTutorialDone } from "../systems/Tutorial";
@@ -25,6 +24,7 @@ import { MutatorSystem } from "../systems/WaveMutators";
 import { Backdrop } from "../game/Backdrop";
 import { GameOverFlow } from "../game/GameOverFlow";
 import { Hud } from "../game/Hud";
+import { MusicSystem } from "../game/MusicSystem";
 import { PickupSystem } from "../game/PickupSystem";
 import { RelicFlow } from "../game/RelicFlow";
 import { RunProgression } from "../game/RunProgression";
@@ -48,8 +48,8 @@ export class GameScene extends Phaser.Scene {
   dilation!: TimeDilation;
   /** Gameplay occurrences (shots, hits, kills, walls, bosses…) for audio and other listeners. Recreated each run. */
   gameEvents!: GameEvents;
-  audioManager!: AudioManager;
-  audioStarted = false;
+  /** GameEvents + conductor ticks → MusicDirector → AudioEngine. Recreated each run. */
+  music!: MusicSystem;
   particles!: ParticleSystem;
 
   playerBullets!: Phaser.GameObjects.Group;
@@ -109,7 +109,7 @@ export class GameScene extends Phaser.Scene {
     this.level = isLevel ? new LevelRunner(this, data!.levelDef!) : null;
 
     // Phaser reuses this instance on restart, so reset every per-run field; the modules
-    // below are recreated. audioManager/audioStarted intentionally persist across restarts.
+    // below are recreated. The audio engine is a module singleton that outlives scenes.
     this.score = 0;
     this.wave = 0;
     this.gameOver = false;
@@ -123,14 +123,16 @@ export class GameScene extends Phaser.Scene {
     this.tickDispatcher.clear();
     this.gameEvents = createGameEvents();
 
-    const selectedTheme = allThemes.find((t) => t.name.toLowerCase() === options.themeId) ?? theremin;
-    recordThemeUsed(selectedTheme.name.toLowerCase());
-    this.conductor = new Conductor({ bpm: selectedTheme.bpm });
+    const palette = getPalette(options.themeId);
+    recordThemeUsed(palette.id);
+    this.conductor = new Conductor({ bpm: palette.bpm });
     this.dilation = new TimeDilation();
     this.conductor.timeScale = this.dilation.scale;
 
     this.backdrop = new Backdrop(this);
     this.onTick((t) => this.backdrop.onTick(t));
+    // Before anything can emit (waves spawn at the end of create()).
+    this.music = new MusicSystem(this, palette);
 
     this.chain = new ChainSystem(this);
     this.chain.init();
@@ -159,13 +161,6 @@ export class GameScene extends Phaser.Scene {
     this.ship.hp = this.stats.maxHp;
     this.ship.maxHp = this.stats.maxHp;
 
-    if (!this.audioManager) {
-      this.audioManager = new AudioManager();
-    } else {
-      this.audioManager.loadTheme(selectedTheme);
-      this.audioManager.setVolume(options.masterVolume / 100);
-    }
-
     if (isMobile()) {
       this.touchControls?.destroy();
       this.touchControls = new TouchControls(this);
@@ -186,9 +181,9 @@ export class GameScene extends Phaser.Scene {
     this.gameOverFlow = new GameOverFlow(this);
 
     this.bindPauseControls();
-    this.bindAudioUnlock(selectedTheme);
 
     this.events.once("shutdown", () => {
+      this.music.destroy();
       this.tickDispatcher.clear();
       this.gameEvents.clear();
       this.toasts.clear();
@@ -219,6 +214,7 @@ export class GameScene extends Phaser.Scene {
     if (this.gameOver) {
       this.gameOverFlow.update(delta);
       this.particles.update(delta, 0.3);
+      this.music.updateGameOver(realDt);
       return;
     }
 
@@ -253,7 +249,8 @@ export class GameScene extends Phaser.Scene {
     this.chain.update(delta, ts);
     this.waves.update(delta, ts);
 
-    if (this.audioStarted) this.audioManager.updateTimeScale(ts);
+    // Last, so this frame's ticks and gameplay events are all in the director's queue.
+    this.music.update(ts);
 
     this.hud.update(rawDelta, this.stats.weaponId);
   }
@@ -302,6 +299,7 @@ export class GameScene extends Phaser.Scene {
       else world.resume();
     }
     this.syncConductor();
+    this.music.setFrozen(frozen);
     // Aim moved while frozen (e.g. to a menu button) must not register as spinning.
     if (!frozen) this.ship?.resetAimTracking();
   }
@@ -348,22 +346,5 @@ export class GameScene extends Phaser.Scene {
     };
     this.game.events.on(Phaser.Core.Events.HIDDEN, onHidden);
     this.events.once("shutdown", () => this.game.events.off(Phaser.Core.Events.HIDDEN, onHidden));
-  }
-
-  /** Browsers only allow audio after a user gesture: start it on the first press. */
-  private bindAudioUnlock(theme: SoundTheme) {
-    this.input.on("pointerdown", () => {
-      if (this.audioStarted) return;
-      this.audioStarted = true;
-      this.audioManager
-        .start()
-        .then(() => {
-          this.audioManager.loadTheme(theme);
-          this.audioManager.setVolume(options.masterVolume / 100);
-        })
-        .catch(() => {
-          this.audioStarted = false;
-        });
-    });
   }
 }

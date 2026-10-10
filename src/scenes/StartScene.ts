@@ -4,8 +4,9 @@ import { createOptionsOverlay } from "../ui/OptionsOverlay";
 import { createCollectionOverlay } from "../ui/CollectionOverlay";
 import { createHowToOverlay } from "../ui/HowToOverlay";
 import { createShopOverlay } from "../ui/ShopOverlay";
-import { AudioManager } from "../systems/AudioManager";
-import { theremin } from "../sounds";
+import { getAudioEngine } from "../audio/AudioEngine";
+import type { MusicControl } from "../audio/MusicDriver";
+import { getPalette } from "../music/palettes";
 import { options, saveOptions } from "../systems/GameOptions";
 import { ALL_WEAPONS } from "../systems/Weapons";
 
@@ -58,8 +59,8 @@ export class StartScene extends Phaser.Scene {
   private collectionOverlay: HTMLDivElement | null = null;
   private howToOverlay: HTMLDivElement | null = null;
   private shopOverlay: HTMLDivElement | null = null;
-  private audioManager: AudioManager | null = null;
-  private audioStarted = false;
+  /** The menu's own heartbeat-and-drone music (null until audio has been unlocked here). */
+  menuMusic: MusicControl | null = null;
 
   private bgGraphics!: Phaser.GameObjects.Graphics;
   private fxGraphics!: Phaser.GameObjects.Graphics;
@@ -178,7 +179,7 @@ export class StartScene extends Phaser.Scene {
 
     this.events.once("shutdown", () => {
       this.removeOverlays();
-      this.disposeAudio();
+      getAudioEngine().releaseAll();
     });
   }
 
@@ -194,7 +195,6 @@ export class StartScene extends Phaser.Scene {
     this.secondaryTexts = [];
 
     this.removeOverlays();
-    this.disposeAudio();
 
     this.titleBaseY = 0;
     this.titleDriftAngle = 0;
@@ -220,12 +220,6 @@ export class StartScene extends Phaser.Scene {
     this.howToOverlay = null;
     this.shopOverlay?.remove();
     this.shopOverlay = null;
-  }
-
-  private disposeAudio() {
-    this.audioManager?.dispose();
-    this.audioManager = null;
-    this.audioStarted = false;
   }
 
   private createMenuButtons() {
@@ -781,24 +775,15 @@ export class StartScene extends Phaser.Scene {
     return !!(this.optionsOverlay || this.collectionOverlay || this.howToOverlay || this.shopOverlay);
   }
 
+  /** Starts the shared audio engine with the selected palette (call from a user gesture). */
   private ensureAudio() {
-    if (this.audioStarted) return;
-    this.audioStarted = true;
-    const am = new AudioManager();
-    this.audioManager = am;
-    am.start().then(() => {
-      // Ignore a start() that resolves after this visit's manager was disposed/replaced.
-      if (this.audioManager !== am) return;
-      am.loadTheme(theremin);
-      this.applyMasterVolume();
-    }).catch(() => {
-      if (this.audioManager === am) this.audioStarted = false;
+    const engine = getAudioEngine();
+    engine.setPalette(getPalette(options.themeId));
+    engine.setVolume(options.masterVolume / 100);
+    if (engine.started) return;
+    engine.start().catch((err: unknown) => {
+      console.warn("[StartScene] audio did not start:", err instanceof Error ? err.message : err);
     });
-  }
-
-  /** Re-applies options.masterVolume to the menu music (called by the volume slider in main.ts). */
-  applyMasterVolume() {
-    this.audioManager?.setVolume((options.masterVolume / 100) * 0.5);
   }
 
   private startGame() {

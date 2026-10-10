@@ -1,4 +1,5 @@
 import type { GameScene } from "../scenes/GameScene";
+import { getAudioEngine } from "../audio/AudioEngine";
 
 interface CrashReport {
   timestamp: string;
@@ -19,8 +20,10 @@ let installed = false;
 
 function snapshotGameState(): Record<string, unknown> | null {
   if (!getScene) return null;
+  const audio = getAudioEngine().stats();
   const scene = getScene();
-  if (!scene) return { status: "no active scene" };
+  if (!scene) return { status: "no active scene", audio };
+  const director = scene.music?.director;
 
   const enemies = scene.enemies?.getChildren() ?? [];
   const playerBullets = scene.playerBullets?.getChildren() ?? [];
@@ -53,10 +56,11 @@ function snapshotGameState(): Record<string, unknown> | null {
           beat: Math.round(scene.conductor.beat * 1000) / 1000,
           bar: scene.conductor.bar,
           paused: scene.conductor.paused,
+          chord: director ? director.harmony.chordAtBar(scene.conductor.bar).symbol : null,
         }
       : null,
-    audioTheme: scene.audioManager?.currentTheme?.name ?? null,
-    audioStarted: scene.audioStarted,
+    palette: director?.palette.id ?? null,
+    audio,
     counts: {
       enemies: enemies.length,
       playerBullets: playerBullets.length,

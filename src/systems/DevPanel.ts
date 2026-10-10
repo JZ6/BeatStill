@@ -1,7 +1,10 @@
-import type { AudioManager } from "./AudioManager";
 import type { GameScene } from "../scenes/GameScene";
-import { allThemes } from "../sounds";
+import { getAudioEngine } from "../audio/AudioEngine";
+import type { MusicControl } from "../audio/MusicDriver";
+import { Harmony } from "../music/Harmony";
+import { ALL_PALETTES, ROLES, getPalette, isPitched, registerMidi, type Palette, type Role } from "../music/palettes";
 import { getCrashReports, getAllReportsText } from "./CrashReporter";
+import { options } from "./GameOptions";
 import { ALL_WEAPONS } from "./Weapons";
 
 function makeTab(label: string): { tab: HTMLButtonElement; content: HTMLDivElement } {
@@ -16,7 +19,6 @@ function makeTab(label: string): { tab: HTMLButtonElement; content: HTMLDivEleme
 
 function buildGameTab(
   getScene: () => GameScene | null,
-  getAudioManager: () => AudioManager | null,
 ): { tab: HTMLButtonElement; content: HTMLDivElement; refresh: () => void } {
   const { tab, content: gc } = makeTab("Game");
   gc.style.flexDirection = "column";
@@ -161,84 +163,97 @@ function buildGameTab(
   return { tab, content: gc, refresh };
 }
 
+/** A chord tone in the middle of the role's register (current bar if music is playing), or [] if unpitched. */
+function sampleNotes(palette: Palette, role: Role, music: MusicControl | null): number[] {
+  const spec = palette.instruments[role];
+  if (!spec || !isPitched(spec)) return [];
+  const [lo, hi] = registerMidi(spec) ?? [60, 84];
+  const harmony =
+    music?.director.palette.id === palette.id
+      ? music.director.harmony
+      : new Harmony({ key: palette.key, mode: palette.mode, progression: palette.progression });
+  const tones = harmony.chordTones(music?.conductor.bar ?? 0, lo, hi);
+  return [tones[Math.floor(tones.length / 2)] ?? Math.round((lo + hi) / 2)];
+}
+
 function buildAudioTab(
-  getAudioManager: () => AudioManager | null,
+  getMusic: () => MusicControl | null,
 ): { tab: HTMLButtonElement; content: HTMLDivElement; syncState: () => void } {
   const { tab, content: ac } = makeTab("Audio");
   ac.style.flexDirection = "column";
   ac.style.gap = "10px";
+  const engine = getAudioEngine();
+  const currentPalette = (): Palette => engine.palette ?? getPalette(options.themeId);
 
-  const themeLabel = document.createElement("div");
-  themeLabel.className = "dp-label";
-  themeLabel.textContent = "SOUND THEME";
-  ac.appendChild(themeLabel);
+  const paletteLabel = document.createElement("div");
+  paletteLabel.className = "dp-label";
+  paletteLabel.textContent = "PALETTE (this session only)";
+  ac.appendChild(paletteLabel);
 
-  const themeRow = document.createElement("div");
-  themeRow.className = "dp-ctrl-row";
-  const themeButtons: HTMLButtonElement[] = [];
-
-  for (const theme of allThemes) {
+  const paletteRow = document.createElement("div");
+  paletteRow.className = "dp-ctrl-row";
+  const paletteButtons: HTMLButtonElement[] = [];
+  for (const palette of ALL_PALETTES) {
     const btn = document.createElement("button");
     btn.className = "dp-game-btn";
-    btn.textContent = theme.name;
-    btn.addEventListener("click", async (e) => {
+    btn.textContent = `${palette.name} ${palette.bpm}`;
+    btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const am = getAudioManager();
-      if (!am) return;
-      await am.start();
-      am.loadTheme(theme);
-      themeButtons.forEach((b) => (b.style.borderColor = "#444"));
-      btn.style.borderColor = "#ffaa44";
+      // Engine, director and conductor tempo together; without music only the engine's instruments.
+      const music = getMusic();
+      if (music) music.setPalette(palette);
+      else engine.setPalette(palette);
+      syncState();
     });
-    themeButtons.push(btn);
-    themeRow.appendChild(btn);
+    paletteButtons.push(btn);
+    paletteRow.appendChild(btn);
   }
-  themeButtons[0].style.borderColor = "#ffaa44";
-  ac.appendChild(themeRow);
+  ac.appendChild(paletteRow);
 
-  const previewLabel = document.createElement("div");
-  previewLabel.className = "dp-label";
-  previewLabel.textContent = "GAME SOUNDS";
-  ac.appendChild(previewLabel);
+  const roleLabel = document.createElement("div");
+  roleLabel.className = "dp-label";
+  roleLabel.textContent = "ROLES (sample note)";
+  ac.appendChild(roleLabel);
 
-  const soundRow = document.createElement("div");
-  soundRow.className = "dp-ctrl-row";
-  soundRow.style.flexWrap = "wrap";
-
-  const gameSounds: { label: string; fn: (am: AudioManager) => void }[] = [
-    { label: "Enemy Hit", fn: (am) => am.onEnemyHit() },
-    { label: "Enemy Kill", fn: (am) => am.onEnemyKill() },
-    { label: "Chain Kill", fn: (am) => am.onChainKill(3, 2) },
-    { label: "Asteroid", fn: (am) => am.onAsteroidBreak() },
-    { label: "Bullet Clash", fn: (am) => am.onBulletClash() },
-    { label: "Player Hit", fn: (am) => am.onPlayerHit() },
-    { label: "Player Death", fn: (am) => am.onPlayerDeath() },
-  ];
-
-  for (const sound of gameSounds) {
+  const roleRow = document.createElement("div");
+  roleRow.className = "dp-ctrl-row";
+  roleRow.style.flexWrap = "wrap";
+  for (const role of ROLES) {
     const btn = document.createElement("button");
     btn.className = "dp-game-btn";
-    btn.textContent = sound.label;
-    btn.addEventListener("click", async (e) => {
+    btn.textContent = role;
+    btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const am = getAudioManager();
-      if (!am) return;
-      await am.start();
-      sound.fn(am);
+      // The click is a user gesture, so it may start audio too.
+      engine.setPalette(currentPalette());
+      engine
+        .start()
+        .then(() => {
+          const midi = sampleNotes(currentPalette(), role, getMusic());
+          engine.play({ role, midi, when: 0.03, duration: role === "drone" ? 1.5 : 0.5, velocity: 0.7 });
+          syncState();
+        })
+        .catch((err: unknown) => console.warn("[DevPanel] audio did not start:", err));
     });
-    soundRow.appendChild(btn);
+    roleRow.appendChild(btn);
   }
-  ac.appendChild(soundRow);
+  ac.appendChild(roleRow);
+
+  const statsLabel = document.createElement("div");
+  statsLabel.className = "dp-ctrl-label";
+  statsLabel.style.whiteSpace = "pre";
+  ac.appendChild(statsLabel);
 
   function syncState() {
-    const am = getAudioManager();
-    if (!am || !am.isStarted) return;
-    const currentName = am.currentTheme?.name;
-    if (currentName) {
-      themeButtons.forEach((b, i) => {
-        b.style.borderColor = allThemes[i].name === currentName ? "#ffaa44" : "#444";
-      });
-    }
+    const st = engine.stats();
+    const active = st.palette ?? currentPalette().id;
+    paletteButtons.forEach((b, i) => (b.style.borderColor = ALL_PALETTES[i].id === active ? "#ffaa44" : "#444"));
+    const music = getMusic();
+    const tempo = music ? `${music.conductor.bpm} BPM, chord ${music.director.harmony.chordAtBar(music.conductor.bar).symbol}` : "no music";
+    statsLabel.textContent =
+      `Engine: ${st.started ? "started" : "not started"} · context ${st.contextState} · palette ${st.palette ?? "-"}\n` +
+      `Notes: ${st.scheduled} scheduled · ${st.dropped} dropped · ${st.errors} errors\n` +
+      `Music: ${tempo}`;
   }
 
   return { tab, content: ac, syncState };
@@ -314,7 +329,7 @@ let devPanelCreated = false;
 
 export function createDevPanel(
   getScene: () => GameScene | null,
-  getAudioManager: () => AudioManager | null,
+  getMusic: () => MusicControl | null,
 ) {
   // Double-init would add a second panel and a second global keydown toggle.
   if (devPanelCreated || document.getElementById("dev-panel")) return;
@@ -337,8 +352,8 @@ export function createDevPanel(
   const tabContainer = document.createElement("div");
   panel.appendChild(tabContainer);
 
-  const gameTab = buildGameTab(getScene, getAudioManager);
-  const audioTab = buildAudioTab(getAudioManager);
+  const gameTab = buildGameTab(getScene);
+  const audioTab = buildAudioTab(getMusic);
   const tabs = [
     gameTab,
     audioTab,
@@ -364,12 +379,15 @@ export function createDevPanel(
 
   // Live refresh only runs while the panel is visible.
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
+  const refresh = () => {
+    gameTab.refresh();
+    if (audioTab.tab.classList.contains("dp-tab-active")) audioTab.syncState();
+  };
   const setOpen = (open: boolean) => {
     panel.style.display = open ? "flex" : "none";
     if (open) {
-      gameTab.refresh();
-      if (refreshTimer === null) refreshTimer = setInterval(gameTab.refresh, 500);
-      if (audioTab.tab.classList.contains("dp-tab-active")) audioTab.syncState();
+      refresh();
+      if (refreshTimer === null) refreshTimer = setInterval(refresh, 500);
     } else if (refreshTimer !== null) {
       clearInterval(refreshTimer);
       refreshTimer = null;

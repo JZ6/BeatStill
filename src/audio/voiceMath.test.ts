@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_START_GAP, VoiceLedger, midiToHz, monotonicStart, pickSlot } from "./voiceMath";
+import { HitMerger, MIN_START_GAP, VoiceLedger, midiToHz, monotonicStart, pickSlot } from "./voiceMath";
 
 describe("monotonicStart", () => {
   it("keeps a start that is already later than the last one", () => {
@@ -94,6 +94,32 @@ describe("pickSlot", () => {
     ];
     expect(pickSlot(slots, 1, new Set([0]))).toBe(1);
     expect(pickSlot(slots, 1, new Set([0, 1]))).toBe(-1);
+  });
+});
+
+describe("HitMerger", () => {
+  it("merges a request onto an earlier hit at the same moment", () => {
+    const m = new HitMerger(0.012);
+    expect(m.claim(1, [60, 64], 0.9)).toEqual({ play: true, time: 1, notes: [60, 64], merged: 0, joined: false });
+    // Same tick from a later frame, a few ms off: joins the first hit's time, only the new note plays.
+    expect(m.claim(1.006, [64, 67], 0.92)).toEqual({ play: true, time: 1, notes: [67], merged: 1, joined: true });
+    expect(m.claim(0.995, [60, 67], 0.93)).toEqual({ play: false, time: 1, notes: [], merged: 2, joined: true });
+  });
+
+  it("merges unpitched hits", () => {
+    const m = new HitMerger(0.012);
+    expect(m.claim(2, [], 1.9).play).toBe(true);
+    expect(m.claim(2.01, [], 1.95)).toEqual({ play: false, time: 2, notes: [], merged: 1, joined: true });
+  });
+
+  it("keeps hits further apart than the window separate, and forgets old ones", () => {
+    const m = new HitMerger(0.012);
+    m.claim(1, [60], 0.9);
+    expect(m.claim(1.02, [60], 0.95)).toEqual({ play: true, time: 1.02, notes: [60], merged: 0, joined: false });
+    // Once `now` passes a hit (beyond the window) it can't match anything.
+    expect(m.claim(1.5, [60], 1.4).play).toBe(true);
+    m.clear();
+    expect(m.claim(1.5, [60], 1.4).merged).toBe(0);
   });
 });
 

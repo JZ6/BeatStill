@@ -94,6 +94,50 @@ export function pickSlot(slots: readonly SlotState[], time: number, exclude: Rea
   return free >= 0 ? free : oldest;
 }
 
+export interface Claim {
+  /** False when every note is already triggered at that moment (nothing to play). */
+  play: boolean;
+  /** Start time: an existing hit's time if the request merged into it. */
+  time: number;
+  /** Notes not yet triggered at that moment (empty for unpitched hits). */
+  notes: number[];
+  /** Requested notes (or 1 unpitched hit) that were already triggered there. */
+  merged: number;
+  /** True when the request landed on an existing hit. */
+  joined: boolean;
+}
+
+/**
+ * Remembers one role's recent hits so requests that land on the same moment (within `window`
+ * seconds) become a single trigger, even when they arrive in different frames: duplicate notes
+ * are skipped and new ones join the earlier hit's start time.
+ */
+export class HitMerger {
+  private hits: { time: number; notes: number[] }[] = [];
+
+  constructor(readonly window: number) {}
+
+  /** `notes` empty = an unpitched hit. `now` is the current context time (requests are never earlier). */
+  claim(time: number, notes: readonly number[], now: number): Claim {
+    if (this.hits.some((h) => h.time < now - this.window)) {
+      this.hits = this.hits.filter((h) => h.time >= now - this.window);
+    }
+    const hit = this.hits.find((h) => Math.abs(h.time - time) <= this.window);
+    if (!hit) {
+      this.hits.push({ time, notes: [...notes] });
+      return { play: true, time, notes: [...notes], merged: 0, joined: false };
+    }
+    if (notes.length === 0) return { play: false, time: hit.time, notes: [], merged: 1, joined: true };
+    const fresh = notes.filter((n) => !hit.notes.includes(n));
+    hit.notes.push(...fresh);
+    return { play: fresh.length > 0, time: hit.time, notes: fresh, merged: notes.length - fresh.length, joined: true };
+  }
+
+  clear(): void {
+    this.hits = [];
+  }
+}
+
 /** Frequency in Hz of a MIDI note (A4 = 69 = 440 Hz). */
 export function midiToHz(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
