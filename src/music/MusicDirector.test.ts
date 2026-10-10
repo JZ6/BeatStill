@@ -11,10 +11,11 @@ import {
   heartbeatLubTicks,
   isHeartbeatTick,
   lowpassCutoff,
+  pingPong,
   roleForEnemy,
 } from "./MusicDirector";
 import type { DirectorClock, NoteRequest } from "./MusicDirector";
-import { ALL_PALETTES, getPalette, isPitched } from "./palettes";
+import { ALL_PALETTES, getPalette, isPitched, registerMidi } from "./palettes";
 import type { InstrumentSpec, Palette, Role } from "./palettes";
 import { pitchClass } from "./theory";
 
@@ -132,6 +133,14 @@ describe("pure helpers", () => {
     expect(roleForEnemy("mystery")).toBe("perc");
   });
 
+  it("pingPong bounces an index between the ends", () => {
+    expect(Array.from({ length: 9 }, (_, i) => pingPong(i, 4))).toEqual([0, 1, 2, 3, 2, 1, 0, 1, 2]);
+    expect(pingPong(-1, 4)).toBe(1);
+    expect(pingPong(5, 1)).toBe(0);
+    expect(pingPong(5, 0)).toBe(0);
+    expect(pingPong(Number.NaN, 4)).toBe(0);
+  });
+
   it("accepts a real Conductor as its clock", () => {
     const conductor = new Conductor({ bpm: 100 });
     const d = new MusicDirector(getPalette("theremin"), conductor);
@@ -180,6 +189,27 @@ describe("timing", () => {
     lead.slice(1).forEach((r, i) => expect(r.midi[0]).toBeLessThan(lead[i].midi[0]));
   });
 
+  it("plays a volley fired on a step at latency − lateBy, never re-quantized", () => {
+    const { d } = setup(getPalette("synth"), 13.5); // 120 bpm, between steps 12 and 18
+    d.handleEvent("enemyFired", { ...fired("tank"), tick: 12, lateBy: 0.02 });
+    const [timed] = d.drain();
+    expect(timed.role).toBe("bass");
+    expect(timed.when).toBeCloseTo(0.03, 9);
+    d.handleEvent("enemyFired", fired("tank")); // no timing: snaps to the next 16th
+    expect(d.drain()[0].when).toBeCloseTo(0.05 + 4.5 / 48, 6);
+    d.handleEvent("enemyFired", { ...fired("tank"), tick: 12, lateBy: 0.09 });
+    expect(d.drain()[0].when).toBe(0);
+  });
+
+  it("pitches a timed volley with the chord of its own tick", () => {
+    const { d } = setup(getPalette("theremin"), TPB + 3);
+    d.handleEvent("enemyFired", { ...fired("tank"), tick: TPB - 6, lateBy: 0.06 });
+    d.handleEvent("enemyFired", { ...fired("tank"), tick: TPB, lateBy: 0.01 });
+    const [late, onBar] = d.drain();
+    expect(pitchClass(late.midi[0])).toBe(4); // E: bar 0 = i
+    expect(pitchClass(onBar.midi[0])).toBe(0); // C: bar 1 = VI
+  });
+
   it("schedules tick sounds at latency − lateBy, never in the past", () => {
     const { d } = setup();
     d.onTick(tickEvent(0, 0.02));
@@ -212,6 +242,18 @@ describe("aggregation", () => {
     expect(reqs).toHaveLength(1);
     expect(reqs[0]).toMatchObject({ role: "hat", midi: [] });
     expect(reqs[0].velocity).toBeCloseTo(Math.min(1, single.velocity + 0.12 * Math.log2(40)));
+  });
+
+  it("merges a crowd of drones firing on one step into one pad chord", () => {
+    const { d } = setup(getPalette("piano"), 50);
+    d.handleEvent("enemyFired", { ...fired("basic"), tick: 48, lateBy: 0.012 });
+    const [single] = d.drain();
+    for (let i = 0; i < 12; i++) d.handleEvent("enemyFired", { ...fired("basic"), tick: 48, lateBy: 0.012 });
+    const reqs = d.drain();
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0].midi).toEqual(single.midi);
+    expect(reqs[0].midi).toHaveLength(3);
+    expect(reqs[0].velocity).toBeGreaterThan(single.velocity);
   });
 
   it("gives a crowd of spirals one shared arp note", () => {
@@ -261,13 +303,16 @@ describe("aggregation", () => {
   });
 });
 
-/** Every non-exempt event, with a spread of payloads. */
-function fireEverything(d: MusicDirector): void {
+/** Every non-exempt event, with a spread of payloads. Timed volleys use `tick` (in the clock's bar). */
+function fireEverything(d: MusicDirector, tick = 0): void {
   d.handleEvent("playerFired", shot(1));
   d.handleEvent("playerFired", shot(5, "shotgun"));
   for (const t of ENEMY_TYPES) {
     d.handleEvent("enemyFired", fired(t));
     d.handleEvent("enemyFired", fired(t, true));
+    for (const [index, pitchHint] of [[0, 0], [3, 0.7], [11, 1]]) {
+      d.handleEvent("enemyFired", { ...fired(t), tick, lateBy: 0.01, index, pitchHint });
+    }
     d.handleEvent("enemyHit", { enemyType: t, x: 0, y: 0, damage: 1, hpLeft: 1, maxHp: 3 });
     for (let tier = 0; tier <= 5; tier++) d.handleEvent("enemyKilled", killed(t, tier));
   }
@@ -300,7 +345,7 @@ describe("harmony", () => {
             d.handleEvent("playerFired", shot(5, "shotgun"));
             for (const n of d.drain()[0].midi) expect(chord.pcs, `${palette.id} bar ${bar} strong lead ${n}`).toContain(pitchClass(n));
           }
-          fireEverything(d);
+          fireEverything(d, bar * TPB + offset);
           const safe = new Set(d.harmony.safeScaleTones(bar, 0, 127));
           const reqs = d.drain();
           expect(reqs.length).toBeGreaterThan(20);
@@ -344,6 +389,44 @@ describe("harmony", () => {
     [1, 2].forEach((k) => fire(k, 1)); // E4, G4
     expect(fire(3, 3)).toEqual([67, 71]); // B4 + G4
     expect(fire(4, 5)).toEqual([67, 71, 76]); // E5 + B4 + G4
+  });
+
+  it("walks each spiral's arp up and down the chord tones by its volley index", () => {
+    const palette = variant("bell", { progression: "i" });
+    const { d } = setup(palette, 3);
+    const [lo, hi] = registerMidi(palette.instruments.arp)!;
+    const tones = d.harmony.chordTones(0, lo, hi);
+    expect(tones.length).toBeGreaterThan(3);
+    const notes: number[] = [];
+    for (let index = 0; index <= 2 * (tones.length - 1); index++) {
+      d.handleEvent("enemyFired", { ...fired("spiral"), tick: 0, lateBy: 0, index });
+      notes.push(d.drain()[0].midi[0]);
+    }
+    expect(notes).toEqual([...tones, ...tones.slice(0, -1).reverse()]);
+    // Two spirals on one step at different points of their walk: one request, both notes.
+    d.handleEvent("enemyFired", { ...fired("spiral"), tick: 6, lateBy: 0, index: 0 });
+    d.handleEvent("enemyFired", { ...fired("spiral"), tick: 6, lateBy: 0, index: 2 });
+    const reqs = d.drain();
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0].midi).toEqual([tones[0], tones[2]]);
+  });
+
+  it("maps a snake's pitchHint onto the melody's chord tones", () => {
+    const palette = variant("theremin", { progression: "i" });
+    const { d } = setup(palette, 3);
+    const [lo, hi] = registerMidi(palette.instruments.melody)!;
+    const tones = d.harmony.chordTones(0, lo, hi);
+    const note = (pitchHint: number) => {
+      d.handleEvent("enemyFired", { ...fired("snake"), tick: 0, lateBy: 0, pitchHint });
+      return d.drain()[0].midi[0];
+    };
+    expect(note(0)).toBe(tones[0]);
+    expect(note(1)).toBe(tones[tones.length - 1]);
+    expect(note(0.5)).toBe(tones[Math.round(0.5 * (tones.length - 1))]);
+    expect(note(-2)).toBe(tones[0]);
+    expect(note(9)).toBe(tones[tones.length - 1]);
+    const rising = [0.1, 0.3, 0.5, 0.7, 0.9].map(note);
+    rising.slice(1).forEach((n, i) => expect(n).toBeGreaterThan(rising[i]));
   });
 
   it("ascends through chord tones across consecutive pickups", () => {
@@ -413,6 +496,20 @@ describe("harmony", () => {
     expect(boss.when).toBeCloseTo(0.04);
     expect(boss.midi.map(pitchClass)).toEqual([8, 3, 8]); // Ab: root, fifth, octave (bar 1 = VI)
     expect(byRole(reqs, "kick")).toHaveLength(1);
+  });
+
+  it("bossPhaseChanged that carries its bar-line tick plays at once on that downbeat", () => {
+    const { d } = setup(getPalette("synth"), TPB + 2);
+    d.handleEvent("bossPhaseChanged", { bossType: "sentinel", phase: 3, tick: TPB, lateBy: 0.01 });
+    const reqs = d.drain();
+    const boss = byRole(reqs, "boss")[0];
+    expect(boss.when).toBeCloseTo(0.04);
+    expect(boss.midi.map(pitchClass)).toEqual([8, 3, 8]); // bar 1 = VI, not the next bar's chord
+    expect(byRole(reqs, "stab")).toHaveLength(1);
+    for (let tick = TPB + 3; tick <= 2 * TPB; tick++) {
+      d.onTick(tickEvent(tick));
+      expect(byRole(d.drain(), "boss")).toEqual([]);
+    }
   });
 });
 

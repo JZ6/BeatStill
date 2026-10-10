@@ -47,7 +47,8 @@ export interface GameEventMap {
   playerDied: { x: number; y: number };
   pickupCollected: { x: number; y: number; upgradeId: string; isWeapon: boolean };
   bossWarning: { bossType: EnemyType };
-  bossPhaseChanged: { bossType: EnemyType; phase: number };
+  /** Sent when the phase actually changes; bosses switch on a bar line and send that tick and its lateBy. */
+  bossPhaseChanged: { bossType: EnemyType; phase: number; tick?: number; lateBy?: number };
   bossDefeated: { bossType: EnemyType; x: number; y: number };
   waveStarted: { wave: number; mode: "endless" | "level" };
   levelCompleted: { levelId: number };

@@ -6,7 +6,10 @@
  *
  * Timing
  * - Tick-driven sounds (heartbeat, bar-line stingers, warning pulses): when = max(0, latency − lateBy).
- * - Event sounds snap to the next 16th if it is at most `maxQuantizeWait` real seconds away;
+ * - Events that happened on a conductor tick carry its `tick` and `lateBy` (enemy volleys fire on
+ *   16th steps, boss phases change on bar lines): they play at exactly that moment,
+ *   when = max(0, latency − lateBy), with that tick's chord, and are never re-quantized.
+ * - Other event sounds snap to the next 16th if it is at most `maxQuantizeWait` real seconds away;
  *   otherwise (deep slow-mo) they play at once (when = latency). playerDied never waits.
  * - Durations are in beats: seconds = beats·60/bpm / max(timeScale, 0.35), so slow-mo stretches a
  *   note at most ≈2.9×. Event figures (arpeggios, runs) space notes by that same bounded 16th:
@@ -121,6 +124,14 @@ export function isHeartbeatTick(t: TickEvent, beatsPerBar = 4): boolean {
 /** Lowest MIDI note with pitch class `pc` at or above `from`. */
 function atOrAbove(pc: number, from: number): number {
   return from + mod(pc - pitchClass(from), 12);
+}
+
+/** Index → position bouncing between 0 and length − 1: 0 1 2 3 2 1 0 1 … */
+export function pingPong(index: number, length: number): number {
+  if (!(length > 1) || !Number.isFinite(index)) return 0;
+  const period = 2 * (length - 1);
+  const i = mod(Math.floor(index), period);
+  return i < length ? i : period - i;
 }
 
 interface Slot {
@@ -318,6 +329,24 @@ export class MusicDirector {
     const bar = this.currentBar();
     const beat = Number.isFinite(this.clock.beatInBar) ? clamp(this.clock.beatInBar, 0, this.beatsPerBar) : 0;
     return { when: this.latency, tick: bar * this.ticksPerBar + Math.floor(beat * TICKS_PER_BEAT), bar, strong: false };
+  }
+
+  /**
+   * The slot of an event that happened on a conductor tick `lateBy` real seconds ago: exactly then
+   * (when = max(0, latency − lateBy)), never re-quantized. Null if the event carries no lateBy.
+   * Without a tick, the last emitted tick stands in for the chord lookup.
+   */
+  private tickSlot(timing: { tick?: number; lateBy?: number }): Slot | null {
+    const { lateBy, tick } = timing;
+    if (lateBy === undefined || !Number.isFinite(lateBy)) return null;
+    const raw = tick !== undefined && Number.isFinite(tick) ? tick : this.clock.currentTick;
+    const at = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
+    return {
+      when: Math.max(0, this.latency - Math.max(0, lateBy)),
+      tick: at,
+      bar: Math.floor(at / this.ticksPerBar),
+      strong: at % TICKS_PER_BEAT === 0,
+    };
   }
 
   private schedule(tick: number, run: (slot: Slot) => void): void {
@@ -566,13 +595,17 @@ export class MusicDirector {
         }
       },
       bossPhaseChanged: (p) => {
-        this.schedule(this.clock.nextMultiple(this.ticksPerBar), (slot) => {
+        const stinger = (slot: Slot) => {
           const [root, , fifth, octave] = this.stack(slot.bar, "boss", 4);
           this.push("kick", [this.rootIn(slot.bar, "kick")], slot.when, 0.5, 0.8);
           this.push("boss", [root, fifth, octave], slot.when, 1, 0.75);
           this.push("metal", [this.highTone(slot.bar, "metal", 0)], slot.when, 1, 0.6);
           if (p.phase >= 2) this.push("stab", this.stack(slot.bar, "stab", 3, 0.25), slot.when, 0.5, 0.6);
-        });
+        };
+        // A phase that changed on a bar line (carrying its tick) is already on the downbeat.
+        const slot = this.tickSlot(p);
+        if (slot) stinger(slot);
+        else this.schedule(this.clock.nextMultiple(this.ticksPerBar), stinger);
       },
       bossDefeated: () => {
         const slot = this.eventSlot();
@@ -613,11 +646,25 @@ export class MusicDirector {
     this.push("lead", [main, ...below], slot.when, art.beats, art.velocity);
   }
 
+  /**
+   * The enemy's instrument plays its volley. Volleys fired on a step (with lateBy) sound at that
+   * step's exact time; a crowd on one step merges into one request. The arp walks chord tones up
+   * and down by the shooter's volley index; the melody takes the chord tone at pitchHint (0 = low,
+   * 1 = high) of its register.
+   */
   private enemyFired(p: GameEventMap["enemyFired"]): void {
     const role = roleForEnemy(p.enemyType);
-    const slot = this.eventSlot();
+    const slot = this.tickSlot(p) ?? this.eventSlot();
     const bar = slot.bar;
     const v = 0.4 + (p.elite ? 0.1 : 0);
+    if (role === "arp" && p.index !== undefined && Number.isFinite(p.index)) {
+      const t = this.tones(bar, role);
+      return this.push(role, [t[pingPong(p.index, t.length)]], slot.when, 0.25, v);
+    }
+    if (role === "melody" && p.pitchHint !== undefined && Number.isFinite(p.pitchHint)) {
+      const t = this.tones(bar, role);
+      return this.push(role, [t[Math.round(clamp(p.pitchHint, 0, 1) * (t.length - 1))]], slot.when, 0.5, v);
+    }
     switch (role) {
       case "bass":
         return this.push(role, [this.rootIn(bar, role)], slot.when, 0.5, v + 0.1);
