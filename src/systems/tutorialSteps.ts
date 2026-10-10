@@ -26,6 +26,8 @@ export interface TutorialStep {
   goal: TutorialGoal;
   /** Enemies the step brings in on the next bar line (and again if they're all gone with the goal unmet). */
   spawn?: readonly EnemyType[];
+  /** Overrides the spawned enemies' hp (e.g. 1, so a chain needs one shot per enemy). */
+  spawnHp?: number;
 }
 
 /** Everything the goals read, accumulated since the step was entered. */
@@ -100,6 +102,8 @@ export function buildTutorialSteps(mobile: boolean, moveDistance = 100): Tutoria
       hint: "chained kills stack into harmony",
       goal: { kind: "chain", count: 2 },
       spawn: ["basic", "basic", "basic"],
+      // One shot each, so two kills fit in the chain window.
+      spawnHp: 1,
     },
   ];
 }

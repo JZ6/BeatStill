@@ -41,6 +41,7 @@ describe("buildTutorialSteps", () => {
     expect(step("instruments").goal).toEqual({ kind: "kill", types: ["tank", "sniper"] });
     expect(step("chain").goal).toEqual({ kind: "chain", count: 2 });
     expect(step("chain").spawn?.length).toBeGreaterThanOrEqual(2);
+    expect(step("chain").spawnHp).toBe(1);
   });
 
   it("scales the move distance", () => {

@@ -277,6 +277,10 @@ export class TutorialManager {
     types.forEach((type, i) => {
       const x = GAME_W / 2 + (i - (types.length - 1) / 2) * spacing;
       const enemy = createEnemy(s, x, y, type);
+      if (step?.spawnHp !== undefined) {
+        enemy.hp = step.spawnHp;
+        enemy.maxHp = step.spawnHp;
+      }
       s.enemies.add(enemy);
       s.particles.burst(x, y, enemy.def.color, 12, 60, 2);
       const label = s.add
