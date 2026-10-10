@@ -21,7 +21,9 @@
 // ratio.
 // No extra dependencies: uses Node's built-in WebSocket.
 //
-// Env overrides: CHROME_PATH, SMOKE_PREVIEW_PORT, SMOKE_DEBUG_PORT.
+// Env overrides: CHROME_PATH, SMOKE_PREVIEW_PORT, SMOKE_DEBUG_PORT. SMOKE_ONLY=a,b runs only those
+// segments (run1, run2, boss, mutator, campaign, editor, tutorial, options, preview) for debugging;
+// the full run is the test.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,6 +35,7 @@ const PREVIEW_PORT = Number(process.env.SMOKE_PREVIEW_PORT ?? 4317);
 const DEBUG_PORT = Number(process.env.SMOKE_DEBUG_PORT ?? 9339);
 const APP_URL = `http://127.0.0.1:${PREVIEW_PORT}/BeatStill/`;
 const ARTIFACT_DIR = join(ROOT, "smoke-artifacts");
+const ONLY = process.env.SMOKE_ONLY ? new Set(process.env.SMOKE_ONLY.split(",").map((x) => x.trim())) : null;
 const VIEWPORT = { width: 1280, height: 720 };
 
 const problems = [];
@@ -203,6 +206,19 @@ function readAudio(cdp) {
 
 /** Every run must schedule enough notes and never hit an engine error. */
 const MIN_RUN_NOTES = 20;
+/**
+ * An endless run's held-fire probe lasts until the conductor has advanced this many beats (and at
+ * least RUN_HOLD_MIN_MS, at most RUN_HOLD_MAX_MS): the note count then measures a fixed stretch of
+ * music instead of a wall-clock window that a slow frame or a low time scale can shrink.
+ */
+const RUN_HOLD_BEATS = 6;
+const RUN_HOLD_MIN_MS = 3000;
+const RUN_HOLD_MAX_MS = 10000;
+/** After resuming from pause: hold fire this long and expect at least this many beats. */
+const RESUME_HOLD_MS = 2000;
+const RESUME_MIN_BEATS = 1;
+/** The campaign probe holds until this many beats have passed (2–8 s). */
+const CAMPAIGN_HOLD_BEATS = 3;
 /** Most dropped notes allowed per scheduled note over the whole smoke run. */
 const MAX_DROP_RATIO = 0.5;
 
@@ -361,20 +377,30 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   await watchEnemyFire(cdp);
   await watchPlayerFire(cdp);
   const audioBefore = await readAudio(cdp);
+  // The probe stands still in a busy wave: god mode, so a death can't stop the clock and spoil the
+  // later checks (survival isn't what this run tests).
+  const scene = `${GAME}.scene.getScene("GameScene")`;
+  await evaluate(cdp, `${scene}.godMode = true; true`);
 
-  // Hold fire while circling the mouse: should start audio and speed time (and the clock) up.
+  // Hold fire while circling the mouse: should start audio and speed time (and the clock) up. Hold
+  // until the music has moved RUN_HOLD_BEATS beats (see there).
   const cx = VIEWPORT.width / 2;
   const cy = VIEWPORT.height / 2;
   const beforeHold = await readGameState(cdp);
+  const holdStart = Date.now();
   let maxTimeScale = 0;
-  await holdFire(cdp, 3000, {
+  let lastBeat = beforeHold.beat;
+  await holdFire(cdp, RUN_HOLD_MAX_MS, {
     cx,
     cy,
     onSample: async () => {
       const st = await readGameState(cdp);
       if (st.timeScale !== null) maxTimeScale = Math.max(maxTimeScale, st.timeScale);
+      if (typeof st.beat === "number") lastBeat = st.beat;
     },
+    until: async () => Date.now() - holdStart >= RUN_HOLD_MIN_MS && lastBeat - beforeHold.beat >= RUN_HOLD_BEATS,
   });
+  const holdMs = Date.now() - holdStart;
   const afterHold = await readGameState(cdp);
   const shot = await screenshot(cdp, `${label}-playing`);
   const holdBeats = afterHold.beat - beforeHold.beat;
@@ -389,7 +415,7 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   log(
     `${label}: wave=${afterHold.wave} score=${afterHold.score} enemies=${afterHold.enemies} ` +
       `maxTimeScale=${fmt(maxTimeScale)} idleTimeScale=${fmt(idle.timeScale, 3)} ` +
-      `bpm=${afterHold.bpm} holdBeats=${fmt(holdBeats)} idleBeats=${fmt(idleBeats, 3)} ` +
+      `bpm=${afterHold.bpm} holdMs=${holdMs} holdBeats=${fmt(holdBeats)} idleBeats=${fmt(idleBeats, 3)} ` +
       `audio=${afterHold.audioReady} gameOver=${idleEnd.gameOver} screenshot=${shot}`,
   );
 
@@ -403,13 +429,14 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   if (typeof beforeHold.beat !== "number" || typeof afterHold.beat !== "number") {
     problems.push(`${label}: conductor missing (beat=${afterHold.beat})`);
   } else if (!(holdBeats >= 0.5)) {
-    problems.push(`${label}: conductor advanced only ${fmt(holdBeats, 3)} beats over the 3 s hold (want ≥ 0.5)`);
+    problems.push(`${label}: conductor advanced only ${fmt(holdBeats, 3)} beats over the ${holdMs} ms hold (want ≥ 0.5)`);
   }
   if (!idleEnd.gameOver && !(idleBeats <= 0.15)) {
     problems.push(`${label}: conductor advanced ${fmt(idleBeats, 3)} beats over 1 s idle (want ≤ 0.15)`);
   }
 
   if (checkPause) await pauseCheck(cdp, label);
+  await evaluate(cdp, `${scene}.godMode = false; true`);
   const audioAfter = await readAudio(cdp);
   checkAudio(label, audioBefore, audioAfter, MIN_RUN_NOTES);
   checkEnemyFire(label, await readEnemyFire(cdp));
@@ -650,12 +677,15 @@ async function editorCheck(cdp) {
   if (run.bpm !== 130 || run.mode !== "dorian" || run.bars !== 4) problems.push(`${label}: play-test ignored the song settings (${JSON.stringify(run)})`);
 }
 
-/** Pause via the ESC path freezes the conductor, scene clock and tweens; resume restarts them. */
+/**
+ * Pause via the ESC path freezes the conductor, scene clock and tweens; resume restarts them, and
+ * held fire after resuming shoots and moves the music again. The caller has god mode on, so a stray
+ * bullet can't end the run and stop the clock.
+ */
 async function pauseCheck(cdp, label) {
   const tag = `${label} pause`;
   const scene = `${GAME}.scene.getScene("GameScene")`;
-  // God mode only for this segment, so a stray bullet can't end the run and stop the clock.
-  await evaluate(cdp, `(() => { const s = ${scene}; s.godMode = true; s.togglePause(); return true; })()`);
+  await evaluate(cdp, `${scene}.togglePause(); true`);
   const opened = await readGameState(cdp);
   await sleep(500);
   const held = await readGameState(cdp);
@@ -669,21 +699,28 @@ async function pauseCheck(cdp, label) {
 
   await evaluate(cdp, `${scene}.togglePause(); true`);
   const resumed = await readGameState(cdp);
-  await holdFire(cdp, 1000, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height / 2 });
+  // Closing the menu ignores pointer fire until a frame sees the button up (the click that closed
+  // it is usually still down). The probe's button is up: wait for that frame, or a press that came
+  // first would be ignored for the whole hold and only the aim spin would move time.
+  const released = await waitFor(() => evaluate(cdp, `!${scene}.ship.fireSuppressed`), 3000, "fire suppression to clear").catch(() => false);
+  const shotsBefore = (await readPlayerFire(cdp))?.shots ?? 0;
+  await holdFire(cdp, RESUME_HOLD_MS, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height / 2 });
   const after = await readGameState(cdp);
-  await evaluate(cdp, `${scene}.godMode = false; true`);
+  const resumedShots = ((await readPlayerFire(cdp))?.shots ?? 0) - shotsBefore;
   const resumedBeats = after.beat - resumed.beat;
 
   log(
     `${tag}: pausedFor=500ms beatDelta=${fmt(held.beat - opened.beat, 4)} clockPaused=${held.clockPaused} ` +
-      `tweensPaused=${held.tweensPaused} resumedBeats=${fmt(resumedBeats)} screenshot=${shot}`,
+      `tweensPaused=${held.tweensPaused} released=${!!released} resumedShots=${resumedShots} resumedBeats=${fmt(resumedBeats)} screenshot=${shot}`,
   );
 
   if (resumed.menuOpen || resumed.conductorPaused || resumed.clockPaused || resumed.tweensPaused) {
     problems.push(`${tag}: did not fully resume (${JSON.stringify(resumed)})`);
   }
-  if (!(resumedBeats >= 0.2)) {
-    problems.push(`${tag}: conductor advanced only ${fmt(resumedBeats, 3)} beats in 1 s of shooting after resume`);
+  if (!released) problems.push(`${tag}: fire stayed suppressed after resuming with the button up`);
+  if (!(resumedShots > 0)) problems.push(`${tag}: no shots in ${RESUME_HOLD_MS} ms of held fire after resume`);
+  if (!(resumedBeats >= RESUME_MIN_BEATS)) {
+    problems.push(`${tag}: conductor advanced only ${fmt(resumedBeats, 3)} beats in ${RESUME_HOLD_MS} ms of shooting after resume (want ≥ ${RESUME_MIN_BEATS})`);
   }
 }
 
@@ -721,11 +758,19 @@ async function untilStepLeaves(cdp, id, timeoutMs) {
 /**
  * Holds fire aimed at the nearest enemy (re-aimed every 50 ms) for up to `ms`, stopping early once
  * `until` resolves truthy. Without enemies it aims down, away from where the tutorial spawns them.
+ * With `sweep`, the aim cycles through the live enemies instead (as a player sweeps across a
+ * cluster), so shots at several targets are in flight at once and kills land close together.
  */
-async function fireAtEnemies(cdp, ms, until) {
-  const nearest = `(() => { const s = ${GAME}.scene.getScene("GameScene"); let best = null, bestD = Infinity; for (const e of s.enemies.getChildren()) { if (!e.active) continue; const d = (e.x - s.ship.x) ** 2 + (e.y - s.ship.y) ** 2; if (d < bestD) { bestD = d; best = { x: e.x, y: e.y }; } } return best ?? { x: s.ship.x, y: s.ship.y + 200 }; })()`;
+async function fireAtEnemies(cdp, ms, until, { sweep = false } = {}) {
+  const pick = (i) =>
+    `(() => { const s = ${GAME}.scene.getScene("GameScene"); const live = s.enemies.getChildren().filter((e) => e.active).sort((a, b) => a.x - b.x || a.y - b.y); ` +
+    `if (live.length === 0) return { x: s.ship.x, y: s.ship.y + 200 }; ` +
+    (sweep
+      ? `const e = live[${i} % live.length]; return { x: e.x, y: e.y }; })()`
+      : `let best = live[0], bestD = Infinity; for (const e of live) { const d = (e.x - s.ship.x) ** 2 + (e.y - s.ship.y) ** 2; if (d < bestD) { bestD = d; best = e; } } return { x: best.x, y: best.y }; })()`);
+  let shots = 0;
   const aim = async () => {
-    const t = await evaluate(cdp, nearest);
+    const t = await evaluate(cdp, pick(shots++));
     return toScreen(cdp, t.x, t.y);
   };
   let p = await aim();
@@ -761,7 +806,7 @@ async function tutorialCheck(cdp) {
     await startGameScene(cdp, `{ mode: "endless" }`, label);
     await evaluate(
       cdp,
-      `(() => { const s = ${scene}; s.godMode = true; window.__smokeWaves = 0; s.gameEvents.on("waveStarted", () => window.__smokeWaves++); return true; })()`,
+      `(() => { const s = ${scene}; s.godMode = true; window.__smokeWaves = 0; window.__smokeKills = []; s.gameEvents.on("waveStarted", () => window.__smokeWaves++); s.gameEvents.on("enemyKilled", (p) => window.__smokeKills.push({ type: p.enemyType, chain: p.chainCount, tick: s.conductor.currentTick, step: s.tutorial?.stepId ?? null })); return true; })()`,
     );
     const first = await readTutorial(cdp);
     const reached = [];
@@ -833,10 +878,12 @@ async function tutorialCheck(cdp) {
       else timeouts.push("speed");
     }
 
-    // 6–7. Instruments and chain: aimed fire at whatever the step brought in (on its bar line).
+    // 6–7. Instruments and chain: aimed fire at whatever the step brought in (on its bar line). The
+    // chain needs two kills within the chain window, so sweep the cluster rather than finishing one
+    // target and then paying a whole bullet flight for the next.
     for (const id of ["instruments", "chain"]) {
       if ((await readTutorial(cdp)).step !== id) continue;
-      const ok = await fireAtEnemies(cdp, 25000, async () => (await readTutorial(cdp)).step !== id);
+      const ok = await fireAtEnemies(cdp, 25000, async () => (await readTutorial(cdp)).step !== id, { sweep: id === "chain" });
       if (ok) reached.push(id);
       else timeouts.push(id);
     }
@@ -868,6 +915,8 @@ async function tutorialCheck(cdp) {
       `(() => { const s = ${scene}; return { wave: s.wave, waves: window.__smokeWaves, flag: localStorage.getItem("beatstill_tutorial_done"), active: !!s.tutorial?.isActive, enemies: s.enemies.getLength(), spawns: [...s.waves.spawnTicks] }; })()`,
     );
     await evaluate(cdp, `${scene}.godMode = false; true`);
+    const kills = await evaluate(cdp, `window.__smokeKills ?? []`);
+    log(`${label} kills: ${JSON.stringify(kills)}`);
     log(
       `${label}: reached=${JSON.stringify(reached)} timeouts=${JSON.stringify(timeouts)} minTimeScale=${fmt(minTimeScale, 3)} ` +
         `skipped=${skipped} endActive=${end.active} after=${JSON.stringify(after)} screenshot=${await screenshot(cdp, `${label}-end`)}`,
@@ -967,11 +1016,18 @@ async function playCampaignLevel(cdp) {
   await watchPlayerFire(cdp);
   const before = await readGameState(cdp);
   const audioBefore = await readAudio(cdp);
-  // Aim up the hallway at the tanks.
-  await holdFire(cdp, 2000, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height * 0.3, rx: 120, ry: 60 });
+  // Aim up the hallway at the tanks, until CAMPAIGN_HOLD_BEATS beats have passed (2–8 s).
+  const holdStart = Date.now();
+  await holdFire(cdp, 8000, {
+    cx: VIEWPORT.width / 2,
+    cy: VIEWPORT.height * 0.3,
+    rx: 120,
+    ry: 60,
+    until: async () => Date.now() - holdStart >= 2000 && (await readGameState(cdp)).beat - before.beat >= CAMPAIGN_HOLD_BEATS,
+  });
   const after = await readGameState(cdp);
   const shot = await screenshot(cdp, `${label}-level1`);
-  // A 2 s probe of a two-tank level: fewer notes than an endless run, but some must sound.
+  // A few beats of a two-tank level: fewer notes than an endless run, but some must sound.
   const audioAfter = await readAudio(cdp);
   checkAudio(label, audioBefore, audioAfter, 5);
   checkPlayerFire(label, await readPlayerFire(cdp), audioBefore, audioAfter);
@@ -1087,51 +1143,32 @@ async function main() {
     await sleep(1000);
     log(`menu screenshot: ${await screenshot(cdp, "menu")}`);
 
-    const stage = (name) => (segment = name);
-    stage("run1");
-    await playEndlessRun(cdp, "run1", { checkPause: true });
-
-    // Back to the menu and play again to exercise scene restart paths.
-    stage("menu→run2");
-    await returnToMenu(cdp);
-    stage("run2");
-    await playEndlessRun(cdp, "run2");
-
-    stage("menu→boss");
-    await returnToMenu(cdp);
-    stage("boss");
-    await bossCheck(cdp);
-
-    stage("menu→mutator");
-    await returnToMenu(cdp);
-    stage("mutator");
-    await mutatorCheck(cdp);
-
-    stage("menu→campaign");
-    await returnToMenu(cdp);
-    stage("campaign");
-    await playCampaignLevel(cdp);
-
-    stage("menu→editor");
-    await returnToMenu(cdp);
-    stage("editor");
-    await editorCheck(cdp);
-
-    stage("menu→tutorial");
-    await returnToMenu(cdp);
-    stage("tutorial");
-    await tutorialCheck(cdp);
-
-    stage("menu→options");
-    await returnToMenu(cdp);
-    stage("options");
-    await heartbeatOptionCheck(cdp);
-
-    stage("menu→preview");
-    await returnToMenu(cdp);
-    stage("preview");
-    await themePreviewCheck(cdp);
-    stage("end");
+    // Each segment starts from the menu; the first one is already there. Between segments the menu
+    // round trip exercises the scene restart paths (and checks the menu's heartbeat).
+    let atMenu = true;
+    const segments = [
+      ["run1", () => playEndlessRun(cdp, "run1", { checkPause: true })],
+      ["run2", () => playEndlessRun(cdp, "run2")],
+      ["boss", () => bossCheck(cdp)],
+      ["mutator", () => mutatorCheck(cdp)],
+      ["campaign", () => playCampaignLevel(cdp)],
+      ["editor", () => editorCheck(cdp)],
+      ["tutorial", () => tutorialCheck(cdp)],
+      ["options", () => heartbeatOptionCheck(cdp)],
+      ["preview", () => themePreviewCheck(cdp)],
+    ];
+    for (const [name, run] of segments) {
+      if (ONLY && !ONLY.has(name)) continue;
+      if (!atMenu) {
+        segment = `menu→${name}`;
+        await returnToMenu(cdp);
+      }
+      segment = name;
+      await run();
+      // The theme preview runs on the menu itself.
+      atMenu = name === "preview";
+    }
+    segment = "end";
 
     const audio = await readAudio(cdp);
     log(

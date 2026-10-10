@@ -178,6 +178,11 @@ export class Ship extends Phaser.GameObjects.Container {
     this.pointerFireSuppressed = true;
   }
 
+  /** Whether pointer fire is still ignored, waiting for the button to be seen released. */
+  get fireSuppressed(): boolean {
+    return this.pointerFireSuppressed;
+  }
+
   /**
    * Forget the last aim angle, so the next readInput() re-seeds the spin tracker instead of
    * counting aim changes made while the game was frozen (e.g. moving to the RESUME button).
