@@ -17,6 +17,7 @@ import { ALL_PALETTES } from "../music/palettes";
 import { doubleDensity } from "../music/patterns";
 import { ENEMY_DEFS, enemyDef, phaseCount, rhythmHits, type EnemyType } from "../objects/enemies/registry";
 import { volleyFor } from "../objects/enemies/volleys";
+import { ALL_EVOLUTIONS } from "../systems/Evolutions";
 import { ALL_UPGRADES, baseStats, type PlayerStats } from "../systems/Upgrades";
 import { ALL_WEAPONS, type WeaponDef } from "../systems/Weapons";
 import { shotProfile } from "../systems/weaponMath";
@@ -35,19 +36,21 @@ export interface LegacyWeapon {
   damageMultiplier: number;
   pierce: number;
   speed: number;
+  /** Game-time ms a bullet lives (0: until it leaves the screen). */
+  lifetime: number;
 }
 
 export const LEGACY_WEAPONS: Readonly<Record<string, LegacyWeapon>> = Object.freeze({
-  standard: { cooldownMs: 220, bulletCount: 1, damageMultiplier: 1, pierce: 0, speed: 450 },
-  shotgun: { cooldownMs: 450, bulletCount: 3, damageMultiplier: 1, pierce: 0, speed: 380 },
-  laser: { cooldownMs: 130, bulletCount: 1, damageMultiplier: 0.5, pierce: 2, speed: 900 },
-  cannon: { cooldownMs: 600, bulletCount: 1, damageMultiplier: 3, pierce: 0, speed: 260 },
-  homing: { cooldownMs: 280, bulletCount: 1, damageMultiplier: 0.7, pierce: 0, speed: 300 },
-  nova: { cooldownMs: 550, bulletCount: 5, damageMultiplier: 1.2, pierce: 0, speed: 380 },
-  railgun: { cooldownMs: 180, bulletCount: 1, damageMultiplier: 0.8, pierce: 10, speed: 1500 },
-  nuke: { cooldownMs: 1200, bulletCount: 1, damageMultiplier: 8, pierce: 3, speed: 150 },
-  swarm: { cooldownMs: 320, bulletCount: 2, damageMultiplier: 0.6, pierce: 0, speed: 320 },
-  minigun: { cooldownMs: 70, bulletCount: 1, damageMultiplier: 0.4, pierce: 0, speed: 530 },
+  standard: { cooldownMs: 220, bulletCount: 1, damageMultiplier: 1, pierce: 0, speed: 450, lifetime: 0 },
+  shotgun: { cooldownMs: 450, bulletCount: 3, damageMultiplier: 1, pierce: 0, speed: 380, lifetime: 800 },
+  laser: { cooldownMs: 130, bulletCount: 1, damageMultiplier: 0.5, pierce: 2, speed: 900, lifetime: 0 },
+  cannon: { cooldownMs: 600, bulletCount: 1, damageMultiplier: 3, pierce: 0, speed: 260, lifetime: 0 },
+  homing: { cooldownMs: 280, bulletCount: 1, damageMultiplier: 0.7, pierce: 0, speed: 300, lifetime: 0 },
+  nova: { cooldownMs: 550, bulletCount: 5, damageMultiplier: 1.2, pierce: 0, speed: 380, lifetime: 600 },
+  railgun: { cooldownMs: 180, bulletCount: 1, damageMultiplier: 0.8, pierce: 10, speed: 1500, lifetime: 0 },
+  nuke: { cooldownMs: 1200, bulletCount: 1, damageMultiplier: 8, pierce: 3, speed: 150, lifetime: 2000 },
+  swarm: { cooldownMs: 320, bulletCount: 2, damageMultiplier: 0.6, pierce: 0, speed: 320, lifetime: 0 },
+  minigun: { cooldownMs: 70, bulletCount: 1, damageMultiplier: 0.4, pierce: 0, speed: 530, lifetime: 0 },
 });
 
 /** Old Rapid Fire: −15 ms per level over 6 levels, never below 30 ms. */
@@ -140,6 +143,20 @@ export const LOADOUTS: readonly Loadout[] = Object.freeze([
 
 const BASE_LOADOUT = LOADOUTS[0];
 
+/**
+ * The Rapid Fire level a weapon is first held at: an evolution that replaces a weapon at max
+ * Rapid Fire (the minigun) is never fired below it. 0 for every other weapon.
+ */
+export function acquisitionRapidFire(weaponId: string): number {
+  const evo = ALL_EVOLUTIONS.find((e) => e.evolvedWeaponId === weaponId && e.requiredUpgradeId === "fireCooldown");
+  return evo ? (ALL_UPGRADES.find((u) => u.id === "fireCooldown")?.maxLevel ?? 0) : 0;
+}
+
+/** Base stats as `weaponId` is first held (see acquisitionRapidFire). */
+export function heldLoadout(weaponId: string): Loadout {
+  return { ...BASE_LOADOUT, name: "held", rapidFire: acquisitionRapidFire(weaponId) };
+}
+
 /** Run stats with `loadout`'s upgrades applied the way pickups apply them (no shop bonuses). */
 export function loadoutStats(loadout: Loadout, weaponId = "standard"): PlayerStats {
   const stats = { ...baseStats(), weaponId };
@@ -172,12 +189,15 @@ export interface WeaponMetrics {
   /** One bullet per shot lands. */
   singleTargetDps: number;
   speed: number;
+  /** Pixels a short-lived bullet travels (null: until it leaves the screen). */
+  range: number | null;
   legacyShotsPerSec: number;
   legacyBulletsPerShot: number;
   legacyDamagePerBullet: number;
   legacyDps: number;
   legacySingleTargetDps: number;
   legacySpeed: number;
+  legacyRange: number | null;
 }
 
 /** Old game-time ms between shots of `weaponId` at Rapid Fire level `rapidFire` (new levels). */
@@ -213,6 +233,7 @@ export function weaponMetrics(weapon: WeaponDef, bpm: number, loadout: Loadout =
     dps: shotsPerSec * shot.count * shot.damage,
     singleTargetDps: shotsPerSec * shot.damage,
     speed: shot.speed,
+    range: weapon.lifetime > 0 ? (weapon.lifetime / 1000) * shot.speed : null,
     legacyShotsPerSec,
     legacyBulletsPerShot,
     legacyDamagePerBullet,
@@ -220,6 +241,7 @@ export function weaponMetrics(weapon: WeaponDef, bpm: number, loadout: Loadout =
     legacySingleTargetDps: legacyShotsPerSec * legacyDamagePerBullet,
     // Loadouts have no Velocity levels: the weapon's own speed.
     legacySpeed: legacy.speed,
+    legacyRange: legacy.lifetime > 0 ? (legacy.lifetime / 1000) * legacy.speed : null,
   };
 }
 

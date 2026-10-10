@@ -12,6 +12,7 @@ import {
   dilationResponse,
   enemyMetrics,
   firingEnemies,
+  heldLoadout,
   paletteTempos,
   relativeChange,
   timePerKill,
@@ -53,11 +54,13 @@ function weaponSection(bpm: number): string {
       pct(relativeChange(m.dps, m.legacyDps)),
       String(m.speed),
       String(m.legacySpeed),
+      m.range === null ? "-" : num(m.range, 0),
+      m.legacyRange === null ? "-" : num(m.legacyRange, 0),
     ]);
     const l = loadout;
     parts.push(
       `Weapons at ${bpm} bpm, loadout "${l.name}" (Rapid Fire ${l.rapidFire}, Power ${l.power}, Multi Shot ${l.multiShot}, Penetration ${l.penetration}):\n` +
-        formatTable(["weapon", "note", "shots/s", "bul", "dmg", "DPS", "1-tgt", "old shots/s", "old DPS", "ΔDPS", "speed", "old speed"], rows),
+        formatTable(["weapon", "note", "shots/s", "bul", "dmg", "DPS", "1-tgt", "old shots/s", "old DPS", "ΔDPS", "speed", "old speed", "range", "old range"], rows),
     );
   }
   return parts.join("\n\n");
@@ -68,11 +71,14 @@ function weaponTempoSection(): string {
   const rows = ALL_WEAPONS.map((w) => [
     w.id,
     ...tempos.map((t) => {
-      const m = weaponMetrics(w, t.bpm);
+      const m = weaponMetrics(w, t.bpm, heldLoadout(w.id));
       return `${num(m.dps, 1)} (${pct(relativeChange(m.dps, m.legacyDps))})`;
     }),
   ]);
-  return "Base DPS (Δ vs old) per palette tempo:\n" + formatTable(["weapon", ...tempos.map((t) => `${t.id} ${t.bpm}`)], rows);
+  return (
+    "DPS as first held (base stats; the minigun at Rapid Fire 3, where its evolution starts), Δ vs old, per palette tempo:\n" +
+    formatTable(["weapon", ...tempos.map((t) => `${t.id} ${t.bpm}`)], rows)
+  );
 }
 
 function enemySection(bpm: number): string {

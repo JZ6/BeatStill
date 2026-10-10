@@ -16,8 +16,8 @@ describe("TICK_LADDER", () => {
   it("gives each weapon the planned note value", () => {
     const names = Object.fromEntries(ALL_WEAPONS.map((w) => [w.id, noteName(w.noteTicks)]));
     expect(names).toEqual({
-      standard: "1/8",
-      shotgun: "1/4",
+      standard: "1/8T",
+      shotgun: "dotted 1/8",
       laser: "1/16",
       cannon: "1/4",
       homing: "1/8",
