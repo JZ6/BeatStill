@@ -8,6 +8,7 @@ import { getAudioEngine } from "../audio/AudioEngine";
 import { MenuMusic } from "../audio/MenuMusic";
 import { MAX_REAL_DT } from "../core/Conductor";
 import { getPalette } from "../music/palettes";
+import { ENEMY_DEFS } from "../objects/enemies/registry";
 import { options, saveOptions } from "../systems/GameOptions";
 import { ALL_WEAPONS } from "../systems/Weapons";
 
@@ -591,18 +592,12 @@ export class StartScene extends Phaser.Scene {
 
   // ── Enemy Silhouettes ─────────────────────────────────────────
 
-  private static readonly ENEMY_DEFS = [
-    { color: 0x44ff44, sides: 0, radius: 16 },
-    { color: 0xff8800, sides: 4, radius: 14 },
-    { color: 0xff2266, sides: 5, radius: 12 },
-    { color: 0xaa44ff, sides: 7, radius: 18 },
-    { color: 0xff4444, sides: 8, radius: 22 },
-    { color: 0xffff44, sides: 3, radius: 10 },
-    { color: 0x44ddff, sides: 2, radius: 14 },
-    { color: 0x44ff88, sides: 6, radius: 16 },
-    { color: 0xffaa22, sides: 12, radius: 28 },
-    { color: 0x4488ff, sides: 4, radius: 24 },
-  ];
+  /** Backdrop silhouettes from the enemy registry: sides 0 = circle, a snake is a line (2), a diamond 4 sides. */
+  private static readonly ENEMY_DEFS = ENEMY_DEFS.filter((d) => !d.hidden).map((d) => ({
+    color: d.color,
+    sides: d.shape.kind === "polygon" ? d.shape.sides : d.shape.kind === "snake" ? 2 : d.shape.kind === "diamond" ? 4 : 0,
+    radius: d.radius,
+  }));
 
   private initEnemies() {
     const defs = StartScene.ENEMY_DEFS;

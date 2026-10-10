@@ -54,6 +54,25 @@ export const ROLES: readonly Role[] = Object.freeze([
   "drone",
 ] as Role[]);
 
+/** Display names of the roles (e.g. an enemy's instrument in the bestiary). */
+export const ROLE_LABELS: Readonly<Record<Role, string>> = Object.freeze({
+  lead: "Lead",
+  bass: "Bass",
+  pad: "Pad",
+  stab: "Stab",
+  arp: "Arpeggio",
+  melody: "Melody",
+  bell: "Bell",
+  kick: "Kick",
+  snare: "Snare",
+  hat: "Hi-hat",
+  perc: "Percussion",
+  metal: "Metal",
+  boss: "Boss theme",
+  heart: "Heartbeat",
+  drone: "Drone",
+});
+
 export type InstrumentKind = "synth" | "poly" | "mono" | "fm" | "am" | "membrane" | "metal" | "noise" | "pluck";
 
 export interface InstrumentSpec {

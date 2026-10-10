@@ -1,7 +1,9 @@
 import type { WallType } from "../objects/Wall";
 import type { PlaceableEnemyType } from "../systems/LevelValidation";
+import { ENEMY_DEFS, ENEMY_REGISTRY, type EnemyShape } from "../objects/enemies/registry";
 
-export const ENEMY_TYPES: PlaceableEnemyType[] = ["basic", "tracker", "sniper", "spiral", "tank", "swarm", "snake", "circler", "sentinel", "phantom"];
+/** Every type a level may place, in registry order (the Phantom's decoys are spawned by the boss). */
+export const ENEMY_TYPES: PlaceableEnemyType[] = ENEMY_DEFS.flatMap((d) => (d.type !== "phantom_decoy" ? [d.type] : []));
 export const WALL_TYPE_LIST: WallType[] = ["solid", "bounce", "glass"];
 export const ASTEROID_SIZES = ["large", "medium", "small"] as const;
 
@@ -9,22 +11,20 @@ export type AsteroidSize = (typeof ASTEROID_SIZES)[number];
 
 export interface EnemyVis {
   color: number;
-  sides: number;
+  shape: EnemyShape;
+  /** Base pixels, as in the registry. */
   radius: number;
 }
 
-export const ENEMY_VIS: Record<PlaceableEnemyType, EnemyVis> = {
-  basic:    { color: 0x44ff44, sides: 4, radius: 16 },
-  tracker:  { color: 0xff8800, sides: 3, radius: 14 },
-  sniper:   { color: 0xff2266, sides: 5, radius: 12 },
-  spiral:   { color: 0xaa44ff, sides: 7, radius: 18 },
-  tank:     { color: 0xff4444, sides: 8, radius: 22 },
-  swarm:    { color: 0xffff44, sides: 0, radius: 10 },
-  snake:    { color: 0x44ddff, sides: -1, radius: 14 },
-  circler:  { color: 0x44ff88, sides: 6, radius: 16 },
-  sentinel: { color: 0xffaa22, sides: 12, radius: 28 },
-  phantom:  { color: 0x4488ff, sides: -1, radius: 24 },
-};
+/** Editor visuals, straight from the enemy registry. */
+export const ENEMY_VIS: Readonly<Record<PlaceableEnemyType, EnemyVis>> = Object.freeze(
+  Object.fromEntries(
+    ENEMY_TYPES.map((t) => {
+      const d = ENEMY_REGISTRY[t];
+      return [t, Object.freeze({ color: d.color, shape: d.shape, radius: d.radius })];
+    }),
+  ) as Record<PlaceableEnemyType, EnemyVis>,
+);
 
 /** Visuals for an enemy type, or undefined for types the editor can't place. */
 export function getEnemyVis(type: string): EnemyVis | undefined {

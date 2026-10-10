@@ -1,44 +1,26 @@
 import { ALL_RELICS } from "../../systems/Relics";
 import { ALL_MUTATORS } from "../../systems/WaveMutators";
+import { ROLE_LABELS } from "../../music/palettes";
+import { ENEMY_DEFS, phaseCount, rhythmHits, rhythmPattern, rhythmPreview, shapeLabel, type EnemyDef } from "../../objects/enemies/registry";
 import { hexColor, addStatRow } from "../CollectionOverlay";
-
-interface BestiaryEntry {
-  name: string;
-  icon: string;
-  color: number;
-  hp: number;
-  speed: number;
-  fireRate: number;
-  shape: string;
-  behavior: string;
-  danger: number;
-  isBoss?: boolean;
-}
-
-const BESTIARY: BestiaryEntry[] = [
-  { name: "Drone", icon: "◆", color: 0x44ff44, hp: 2, speed: 40, fireRate: 2400, shape: "Circle", behavior: "Wanders randomly, fires radial bursts that scale with wave", danger: 1 },
-  { name: "Tracker", icon: "▲", color: 0xff8800, hp: 1, speed: 60, fireRate: 2000, shape: "Square", behavior: "Follows your position, fires aimed volleys", danger: 2 },
-  { name: "Sniper", icon: "✦", color: 0xff2266, hp: 1, speed: 20, fireRate: 1600, shape: "Pentagon", behavior: "Barely moves, fires fast precise shots", danger: 2 },
-  { name: "Spiral", icon: "✺", color: 0xaa44ff, hp: 3, speed: 25, fireRate: 300, shape: "Heptagon", behavior: "Fires continuous rotating spiral patterns", danger: 3 },
-  { name: "Swarm", icon: "●", color: 0xffff44, hp: 1, speed: 90, fireRate: 3200, shape: "Triangle", behavior: "Rushes directly at you, fast but fragile", danger: 2 },
-  { name: "Snake", icon: "≋", color: 0x44ddff, hp: 2, speed: 50, fireRate: 2400, shape: "Line", behavior: "Weaves toward you in sinusoidal path", danger: 2 },
-  { name: "Circler", icon: "⬡", color: 0x44ff88, hp: 3, speed: 20, fireRate: 2200, shape: "Hexagon", behavior: "Drifts around the arena, fires 16-bullet radial bursts", danger: 3 },
-  { name: "Tank", icon: "■", color: 0xff4444, hp: 6, speed: 15, fireRate: 2800, shape: "Octagon", behavior: "Slow and tough, fires radial + aimed combo patterns", danger: 4 },
-  { name: "Sentinel", icon: "⊛", color: 0xffaa22, hp: 30, speed: 8, fireRate: 2000, shape: "Dodecagon", behavior: "3-phase boss that summons minions, intensifies attacks each phase", danger: 5, isBoss: true },
-  { name: "Phantom", icon: "◈", color: 0x4488ff, hp: 40, speed: 40, fireRate: 2500, shape: "Diamond", behavior: "Teleporting boss that spawns decoys, charges power when time is frozen", danger: 5, isBoss: true },
-];
 
 const MUTATOR_ICONS: Record<string, string> = {
   double_time: ">>", bullet_storm: "!!", swarm_tide: "++", fragile: "--", armored: "##",
 };
 
+/** Steps shown per rhythm row: one 4/4 bar of 16ths. */
+const GRID_STEPS = 16;
+const STEPS_PER_BEAT = 4;
+
 export function renderEnemies(container: HTMLDivElement) {
+  const listed = ENEMY_DEFS.filter((d) => !d.hidden);
+
   const regularLabel = document.createElement("div");
   regularLabel.className = "col-section-label";
   regularLabel.textContent = "REGULAR ENEMIES";
   container.appendChild(regularLabel);
 
-  for (const entry of BESTIARY.filter((e) => !e.isBoss)) {
+  for (const entry of listed.filter((e) => !e.isBoss)) {
     renderBestiaryEntry(container, entry);
   }
 
@@ -47,12 +29,45 @@ export function renderEnemies(container: HTMLDivElement) {
   bossLabel.textContent = "BOSSES";
   container.appendChild(bossLabel);
 
-  for (const entry of BESTIARY.filter((e) => e.isBoss)) {
+  for (const entry of listed.filter((e) => e.isBoss)) {
     renderBestiaryEntry(container, entry);
   }
 }
 
-function renderBestiaryEntry(container: HTMLDivElement, entry: BestiaryEntry) {
+/**
+ * One bar of the enemy's firing rhythm as 16 dots in beats of four; lit dots are shots. Bosses get
+ * a row per phase. The tooltip shows the whole pattern and its length.
+ */
+function renderRhythm(parent: HTMLElement, entry: EnemyDef) {
+  const phases = phaseCount(entry.type);
+  for (let phase = 1; phase <= phases; phase++) {
+    const row = document.createElement("div");
+    row.className = "col-rhythm";
+    const length = rhythmHits(entry.type, phase).length;
+    row.title = `${rhythmPattern(entry.type, phase)} (${length} steps, loops)`;
+
+    const label = document.createElement("div");
+    label.className = "col-rhythm-label";
+    label.textContent = phases > 1 ? `P${phase}` : "♪";
+    row.appendChild(label);
+
+    const preview = rhythmPreview(entry.type, phase, GRID_STEPS);
+    for (let beat = 0; beat < GRID_STEPS / STEPS_PER_BEAT; beat++) {
+      const group = document.createElement("div");
+      group.className = "col-rhythm-beat";
+      for (let s = 0; s < STEPS_PER_BEAT; s++) {
+        const dot = document.createElement("div");
+        dot.className = "col-rhythm-dot";
+        if (preview[beat * STEPS_PER_BEAT + s]) dot.style.background = hexColor(entry.color);
+        group.appendChild(dot);
+      }
+      row.appendChild(group);
+    }
+    parent.appendChild(row);
+  }
+}
+
+function renderBestiaryEntry(container: HTMLDivElement, entry: EnemyDef) {
   const item = document.createElement("div");
   item.className = `col-item${entry.isBoss ? " boss-item" : ""}`;
 
@@ -76,13 +91,13 @@ function renderBestiaryEntry(container: HTMLDivElement, entry: BestiaryEntry) {
   info.appendChild(name);
   info.appendChild(desc);
 
-  const fireRateStr = entry.fireRate >= 1000 ? `${(entry.fireRate / 1000).toFixed(1)}s` : `${entry.fireRate}ms`;
   addStatRow(info, [
     ["HP", `${entry.hp}`],
     ["SPD", `${entry.speed}`],
-    ["FIRE", fireRateStr],
-    ["SHAPE", entry.shape],
+    ["PLAYS", ROLE_LABELS[entry.role]],
+    ["SHAPE", shapeLabel(entry.shape)],
   ]);
+  renderRhythm(info, entry);
 
   item.appendChild(icon);
   item.appendChild(info);

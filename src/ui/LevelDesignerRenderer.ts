@@ -95,21 +95,44 @@ function drawWave(g: Phaser.GameObjects.Graphics, wave: LevelWave | undefined, a
 function drawEnemy(g: Phaser.GameObjects.Graphics, x: number, y: number, type: EnemyType, alpha: number) {
   const vis = getEnemyVis(type);
   if (!vis) return;
-  const { color, sides, radius: r } = vis;
+  const { color, shape, radius: r } = vis;
 
   g.fillStyle(color, 0.12 * alpha);
   g.fillCircle(x, y, r + 6);
 
-  if (sides === 0) {
-    g.fillStyle(color, 0.25 * alpha);
-    g.fillCircle(x, y, r);
-    g.lineStyle(1.5, color, 0.8 * alpha);
-    g.strokeCircle(x, y, r);
-  } else if (sides === -1) {
-    drawDiamond(g, x, y, r, color, alpha);
-  } else {
-    drawPolygon(g, x, y, r, sides, color, alpha);
+  switch (shape.kind) {
+    case "circle":
+      g.fillStyle(color, 0.25 * alpha);
+      g.fillCircle(x, y, r);
+      g.lineStyle(1.5, color, 0.8 * alpha);
+      g.strokeCircle(x, y, r);
+      break;
+    case "diamond":
+      drawDiamond(g, x, y, r, color, alpha);
+      break;
+    case "snake":
+      drawSnake(g, x, y, r, color, alpha);
+      break;
+    case "polygon":
+      drawPolygon(g, x, y, r, shape.sides, color, alpha);
+      break;
   }
+}
+
+/** One sine period from tail to head, like the in-game snake body. */
+function drawSnake(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, color: number, alpha: number) {
+  const segments = 8;
+  g.lineStyle(3, color, 0.8 * alpha);
+  g.beginPath();
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const px = x - r + 1.75 * r * t;
+    const py = y + Math.sin(t * Math.PI * 2) * r * 0.35;
+    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+  }
+  g.strokePath();
+  g.fillStyle(color, alpha);
+  g.fillCircle(x + 0.75 * r, y, r * 0.25);
 }
 
 function drawDiamond(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, color: number, alpha: number) {

@@ -292,6 +292,12 @@ export function rhythmHits(type: EnemyType, phase = 1): readonly boolean[] {
   return hits;
 }
 
+/** The first `steps` steps of the pattern as it loops (default one 4/4 bar), e.g. for a bestiary grid. */
+export function rhythmPreview(type: EnemyType, phase = 1, steps = 16): boolean[] {
+  const hits = rhythmHits(type, phase);
+  return Array.from({ length: Math.max(0, Math.floor(steps)) }, (_, i) => hits.length > 0 && hits[i % hits.length]);
+}
+
 const POLYGON_NAMES: Readonly<Record<number, string>> = {
   3: "Triangle",
   4: "Square",

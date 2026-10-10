@@ -101,6 +101,15 @@ function injectStyles() {
     .col-danger-dot {
       width:6px;height:6px;border-radius:50%;
     }
+    .col-rhythm {
+      display:flex;align-items:center;gap:5px;margin-top:5px;
+    }
+    .col-rhythm-label { font-size:9px;color:#555;width:14px;letter-spacing:0.5px; }
+    .col-rhythm-beat { display:flex;gap:2px; }
+    .col-rhythm-dot {
+      width:5px;height:5px;border-radius:50%;background:#222;
+    }
+    .col-rhythm-beat .col-rhythm-dot:first-child { box-shadow:0 0 0 1px #2c2c2c; }
     .col-boss-tag {
       font-size:9px;color:#ffaa22;border:1px solid #ffaa22;
       padding:1px 6px;border-radius:3px;letter-spacing:1px;flex-shrink:0;

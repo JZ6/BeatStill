@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Harmony } from "./Harmony";
-import { ALL_PALETTES, DEFAULT_PALETTE_ID, ROLES, getPalette, isPitched, registerMidi } from "./palettes";
+import { ALL_PALETTES, DEFAULT_PALETTE_ID, ROLES, ROLE_LABELS, getPalette, isPitched, registerMidi } from "./palettes";
 import type { InstrumentKind, InstrumentSpec, Role } from "./palettes";
 import { isHeptatonicMode, noteToMidi, scalePcs } from "./theory";
 
@@ -119,6 +119,12 @@ describe("instruments", () => {
   it("every palette defines every role", () => {
     expect(ROLES).toHaveLength(15);
     for (const p of ALL_PALETTES) expect(Object.keys(p.instruments).sort()).toEqual([...ROLES].sort());
+  });
+
+  it("labels every role", () => {
+    expect(Object.keys(ROLE_LABELS).sort()).toEqual([...ROLES].sort());
+    for (const role of ROLES) expect(ROLE_LABELS[role].length, role).toBeGreaterThan(0);
+    expect(ROLE_LABELS.hat).toBe("Hi-hat");
   });
 
   it("voices, volumes and sends are sane", () => {

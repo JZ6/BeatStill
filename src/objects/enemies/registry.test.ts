@@ -8,6 +8,7 @@ import {
   phaseCount,
   rhythmHits,
   rhythmPattern,
+  rhythmPreview,
   shapeLabel,
 } from "./registry";
 
@@ -112,6 +113,17 @@ describe("enemy registry", () => {
         if (step > 0) expect(len % step, d.type).toBe(0);
       }
     }
+  });
+
+  it("previews one bar of each rhythm, looping short patterns", () => {
+    const steps = (hits: boolean[]) => hitSteps(hits);
+    expect(steps(rhythmPreview("sniper"))).toEqual([4]);
+    expect(steps(rhythmPreview("spiral"))).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
+    expect(steps(rhythmPreview("sentinel", 1))).toEqual([0, 12]);
+    expect(steps(rhythmPreview("sentinel", 3))).toEqual([0, 6, 12]);
+    expect(steps(rhythmPreview("swarm", 1, 20))).toEqual([0]);
+    expect(rhythmPreview("phantom_decoy")).toEqual(new Array(16).fill(false));
+    expect(rhythmPreview("basic", 1, 4)).toHaveLength(4);
   });
 
   it("labels shapes and recognises enemy types", () => {
