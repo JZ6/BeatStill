@@ -5,11 +5,17 @@ export interface RelicDef {
   description: string;
 }
 
+/**
+ * Relics (one pick per elite kill). Musical ones:
+ * - metronome: a kill within ±1/8 beat of a beat adds +1 chain and scores ×1.5 (ChainSystem).
+ * - overclock: halves the fire interval (an octave faster, never below a 32nd) and bullet lifetime (Ship).
+ * - timewarp: enemy bullets run at 10% speed while time is nearly frozen (GameScene).
+ */
 export const ALL_RELICS: RelicDef[] = [
-  { id: "metronome",  name: "Metronome",    icon: "♩", description: "Chain window +50%, radius -50%" },
+  { id: "metronome",  name: "Metronome",    icon: "♩", description: "Kills on the beat: +1 chain, score x1.5" },
   { id: "glass",      name: "Glass Cannon",  icon: "☠", description: "1 HP max, damage x3" },
   { id: "vampiric",   name: "Vampiric",      icon: "♥", description: "15% chance kills heal 1 HP" },
-  { id: "overclock",  name: "Overclock",     icon: "⚡", description: "Fire rate x2, bullet lifetime halved" },
+  { id: "overclock",  name: "Overclock",     icon: "⚡", description: "Double-time fire (half the note value), bullet lifetime halved" },
   { id: "ricochet",   name: "Ricochet",      icon: "◇", description: "Bullets bounce off screen edges" },
   { id: "timewarp",   name: "Time Warp",     icon: "◈", description: "Frozen time slows enemy bullets to 10%" },
   { id: "magnetism",  name: "Magnetism",     icon: "⊕", description: "All pickups auto-collect" },

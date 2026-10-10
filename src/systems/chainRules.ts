@@ -16,3 +16,21 @@ export const CHAIN_LINK_BEATS = 0.25;
 export function chainWindowBeats(bonusBeats: number): number {
   return CHAIN_WINDOW_BEATS + (Number.isFinite(bonusBeats) ? Math.max(0, bonusBeats) : 0);
 }
+
+/** Metronome relic: a kill within this many beats of a beat is on the beat (a 32nd either side). */
+export const METRONOME_TOLERANCE_BEATS = 0.125;
+/** Metronome relic: extra chain count for an on-beat kill. */
+export const METRONOME_CHAIN_BONUS = 1;
+/** Metronome relic: score multiplier for an on-beat kill. */
+export const METRONOME_SCORE_MULT = 1.5;
+
+/** Distance in beats from `beat` to the nearest whole beat, in [0, 0.5]. */
+export function beatDistance(beat: number): number {
+  if (!Number.isFinite(beat)) return 0.5;
+  return Math.abs(beat - Math.round(beat));
+}
+
+/** Whether `beat` is within `tolerance` beats of a whole beat. */
+export function isOnBeat(beat: number, tolerance: number = METRONOME_TOLERANCE_BEATS): boolean {
+  return beatDistance(beat) <= tolerance + 1e-9;
+}

@@ -3,9 +3,17 @@ import { addWeaponKill } from "./Unlocks";
 import { addKill } from "./Achievements";
 import { getLuckyStarBonus } from "./Shop";
 import { px } from "./GameConfig";
-import { CHAIN_GRACE_BEATS, chainWindowBeats } from "./chainRules";
+import {
+  CHAIN_GRACE_BEATS,
+  METRONOME_CHAIN_BONUS,
+  METRONOME_SCORE_MULT,
+  chainWindowBeats,
+  isOnBeat,
+} from "./chainRules";
 
 export const CHAIN_RADIUS = 120;
+/** Popup color for a Metronome on-beat kill. */
+const ON_BEAT_COLOR = "#ffdd88";
 
 export const CHAIN_TIERS = [
   { min: 0,  name: "",          color: 0xffffff, textColor: "#ffffff", mult: 1 },
@@ -77,9 +85,10 @@ export class ChainSystem {
     const dx = x - this.lastKillX;
     const dy = y - this.lastKillY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const hasMetronome = s.relics.hasRelic("metronome");
-    const effectiveRadius = (CHAIN_RADIUS + s.stats.chainRadius) * (hasMetronome ? 0.5 : 1);
+    const effectiveRadius = CHAIN_RADIUS + s.stats.chainRadius;
     const effectiveWindow = this.windowBeats();
+    // Metronome relic: a kill within ±1/8 beat of a beat counts one extra and scores ×1.5.
+    const onBeat = s.relics.hasRelic("metronome") && isOnBeat(s.conductor.beat);
 
     const prevTier = this.chainTier;
 
@@ -91,14 +100,16 @@ export class ChainSystem {
     } else {
       this.chainCount = 1;
     }
+    if (onBeat) this.chainCount += METRONOME_CHAIN_BONUS;
 
     if (this.chainCount > this.bestChain) this.bestChain = this.chainCount;
     this.chainTier = getChainTier(this.chainCount);
     const tier = CHAIN_TIERS[this.chainTier];
 
     const basePoints = isBoss ? 500 : 100;
-    const points = Math.floor(basePoints * tier.mult);
+    const points = Math.floor(basePoints * tier.mult * (onBeat ? METRONOME_SCORE_MULT : 1));
     s.addScore(points);
+    if (onBeat) this.spawnPopup(x, y + px(18), "ON BEAT", ON_BEAT_COLOR);
 
     // The kill's sound comes from the enemyKilled event (CollisionSystem), which carries the chain state.
     if (this.chainTier > 0) {
@@ -143,8 +154,7 @@ export class ChainSystem {
 
   /** The chain window in beats (base + Chain Sustain + Chain Link). */
   windowBeats(): number {
-    const hasMetronome = this.scene.relics.hasRelic("metronome");
-    return chainWindowBeats(this.scene.stats.chainWindow) * (hasMetronome ? 1.5 : 1);
+    return chainWindowBeats(this.scene.stats.chainWindow);
   }
 
   /** Per live frame: `delta` real ms and the time scale, i.e. delta × ts game ms of conductor time. */

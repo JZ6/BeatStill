@@ -1,5 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { CHAIN_GRACE_BEATS, CHAIN_LINK_BEATS, CHAIN_SUSTAIN_BEATS, CHAIN_WINDOW_BEATS, chainWindowBeats } from "./chainRules";
+import {
+  CHAIN_GRACE_BEATS,
+  CHAIN_LINK_BEATS,
+  CHAIN_SUSTAIN_BEATS,
+  CHAIN_WINDOW_BEATS,
+  METRONOME_TOLERANCE_BEATS,
+  beatDistance,
+  chainWindowBeats,
+  isOnBeat,
+} from "./chainRules";
+
+describe("on-beat kills (Metronome)", () => {
+  it("measures the distance to the nearest beat", () => {
+    expect(beatDistance(4)).toBe(0);
+    expect(beatDistance(4.1)).toBeCloseTo(0.1);
+    expect(beatDistance(3.9)).toBeCloseTo(0.1);
+    expect(beatDistance(2.5)).toBe(0.5);
+    expect(beatDistance(Number.NaN)).toBe(0.5);
+  });
+
+  it("accepts kills within ±1/8 beat of a beat", () => {
+    expect(METRONOME_TOLERANCE_BEATS).toBe(0.125);
+    expect(isOnBeat(8)).toBe(true);
+    expect(isOnBeat(8.125)).toBe(true);
+    expect(isOnBeat(7.875)).toBe(true);
+    expect(isOnBeat(8.13)).toBe(false);
+    expect(isOnBeat(8.5)).toBe(false);
+    expect(isOnBeat(0.05)).toBe(true);
+    expect(isOnBeat(8.3, 0.3)).toBe(true);
+  });
+});
 
 describe("chain window", () => {
   it("is 1.5 beats (≈ the old 800 ms at 100–120 bpm) plus bonuses", () => {
