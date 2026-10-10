@@ -2,7 +2,11 @@ import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
 import type { LevelWave } from "../systems/Levels";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
-import { ENEMY_VIS, WALL_COLORS, ASTEROID_RADII, type Selection } from "./LevelDesignerData";
+import { getEnemyVis, WALL_COLORS, DEFAULT_WALL_COLOR, ASTEROID_RADII, type Selection } from "./LevelDesignerData";
+
+function wallColor(type: WallType): number {
+  return WALL_COLORS[type] ?? DEFAULT_WALL_COLOR;
+}
 
 export interface EditorDrawState {
   waves: LevelWave[];
@@ -28,12 +32,13 @@ export function drawEditorCanvas(g: Phaser.GameObjects.Graphics, state: EditorDr
   g.lineStyle(1, 0x332211, 0.3);
   g.strokeRect(0, 0, GAME_W, GAME_H);
 
-  for (let i = 0; i < state.waves.length; i++) {
+  const waves = Array.isArray(state.waves) ? state.waves : [];
+  for (let i = 0; i < waves.length; i++) {
     if (i === state.currentWave) continue;
-    drawWave(g, state.waves[i], 0.12);
+    drawWave(g, waves[i], 0.12);
   }
 
-  drawWave(g, state.waves[state.currentWave], 1);
+  drawWave(g, waves[state.currentWave], 1);
   drawShipMarker(g, state.shipRx, state.shipRy);
 
   if (state.selected) {
@@ -42,17 +47,21 @@ export function drawEditorCanvas(g: Phaser.GameObjects.Graphics, state: EditorDr
 
   if (state.wallPreview) {
     const wp = state.wallPreview;
-    g.lineStyle(2, WALL_COLORS[state.wallType], 0.8);
+    const color = wallColor(state.wallType);
+    g.lineStyle(2, color, 0.8);
     g.strokeRect(wp.rx * GAME_W, wp.ry * GAME_H, wp.rw * GAME_W, wp.rh * GAME_H);
-    g.fillStyle(WALL_COLORS[state.wallType], 0.15);
+    g.fillStyle(color, 0.15);
     g.fillRect(wp.rx * GAME_W, wp.ry * GAME_H, wp.rw * GAME_W, wp.rh * GAME_H);
   }
 }
 
-function drawWave(g: Phaser.GameObjects.Graphics, wave: LevelWave, alpha: number) {
-  if (wave.walls) {
+// `wave` may be undefined (out-of-range index) or malformed; this runs every frame, so never throw.
+function drawWave(g: Phaser.GameObjects.Graphics, wave: LevelWave | undefined, alpha: number) {
+  if (!wave) return;
+
+  if (Array.isArray(wave.walls)) {
     for (const w of wave.walls) {
-      const color = WALL_COLORS[w.type];
+      const color = wallColor(w.type);
       const x = w.rx * GAME_W;
       const y = w.ry * GAME_H;
       const ww = w.rw * GAME_W;
@@ -64,7 +73,7 @@ function drawWave(g: Phaser.GameObjects.Graphics, wave: LevelWave, alpha: number
     }
   }
 
-  if (wave.asteroids) {
+  if (Array.isArray(wave.asteroids)) {
     for (const a of wave.asteroids) {
       const r = ASTEROID_RADII[a.size] ?? 24;
       const x = a.rx * GAME_W;
@@ -76,13 +85,15 @@ function drawWave(g: Phaser.GameObjects.Graphics, wave: LevelWave, alpha: number
     }
   }
 
-  for (const e of wave.enemies) {
-    drawEnemy(g, e.rx * GAME_W, e.ry * GAME_H, e.type, alpha);
+  if (Array.isArray(wave.enemies)) {
+    for (const e of wave.enemies) {
+      drawEnemy(g, e.rx * GAME_W, e.ry * GAME_H, e.type, alpha);
+    }
   }
 }
 
 function drawEnemy(g: Phaser.GameObjects.Graphics, x: number, y: number, type: EnemyType, alpha: number) {
-  const vis = ENEMY_VIS[type];
+  const vis = getEnemyVis(type);
   if (!vis) return;
   const { color, sides, radius: r } = vis;
 
@@ -169,16 +180,21 @@ function drawSelectionHighlight(g: Phaser.GameObjects.Graphics, state: EditorDra
   if (!state.selected) return;
   const { kind, index } = state.selected;
   const pulse = 0.5 + Math.sin(state.time * 0.003) * 0.3;
-  const wave = state.waves[state.currentWave];
 
   g.lineStyle(2, 0xffaa44, pulse);
 
   if (kind === "ship") {
     g.strokeCircle(state.shipRx * GAME_W, state.shipRy * GAME_H, 22);
-  } else if (kind === "enemy") {
-    const e = wave.enemies[index];
+    return;
+  }
+
+  const wave = Array.isArray(state.waves) ? state.waves[state.currentWave] : undefined;
+  if (!wave) return;
+
+  if (kind === "enemy") {
+    const e = Array.isArray(wave.enemies) ? wave.enemies[index] : undefined;
     if (e) {
-      const r = (ENEMY_VIS[e.type]?.radius ?? 16) + 8;
+      const r = (getEnemyVis(e.type)?.radius ?? 16) + 8;
       g.strokeCircle(e.rx * GAME_W, e.ry * GAME_H, r);
     }
   } else if (kind === "wall") {

@@ -1,7 +1,8 @@
 import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
 import type { LevelDef, LevelWave } from "../systems/Levels";
-import { ENEMY_TYPES, WALL_TYPE_LIST, ASTEROID_SIZES, ENEMY_VIS, type Tool, type Selection } from "./LevelDesignerData";
+import { normalizeLevelDef, MAX_LEVEL_NAME_LENGTH } from "../systems/LevelValidation";
+import { ENEMY_TYPES, WALL_TYPE_LIST, ASTEROID_SIZES, getEnemyVis, type Tool, type Selection } from "./LevelDesignerData";
 
 // ── CSS ─────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ export function injectEditorStyles() {
       outline:none;resize:vertical;
     }
     .ld-modal-textarea:focus { border-color:#ffaa44; }
+    .ld-modal-error { color:#ff6666;font-size:11px;margin-top:8px;white-space:pre-wrap; }
     .ld-toast {
       position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
       background:rgba(10,8,6,0.95);border:1px solid #ffaa44;border-radius:6px;
@@ -128,6 +130,7 @@ export function createEditorPanels(levelName: string, activeTool: Tool, callback
   nameInput.className = "ld-input";
   nameInput.value = levelName;
   nameInput.placeholder = "Level name";
+  nameInput.maxLength = MAX_LEVEL_NAME_LENGTH;
   nameInput.addEventListener("input", () => callbacks.onNameChange(nameInput.value));
   top.appendChild(nameInput);
 
@@ -246,7 +249,7 @@ export function refreshSubtool(
     el.appendChild(makeLabel("TYPE"));
     el.appendChild(makeSelect(ENEMY_TYPES, enemyType, (v) => onEnemyType(v as EnemyType), true));
     const dot = document.createElement("div");
-    dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:#${(ENEMY_VIS[enemyType]?.color ?? 0xffffff).toString(16).padStart(6, "0")}`;
+    dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:#${(getEnemyVis(enemyType)?.color ?? 0xffffff).toString(16).padStart(6, "0")}`;
     el.appendChild(dot);
   } else if (tool === "wall") {
     el.appendChild(makeLabel("TYPE"));
@@ -324,12 +327,21 @@ export function showLoadModal(levels: LevelDef[], onLoad: (level: LevelDef) => v
   for (const lv of levels) {
     const item = document.createElement("div");
     item.className = "ld-modal-item";
-    item.innerHTML = `
-      <div style="flex:1">
-        <div class="ld-modal-name">${lv.name}</div>
-        <div class="ld-modal-desc">${lv.waves.length} waves, ${lv.waves.reduce((s, w) => s + w.enemies.length, 0)} enemies</div>
-      </div>
-    `;
+
+    // Built with textContent: level names come from saved/imported data (no HTML injection).
+    const info = document.createElement("div");
+    info.style.flex = "1";
+    const name = document.createElement("div");
+    name.className = "ld-modal-name";
+    name.textContent = lv.name;
+    const waves = Array.isArray(lv.waves) ? lv.waves : [];
+    const enemyCount = waves.reduce((s, w) => s + (Array.isArray(w?.enemies) ? w.enemies.length : 0), 0);
+    const desc = document.createElement("div");
+    desc.className = "ld-modal-desc";
+    desc.textContent = `${waves.length} waves, ${enemyCount} enemies`;
+    info.append(name, desc);
+    item.appendChild(info);
+
     item.addEventListener("click", (e) => { e.stopPropagation(); onLoad(lv); modal.remove(); });
     box.appendChild(item);
   }
@@ -353,20 +365,42 @@ export function showImportExportModal(mode: "IMPORT" | "EXPORT", content: string
   btnRow.style.cssText = "display:flex;gap:8px;margin-top:12px;";
 
   if (mode === "IMPORT" && onImport) {
+    const errorEl = document.createElement("div");
+    errorEl.className = "ld-modal-error";
+    errorEl.setAttribute("role", "alert");
+    errorEl.hidden = true;
+    box.appendChild(errorEl);
+
+    const showError = (msg: string) => {
+      ta.style.borderColor = "#ff4444";
+      errorEl.textContent = msg;
+      errorEl.hidden = false;
+    };
+    ta.addEventListener("input", () => {
+      ta.style.borderColor = "";
+      errorEl.hidden = true;
+    });
+
     const loadBtn = document.createElement("button");
     loadBtn.className = "ld-btn primary";
     loadBtn.textContent = "LOAD";
     loadBtn.addEventListener("click", (e) => {
       e.stopPropagation();
+      let parsed: unknown;
       try {
-        const def = JSON.parse(ta.value) as LevelDef;
-        if (!def.waves || !Array.isArray(def.waves)) throw new Error("Invalid");
-        onImport(def);
-        modal.remove();
-        showToast("Level imported");
-      } catch {
-        ta.style.borderColor = "#ff4444";
+        parsed = JSON.parse(ta.value);
+      } catch (err) {
+        showError(`Invalid JSON: ${err instanceof Error ? err.message : String(err)}`);
+        return;
       }
+      const def = normalizeLevelDef(parsed);
+      if (!def) {
+        showError("Not a valid level: expected a JSON object with a numeric \"id\" and a \"waves\" array.");
+        return;
+      }
+      onImport(def);
+      modal.remove();
+      showToast("Level imported");
     });
     btnRow.appendChild(loadBtn);
   }

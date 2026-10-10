@@ -4,7 +4,8 @@ import type { WallType } from "../objects/Wall";
 import type { LevelDef, LevelWave, LevelWall } from "../systems/Levels";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
 import { saveCustomLevel, loadCustomLevels, saveEditorState, loadEditorState, nextCustomId } from "../systems/CustomLevels";
-import { ENEMY_VIS, WALL_COLORS, ASTEROID_RADII, type Tool, type Selection } from "../ui/LevelDesignerData";
+import { normalizeLevelDef, DEFAULT_LEVEL_NAME } from "../systems/LevelValidation";
+import { getEnemyVis, ASTEROID_RADII, type Tool, type Selection } from "../ui/LevelDesignerData";
 import { drawEditorCanvas, type EditorDrawState } from "../ui/LevelDesignerRenderer";
 import {
   createEditorPanels, updateToolButtons,
@@ -13,11 +14,25 @@ import {
   type EditorUIElements,
 } from "../ui/LevelDesignerUI";
 
+function emptyLevel(): LevelDef {
+  return { id: 0, name: DEFAULT_LEVEL_NAME, description: "", waves: [{ enemies: [] }] };
+}
+
+/** True while the user is typing in an HTML text field. */
+function isTextEntry(el: Element | null): el is HTMLElement {
+  if (!el) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || (el as HTMLElement).isContentEditable;
+}
+
+const clamp01 = (v: number) => Phaser.Math.Clamp(v, 0, 1);
+
 export class LevelDesignerScene extends Phaser.Scene {
   private g!: Phaser.GameObjects.Graphics;
 
+  /** Full loaded level (incl. description and unknown fields); toLevelDef overwrites only edited fields. */
+  private sourceLevel: LevelDef = emptyLevel();
   private levelId = 0;
-  private levelName = "Custom Level";
+  private levelName = DEFAULT_LEVEL_NAME;
   private shipRx = 0.5;
   private shipRy = 0.8;
   private waves: LevelWave[] = [{ enemies: [] }];
@@ -44,6 +59,10 @@ export class LevelDesignerScene extends Phaser.Scene {
   }
 
   create(data?: { levelDef?: LevelDef }) {
+    this.dragging = false;
+    this.wallStart = null;
+    this.wallPreview = null;
+
     if (data?.levelDef) {
       this.loadLevel(data.levelDef);
     } else {
@@ -82,23 +101,27 @@ export class LevelDesignerScene extends Phaser.Scene {
   // ── Level State ───────────────────────────────────────────────
 
   private loadLevel(def: LevelDef) {
-    this.levelId = def.id;
-    this.levelName = def.name;
-    this.shipRx = def.shipRx ?? 0.5;
-    this.shipRy = def.shipRy ?? 0.8;
-    this.waves = def.waves.map((w) => ({
-      enemies: [...w.enemies],
-      walls: w.walls ? [...w.walls] : undefined,
-      asteroids: w.asteroids ? [...w.asteroids] : undefined,
-      initialBullets: w.initialBullets ? [...w.initialBullets] : undefined,
-    }));
+    // normalizeLevelDef returns a validated deep copy, so editing never mutates the
+    // caller's LevelDef (e.g. a campaign level constant).
+    const level = normalizeLevelDef(def);
+    if (!level) {
+      this.resetLevel();
+      return;
+    }
+    this.sourceLevel = level;
+    this.levelId = level.id;
+    this.levelName = level.name;
+    this.shipRx = level.shipRx ?? 0.5;
+    this.shipRy = level.shipRy ?? 0.8;
+    this.waves = structuredClone(level.waves);
     this.currentWave = 0;
     this.selected = null;
   }
 
   private resetLevel() {
+    this.sourceLevel = emptyLevel();
     this.levelId = 0;
-    this.levelName = "Custom Level";
+    this.levelName = DEFAULT_LEVEL_NAME;
     this.shipRx = 0.5;
     this.shipRy = 0.8;
     this.waves = [{ enemies: [] }];
@@ -106,15 +129,22 @@ export class LevelDesignerScene extends Phaser.Scene {
     this.selected = null;
   }
 
+  /** Allocates an id once for an unsaved level and keeps it. */
+  private ensureLevelId(): number {
+    if (!this.levelId) this.levelId = nextCustomId();
+    return this.levelId;
+  }
+
+  /** Deep copy of the source level with the edited fields applied (unknown fields survive). */
   private toLevelDef(): LevelDef {
-    return {
-      id: this.levelId || nextCustomId(),
+    return structuredClone({
+      ...this.sourceLevel,
+      id: this.ensureLevelId(),
       name: this.levelName,
-      description: "",
       shipRx: this.shipRx,
       shipRy: this.shipRy,
       waves: this.waves,
-    };
+    });
   }
 
   private persistState() {
@@ -129,7 +159,10 @@ export class LevelDesignerScene extends Phaser.Scene {
 
   private createUI() {
     const elements = createEditorPanels(this.levelName, this.tool, {
-      onNameChange: (name) => { this.levelName = name; },
+      onNameChange: (name) => {
+        this.levelName = name;
+        this.persistState();
+      },
       onToolSelect: (t) => this.setTool(t),
       onPlayTest: () => this.playTest(),
       onSave: () => this.saveLevelAction(),
@@ -150,6 +183,9 @@ export class LevelDesignerScene extends Phaser.Scene {
   private setTool(t: Tool) {
     this.tool = t;
     this.selected = null;
+    this.dragging = false;
+    this.wallStart = null;
+    this.wallPreview = null;
     if (this.ui) updateToolButtons(this.ui.toolBtns, t);
     this.doRefresh();
   }
@@ -177,6 +213,7 @@ export class LevelDesignerScene extends Phaser.Scene {
 
   private addWave() {
     this.waves.push({ enemies: [] });
+    this.persistState();
     this.switchWave(this.waves.length - 1);
   }
 
@@ -185,18 +222,15 @@ export class LevelDesignerScene extends Phaser.Scene {
     this.waves.splice(this.currentWave, 1);
     if (this.currentWave >= this.waves.length) this.currentWave = this.waves.length - 1;
     this.selected = null;
+    this.persistState();
     this.doRefresh();
   }
 
   private duplicateWave() {
-    const src = this.wave();
-    const dup: LevelWave = {
-      enemies: src.enemies.map((e) => ({ ...e })),
-      walls: src.walls?.map((w) => ({ ...w })),
-      asteroids: src.asteroids?.map((a) => ({ ...a })),
-      initialBullets: src.initialBullets?.map((b) => ({ ...b })),
-    };
+    // Deep copy, keeping any unknown wave fields.
+    const dup: LevelWave = structuredClone(this.wave());
     this.waves.splice(this.currentWave + 1, 0, dup);
+    this.persistState();
     this.switchWave(this.currentWave + 1);
   }
 
@@ -204,6 +238,11 @@ export class LevelDesignerScene extends Phaser.Scene {
 
   private setupInput() {
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // Phaser prevents the default mousedown on the canvas, so focus would stay in the
+      // name field; blur it so keyboard shortcuts work again after clicking the canvas.
+      const active = document.activeElement;
+      if (isTextEntry(active)) active.blur();
+
       const rx = pointer.x / GAME_W;
       const ry = pointer.y / GAME_H;
 
@@ -250,37 +289,51 @@ export class LevelDesignerScene extends Phaser.Scene {
         this.moveObject(this.selected, rx + this.dragOffRx, ry + this.dragOffRy);
         this.doRefresh();
       } else if (this.tool === "wall" && this.wallStart) {
-        const x1 = Math.min(this.wallStart.rx, rx);
-        const y1 = Math.min(this.wallStart.ry, ry);
-        const x2 = Math.max(this.wallStart.rx, rx);
-        const y2 = Math.max(this.wallStart.ry, ry);
+        // The pointer can leave the canvas mid-drag; keep the new wall inside the arena.
+        const cx = clamp01(rx);
+        const cy = clamp01(ry);
+        const x1 = Math.min(this.wallStart.rx, cx);
+        const y1 = Math.min(this.wallStart.ry, cy);
+        const x2 = Math.max(this.wallStart.rx, cx);
+        const y2 = Math.max(this.wallStart.ry, cy);
         this.wallPreview = { rx: x1, ry: y1, rw: x2 - x1, rh: y2 - y1 };
       }
     });
 
-    this.input.on("pointerup", () => {
-      if (this.tool === "select" && this.dragging) {
-        this.dragging = false;
-        this.persistState();
-      } else if (this.tool === "wall" && this.wallStart && this.wallPreview) {
-        const { rw, rh } = this.wallPreview;
-        if (rw > 0.01 && rh > 0.005) {
-          if (!this.wave().walls) this.wave().walls = [];
-          const wall: LevelWall = { ...this.wallPreview, type: this.wallType };
-          if (this.wallType === "glass") wall.hp = this.wallHp;
-          this.wave().walls!.push(wall);
-          this.persistState();
-          this.doRefresh();
-        }
-        this.wallStart = null;
-        this.wallPreview = null;
-      }
-    });
+    // Releasing over the HTML panels fires "pointerupoutside" instead of "pointerup".
+    this.input.on("pointerup", () => this.handlePointerUp());
+    this.input.on("pointerupoutside", () => this.handlePointerUp());
 
     if (this.input.keyboard) {
-      this.input.keyboard.on("keydown-DELETE", () => this.deleteSelected());
-      this.input.keyboard.on("keydown-BACKSPACE", () => this.deleteSelected());
+      const onDeleteKey = () => {
+        if (isTextEntry(document.activeElement)) return;
+        this.deleteSelected();
+      };
+      this.input.keyboard.on("keydown-DELETE", onDeleteKey);
+      this.input.keyboard.on("keydown-BACKSPACE", onDeleteKey);
     }
+  }
+
+  private handlePointerUp() {
+    if (this.dragging) {
+      this.dragging = false;
+      this.persistState();
+    }
+
+    if (this.tool === "wall" && this.wallStart && this.wallPreview) {
+      const { rw, rh } = this.wallPreview;
+      if (rw > 0.01 && rh > 0.005) {
+        const w = this.wave();
+        if (!w.walls) w.walls = [];
+        const wall: LevelWall = { ...this.wallPreview, type: this.wallType };
+        if (this.wallType === "glass") wall.hp = this.wallHp;
+        w.walls.push(wall);
+        this.persistState();
+        this.doRefresh();
+      }
+    }
+    this.wallStart = null;
+    this.wallPreview = null;
   }
 
   private getObjectPosition(sel: Selection): { rx: number; ry: number } {
@@ -299,17 +352,21 @@ export class LevelDesignerScene extends Phaser.Scene {
 
   private moveObject(sel: Selection, rx: number, ry: number) {
     if (sel.kind === "ship") {
-      this.shipRx = Phaser.Math.Clamp(rx, 0, 1);
-      this.shipRy = Phaser.Math.Clamp(ry, 0, 1);
+      this.shipRx = clamp01(rx);
+      this.shipRy = clamp01(ry);
     } else if (sel.kind === "enemy") {
       const e = this.wave().enemies[sel.index];
-      if (e) { e.rx = rx; e.ry = ry; }
+      if (e) { e.rx = clamp01(rx); e.ry = clamp01(ry); }
     } else if (sel.kind === "wall") {
-      const w = this.wave().walls![sel.index];
-      if (w) { w.rx = rx; w.ry = ry; }
+      // Keep the whole wall inside the arena (top-left anchored).
+      const w = this.wave().walls?.[sel.index];
+      if (w) {
+        w.rx = Phaser.Math.Clamp(rx, 0, Math.max(0, 1 - w.rw));
+        w.ry = Phaser.Math.Clamp(ry, 0, Math.max(0, 1 - w.rh));
+      }
     } else if (sel.kind === "asteroid") {
-      const a = this.wave().asteroids![sel.index];
-      if (a) { a.rx = rx; a.ry = ry; }
+      const a = this.wave().asteroids?.[sel.index];
+      if (a) { a.rx = clamp01(rx); a.ry = clamp01(ry); }
     }
   }
 
@@ -322,7 +379,7 @@ export class LevelDesignerScene extends Phaser.Scene {
 
     for (let i = w.enemies.length - 1; i >= 0; i--) {
       const e = w.enemies[i];
-      const r = ENEMY_VIS[e.type]?.radius ?? 16;
+      const r = getEnemyVis(e.type)?.radius ?? 16;
       if (Math.hypot(px - e.rx * GAME_W, py - e.ry * GAME_H) < r + 4) return { kind: "enemy", index: i };
     }
 
@@ -366,11 +423,11 @@ export class LevelDesignerScene extends Phaser.Scene {
 
   private playTest() {
     this.persistState();
+    // toLevelDef() is a deep copy, so the game can't mutate the editor's state.
     this.scene.start("GameScene", { mode: "level", levelDef: this.toLevelDef() });
   }
 
   private saveLevelAction() {
-    if (!this.levelId) this.levelId = nextCustomId();
     saveCustomLevel(this.toLevelDef());
     showToast(`Saved: ${this.levelName}`);
   }
@@ -388,6 +445,7 @@ export class LevelDesignerScene extends Phaser.Scene {
     showLoadModal(loadCustomLevels(), (level) => {
       this.loadLevel(level);
       if (this.ui) this.ui.nameInput.value = this.levelName;
+      this.persistState();
       this.doRefresh();
     });
   }
@@ -395,7 +453,10 @@ export class LevelDesignerScene extends Phaser.Scene {
   private showImportAction() {
     showImportExportModal("IMPORT", "", (def) => {
       this.loadLevel(def);
+      // An imported id may belong to an unrelated saved level; save as a new level instead.
+      this.levelId = 0;
       if (this.ui) this.ui.nameInput.value = this.levelName;
+      this.persistState();
       this.doRefresh();
     });
   }
