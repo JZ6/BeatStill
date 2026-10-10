@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phases 0–6 complete. Phase 7 (periphery) in progress.
+- **Status:** Phases 0–7 complete. Phase 8 (balance) in progress.
 
 ## 1. Vision
 
@@ -479,13 +479,14 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Follow-up: in the DevPanel, a palette switch resets the mutator tempo/key, and "Skip Wave" does nothing in level mode. Smoke margins are thin (run2 notes, pause-resume).
 
 ### Phase 7 — Periphery
-- [ ] Tutorial rewritten for the musical mechanics (latched counters; real-time step minimum)
-- [ ] HowTo text; bestiary / weapon tabs from the registries (note values, instruments)
-- [ ] Options: audio latency offset + calibration, drone volume, beat visualiser, reduce flashing, haptics
-- [ ] StartScene heartbeat/EKG driven by the conductor; theme preview phrase in Customize
-- [ ] Crash snapshot includes conductor and harmony state
-- [ ] Menu heartbeat is too slow when idle (up to ~40 s at timeScale 0.03). Give the menu conductor a higher floor.
-- [ ] Add a `theme_piano` unlock. Piano currently can't be selected, so the Virtuoso achievement (all 6 themes) is impossible.
+- [x] Tutorial rewritten with 7 latched steps: move, aim, fire, slow, speed, instruments (tank + sniper), chain. Real-time minimum per step, respawns instead of softlocks, endless starts exactly once.
+- [x] HowTo text explains the musical mechanics. The bestiary and weapon tabs read from the registries. The basic enemy's display name is now "Pulse".
+- [x] Options: `audioLatencyMs`, `droneVolume`, `heartbeat`, `beatVisualizer`, `reduceFlashing`, `haptics`. All flat fields, applied live.
+  - Calibration was intentionally skipped: scheduling latency can't make up for output delay. If a calibration is ever added, it should shift input/visual timing instead.
+- [x] The StartScene EKG follows the menu conductor's heartbeat (Phase 3). The menu time-scale floor is 0.35. Customize has theme preview phrases.
+- [x] Crash snapshot includes conductor, harmony, director queue, engine stats and palette.
+- [x] Piano theme unlock (`theme_piano`: 75 shards + 40k score), which makes Virtuoso achievable.
+- [x] DevPanel: a palette switch keeps the mutator modifiers; Skip Wave works in level mode.
 
 ### Phase 8 — Balance
 - [ ] Playtest passes: tempo per theme, pattern density, enemy counts, weapon subdivisions, time-dilation weights
