@@ -84,6 +84,8 @@ export const WEAPON_ARTICULATION: Readonly<Record<string, { beats: number; veloc
   Object.fromEntries(ALL_WEAPONS.map((w) => [w.id, { ...w.articulation }])),
 );
 const DEFAULT_ARTICULATION = { beats: 0.25, velocity: 0.5 };
+/** Smallest interval (semitones) between a shot's melody note and its harmony notes: a minor third. */
+const MIN_HARMONY_INTERVAL = 3;
 
 export const MERGE_WINDOW = 0.005;
 /** Durations stretch with slow-mo only down to this time scale. */
@@ -647,12 +649,16 @@ export class MusicDirector {
     this.push("lead", [main, ...this.harmonize(slot.bar, "lead", main, voices - 1)], slot.when, art.beats, art.velocity);
   }
 
-  /** `count` chord tones to sound with `main`: the nearest ones below it, then above if the register runs out. */
+  /**
+   * `count` chord tones to sound with `main`: the nearest ones below it, then above if the register
+   * runs out. Each is at least a minor third from `main`, so an off-beat melody note (a scale tone
+   * between chord tones) never forms a second with its harmony.
+   */
   private harmonize(bar: number, role: Role, main: number, count: number): number[] {
     if (!(count > 0)) return [];
     const tones = this.tones(bar, role);
-    const below = tones.filter((n) => n < main).reverse();
-    const above = tones.filter((n) => n > main);
+    const below = tones.filter((n) => n <= main - MIN_HARMONY_INTERVAL).reverse();
+    const above = tones.filter((n) => n >= main + MIN_HARMONY_INTERVAL);
     return [...below, ...above].slice(0, count);
   }
 

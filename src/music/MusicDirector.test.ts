@@ -435,6 +435,26 @@ describe("harmony", () => {
     expect(fire(5, 0)).toEqual([79]); // no bullets still plays the melody note
   });
 
+  it("keeps harmony notes at least a minor third from the melody note, also off the beat", () => {
+    for (const palette of ALL_PALETTES) {
+      for (let tick = 3; tick < 2 * TPB; tick += 6) {
+        // Same state in both directors: one plays the melody note alone, the other harmonizes it.
+        const melody = setup(palette, tick + 0.5).d;
+        const chord = setup(palette, tick + 0.5).d;
+        for (const d of [melody, chord]) d.handleEvent("playerFired", { ...shot(1), tick: tick - 3, lateBy: 0.01 });
+        melody.drain();
+        chord.drain();
+        melody.handleEvent("playerFired", { ...shot(1), tick, lateBy: 0.01 });
+        chord.handleEvent("playerFired", { ...shot(4), tick, lateBy: 0.01 });
+        const [main] = melody.drain()[0].midi;
+        const notes = chord.drain()[0].midi;
+        expect(notes, `${palette.id} tick ${tick}`).toContain(main);
+        expect(notes.length, `${palette.id} tick ${tick}`).toBeGreaterThan(1);
+        for (const n of notes) if (n !== main) expect(Math.abs(n - main), `${palette.id} tick ${tick}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
   it("takes chord tones above when the melody note is at the bottom of the register", () => {
     const { clock, d } = setup(variant("theremin", { progression: "i" }));
     clock.pos = 23;
