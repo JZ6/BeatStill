@@ -3,7 +3,11 @@ export interface WeaponDef {
   name: string;
   icon: string;
   description: string;
-  baseCooldown: number;
+  /**
+   * The weapon's note value: ticks between shots on the conductor grid (24 ticks per beat), e.g.
+   * 12 = 1/8, 8 = 1/8 triplet. Must be on TICK_LADDER (src/music/noteValues.ts); Rapid Fire climbs it.
+   */
+  noteTicks: number;
   baseBulletCount: number;
   baseBulletSpread: number;
   baseBulletSpeed: number;
@@ -22,7 +26,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Standard",
     icon: "---",
     description: "Balanced all-rounder",
-    baseCooldown: 220,
+    noteTicks: 12, // 1/8
     baseBulletCount: 1,
     baseBulletSpread: 0.15,
     baseBulletSpeed: 450,
@@ -39,7 +43,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Shotgun",
     icon: "|||",
     description: "Wide burst, deadly up close, short range",
-    baseCooldown: 450,
+    noteTicks: 24, // 1/4
     baseBulletCount: 3,
     baseBulletSpread: 0.5,
     baseBulletSpeed: 380,
@@ -56,7 +60,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Laser",
     icon: "===",
     description: "Rapid needles that pierce through enemies",
-    baseCooldown: 130,
+    noteTicks: 6, // 1/16
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 900,
@@ -73,7 +77,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Cannon",
     icon: "(O)",
     description: "Slow heavy slugs that devastate on hit",
-    baseCooldown: 600,
+    noteTicks: 24, // 1/4
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 260,
@@ -90,7 +94,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Homing",
     icon: "@>@",
     description: "Bullets seek enemies, never miss",
-    baseCooldown: 280,
+    noteTicks: 12, // 1/8
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 300,
@@ -109,7 +113,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Nova",
     icon: "***",
     description: "360° burst of destruction",
-    baseCooldown: 550,
+    noteTicks: 24, // 1/4
     baseBulletCount: 5,
     baseBulletSpread: Math.PI * 2,
     baseBulletSpeed: 380,
@@ -127,7 +131,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Railgun",
     icon: ">>|",
     description: "Hypersonic beam pierces everything",
-    baseCooldown: 180,
+    noteTicks: 8, // 1/8 triplet
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 1500,
@@ -145,7 +149,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Nuke",
     icon: "(X)",
     description: "Massive slug of annihilation",
-    baseCooldown: 1200,
+    noteTicks: 48, // 1/2
     baseBulletCount: 1,
     baseBulletSpread: 0,
     baseBulletSpeed: 150,
@@ -163,7 +167,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Swarm",
     icon: ">>@",
     description: "Homing missile barrage",
-    baseCooldown: 320,
+    noteTicks: 12, // 1/8
     baseBulletCount: 2,
     baseBulletSpread: 0.8,
     baseBulletSpeed: 320,
@@ -181,7 +185,7 @@ export const ALL_WEAPONS: WeaponDef[] = [
     name: "Minigun",
     icon: "|||",
     description: "Relentless bullet stream",
-    baseCooldown: 70,
+    noteTicks: 3, // 1/32
     baseBulletCount: 1,
     baseBulletSpread: 0.2,
     baseBulletSpeed: 530,

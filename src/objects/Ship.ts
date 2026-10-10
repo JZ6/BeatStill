@@ -7,6 +7,7 @@ import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 import { options } from "../systems/GameOptions";
 import type { TouchControls } from "../systems/TouchControls";
 import { AngularSpeedTracker, type DilationInput } from "../core/TimeDilation";
+import { TICKS_PER_BEAT } from "../core/Conductor";
 import { keyboardVector } from "../core/InputMath";
 
 const BASE = defaultStats();
@@ -273,7 +274,8 @@ export class Ship extends Phaser.GameObjects.Container {
     gameScene.gameEvents.emit("playerFired", { weaponId: weapon.id, x: this.x, y: this.y, angle, bulletCount: count });
 
     const cooldownReduction = BASE.fireCooldown - this.stats.fireCooldown;
-    const cd = Math.max(weapon.baseCooldown - cooldownReduction, 30);
+    const noteMs = gameScene.conductor.beatsToGameSeconds(weapon.noteTicks / TICKS_PER_BEAT) * 1000;
+    const cd = Math.max(noteMs - cooldownReduction, 30);
     return gameScene.relics.hasRelic("overclock") ? Math.max(cd / 2, 20) : cd;
   }
 

@@ -1,6 +1,7 @@
 import { options, saveOptions } from "../../systems/GameOptions";
 import { getWeaponMastery, isWeaponMastered, hasEvolved } from "../../systems/Unlocks";
 import { ALL_WEAPONS } from "../../systems/Weapons";
+import { noteName } from "../../music/noteValues";
 import { getEvolutionRequirement } from "../../systems/Evolutions";
 import { hexColor, addStatRow } from "../CollectionOverlay";
 
@@ -8,12 +9,14 @@ function weaponStats(w: typeof ALL_WEAPONS[number]): [string, string][] {
   const stats: [string, string][] = [
     ["DMG", `${w.damageMultiplier}x`],
     ["SPD", `${w.baseBulletSpeed}`],
-    ["CD", `${w.baseCooldown}ms`],
+    // The note value it fires on the beat grid (e.g. 1/8, 1/8T).
+    ["NOTE", noteName(w.noteTicks)],
   ];
   if (w.basePierce > 0) stats.push(["PRC", `${w.basePierce}`]);
   if (w.baseBulletCount > 1) stats.push(["CNT", `${w.baseBulletCount}`]);
   if (w.homing) stats.push(["", "HOMING"]);
-  if (w.lifetime > 0) stats.push(["RNG", `${w.lifetime}ms`]);
+  // Short-lived bullets: how far one travels (px) at the weapon's base speed.
+  if (w.lifetime > 0) stats.push(["RNG", `${Math.round((w.lifetime / 1000) * w.baseBulletSpeed)}`]);
   return stats;
 }
 
