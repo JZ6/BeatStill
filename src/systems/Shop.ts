@@ -1,6 +1,15 @@
 import type { PlayerStats } from "./Upgrades";
 import { getState, purchaseShopLevel } from "./Unlocks";
+import { CHAIN_LINK_BEATS } from "./chainRules";
 
+/** First-shot late-grace window (real seconds) added per Quick Draw level. */
+export const QUICK_DRAW_SECONDS = 0.04;
+
+/**
+ * Permanent bonuses bought with shards. Ids, max levels and costs are part of the save format
+ * (beatstill_unlocks.shopPurchases stores levels by id), so keep them. A bonus raises the starting
+ * stats only: it never counts as an in-run upgrade level.
+ */
 export interface ShopItemDef {
   id: string;
   name: string;
@@ -33,15 +42,15 @@ export const ALL_SHOP_ITEMS: ShopItemDef[] = [
   },
   {
     id: "quick_draw", name: "Quick Draw", icon: "⚡",
-    description: "-10ms starting fire cooldown",
+    description: "+40 ms first-shot timing window per level",
     baseCost: 35, maxLevel: 3, costScale: 1.5,
-    apply: (s) => { s.fireCooldown = Math.max(s.fireCooldown - 10, 60); },
+    apply: (s) => { s.fireGrace += QUICK_DRAW_SECONDS; },
   },
   {
     id: "chain_link", name: "Chain Link", icon: "◎",
-    description: "+100ms starting chain window",
+    description: "+0.25 beat chain window per level",
     baseCost: 25, maxLevel: 3, costScale: 1.5,
-    apply: (s) => { s.chainWindow += 100; },
+    apply: (s) => { s.chainWindow += CHAIN_LINK_BEATS; },
   },
   {
     id: "lucky_star", name: "Lucky Star", icon: "★",

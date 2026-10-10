@@ -62,3 +62,38 @@ describe("purchaseItem", () => {
     expect(store.setItem).not.toHaveBeenCalled();
   });
 });
+
+describe("shop bonuses", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the saved item ids, max levels and costs", async () => {
+    const { shop } = await setup();
+    expect(shop.ALL_SHOP_ITEMS.map((i) => [i.id, i.maxLevel, i.baseCost, i.costScale])).toEqual([
+      ["iron_hull", 3, 50, 1.5],
+      ["sharp_rounds", 3, 40, 1.5],
+      ["swift_feet", 3, 30, 1.5],
+      ["quick_draw", 3, 35, 1.5],
+      ["chain_link", 3, 25, 1.5],
+      ["lucky_star", 5, 20, 1.3],
+    ]);
+    for (const item of shop.ALL_SHOP_ITEMS) expect(item.description, item.id).not.toMatch(/cooldown/i);
+  });
+
+  it("Quick Draw widens the first-shot window and Chain Link the chain window, in musical units", async () => {
+    await setup({ shopPurchases: { quick_draw: 3, chain_link: 2, iron_hull: 1 } });
+    const { defaultStats, ALL_UPGRADES } = await import("./Upgrades");
+    const stats = defaultStats();
+    expect(stats.fireGrace).toBeCloseTo(0.12);
+    expect(stats.chainWindow).toBeCloseTo(0.5);
+    expect(stats.maxHp).toBe(6);
+    expect(stats.fireRate).toBe(0);
+    // Shop bonuses never count as in-run upgrade levels.
+    for (const u of ALL_UPGRADES) if (!u.isWeapon) expect(u.level(stats), u.id).toBe(0);
+  });
+});

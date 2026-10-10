@@ -3,8 +3,8 @@ import { addWeaponKill } from "./Unlocks";
 import { addKill } from "./Achievements";
 import { getLuckyStarBonus } from "./Shop";
 import { px } from "./GameConfig";
+import { CHAIN_GRACE_BEATS, chainWindowBeats } from "./chainRules";
 
-export const CHAIN_WINDOW = 800;
 export const CHAIN_RADIUS = 120;
 
 export const CHAIN_TIERS = [
@@ -26,13 +26,19 @@ export function getChainTier(count: number): number {
   return 0;
 }
 
+/**
+ * Kill chains. The chain and grace timers are in beats of conductor time: they count down by
+ * gameDt × bpm / 60, so they dilate with time like the music.
+ */
 export class ChainSystem {
+  /** Beats left before the chain breaks. */
   chainTimer = 0;
   chainCount = 0;
   chainTier = 0;
   bestChain = 0;
   lastKillX = 0;
   lastKillY = 0;
+  /** Beats left in which a kill resumes a broken chain one tier lower. */
   private graceTimer = 0;
   private graceTier = 0;
   private arcGraphics!: Phaser.GameObjects.Graphics;
@@ -73,7 +79,7 @@ export class ChainSystem {
     const dist = Math.sqrt(dx * dx + dy * dy);
     const hasMetronome = s.relics.hasRelic("metronome");
     const effectiveRadius = (CHAIN_RADIUS + s.stats.chainRadius) * (hasMetronome ? 0.5 : 1);
-    const effectiveWindow = (CHAIN_WINDOW + s.stats.chainWindow) * (hasMetronome ? 1.5 : 1);
+    const effectiveWindow = this.windowBeats();
 
     const prevTier = this.chainTier;
 
@@ -135,13 +141,21 @@ export class ChainSystem {
     s.progression.processAchievements(false, false);
   }
 
+  /** The chain window in beats (base + Chain Sustain + Chain Link). */
+  windowBeats(): number {
+    const hasMetronome = this.scene.relics.hasRelic("metronome");
+    return chainWindowBeats(this.scene.stats.chainWindow) * (hasMetronome ? 1.5 : 1);
+  }
+
+  /** Per live frame: `delta` real ms and the time scale, i.e. delta × ts game ms of conductor time. */
   update(delta: number, ts: number) {
+    const beats = this.scene.conductor.gameSecondsToBeats((delta / 1000) * ts);
     if (this.chainTimer > 0) {
-      this.chainTimer -= delta * ts;
+      this.chainTimer -= beats;
       if (this.chainTimer <= 0) {
         const prevTier = this.chainTier;
         if (prevTier >= 2) {
-          this.graceTimer = 400;
+          this.graceTimer = CHAIN_GRACE_BEATS;
           this.graceTier = prevTier - 1;
         }
         this.scene.gameEvents.emit("chainBreak", { tier: prevTier, x: this.lastKillX, y: this.lastKillY });
@@ -156,7 +170,7 @@ export class ChainSystem {
     }
 
     if (this.graceTimer > 0) {
-      this.graceTimer -= delta * ts;
+      this.graceTimer -= beats;
     }
 
     this.updateArc(ts);
@@ -188,9 +202,7 @@ export class ChainSystem {
     this.arcGraphics.clear();
     if (this.chainTimer <= 0) return;
     const tier = CHAIN_TIERS[this.chainTier] ?? CHAIN_TIERS[0];
-    const hasMetronome = this.scene.relics.hasRelic("metronome");
-    const effectiveWindow = (CHAIN_WINDOW + this.scene.stats.chainWindow) * (hasMetronome ? 1.5 : 1);
-    const progress = this.chainTimer / effectiveWindow;
+    const progress = Math.min(1, this.chainTimer / this.windowBeats());
     const arcAngle = progress * Math.PI * 2;
     let alpha = 0.6;
     if (ts < 0.1) alpha = 0.5 + 0.5 * Math.sin(Date.now() * 0.008);

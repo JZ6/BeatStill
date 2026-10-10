@@ -261,7 +261,8 @@ export class Ship extends Phaser.GameObjects.Container {
     }
 
     // After moving and aiming, so shots leave from this frame's position along this frame's aim.
-    const first = this.fireClock.endFrame(gameScene.conductor, BASE_FIRE_GRACE);
+    const grace = BASE_FIRE_GRACE + (Number.isFinite(this.stats.fireGrace) ? Math.max(0, this.stats.fireGrace) : 0);
+    const first = this.fireClock.endFrame(gameScene.conductor, grace);
     const shots = first ? [...this.dueShots, first] : this.dueShots;
     this.dueShots = [];
     for (const shot of shots) this.fire(aimAngle, gameScene, shot);
