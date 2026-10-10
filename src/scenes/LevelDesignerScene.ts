@@ -1,18 +1,26 @@
 import Phaser from "phaser";
 import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
-import type { LevelDef, LevelWave, LevelWall } from "../systems/Levels";
+import type { LevelDef, LevelMusic, LevelWave, LevelWall } from "../systems/Levels";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { options } from "../systems/GameOptions";
+import { isThemeUnlocked } from "../systems/Unlocks";
 import { saveCustomLevel, loadCustomLevels, saveEditorState, loadEditorState, nextCustomId } from "../systems/CustomLevels";
-import { normalizeLevelDef, DEFAULT_LEVEL_NAME } from "../systems/LevelValidation";
+import { normalizeLevelDef, normalizeLevelMusic, normalizeWaveBars, DEFAULT_LEVEL_NAME } from "../systems/LevelValidation";
+import { PreviewMusic } from "../audio/PreviewMusic";
+import { levelPalette } from "../music/levelMusic";
+import { getPalette } from "../music/palettes";
 import { getEnemyVis, ASTEROID_RADII, type Tool, type Selection } from "../ui/LevelDesignerData";
 import { drawEditorCanvas, type EditorDrawState } from "../ui/LevelDesignerRenderer";
 import {
   createEditorPanels, updateToolButtons,
   refreshSubtool, refreshProps, refreshWaveBar,
-  showToast, showLoadModal, showImportExportModal,
+  showToast, showLoadModal, showImportExportModal, showSongModal,
   type EditorUIElements,
 } from "../ui/LevelDesignerUI";
+
+/** Bars a song preview plays. */
+const PREVIEW_BARS = 4;
 
 function emptyLevel(): LevelDef {
   return { id: 0, name: DEFAULT_LEVEL_NAME, description: "", waves: [{ enemies: [] }] };
@@ -37,6 +45,9 @@ export class LevelDesignerScene extends Phaser.Scene {
   private shipRy = 0.8;
   private waves: LevelWave[] = [{ enemies: [] }];
   private currentWave = 0;
+  /** The level's song settings (normalized), or undefined to follow the player's theme. */
+  private music: LevelMusic | undefined = undefined;
+  private stopPreview: (() => void) | null = null;
 
   private tool: Tool = "enemy";
   private enemyType: EnemyType = "basic";
@@ -77,6 +88,7 @@ export class LevelDesignerScene extends Phaser.Scene {
     this.doRefresh();
 
     this.events.once("shutdown", () => {
+      this.stopPreview?.();
       this.persistState();
       this.uiContainer?.remove();
       this.uiContainer = null;
@@ -114,6 +126,7 @@ export class LevelDesignerScene extends Phaser.Scene {
     this.shipRx = level.shipRx ?? 0.5;
     this.shipRy = level.shipRy ?? 0.8;
     this.waves = structuredClone(level.waves);
+    this.music = level.music ? structuredClone(level.music) : undefined;
     this.currentWave = 0;
     this.selected = null;
   }
@@ -125,6 +138,7 @@ export class LevelDesignerScene extends Phaser.Scene {
     this.shipRx = 0.5;
     this.shipRy = 0.8;
     this.waves = [{ enemies: [] }];
+    this.music = undefined;
     this.currentWave = 0;
     this.selected = null;
   }
@@ -137,14 +151,17 @@ export class LevelDesignerScene extends Phaser.Scene {
 
   /** Deep copy of the source level with the edited fields applied (unknown fields survive). */
   private toLevelDef(): LevelDef {
-    return structuredClone({
+    const def: LevelDef = structuredClone({
       ...this.sourceLevel,
       id: this.ensureLevelId(),
       name: this.levelName,
       shipRx: this.shipRx,
       shipRy: this.shipRy,
+      music: this.music,
       waves: this.waves,
     });
+    if (def.music === undefined) delete def.music;
+    return def;
   }
 
   private persistState() {
@@ -165,6 +182,7 @@ export class LevelDesignerScene extends Phaser.Scene {
       },
       onToolSelect: (t) => this.setTool(t),
       onPlayTest: () => this.playTest(),
+      onSong: () => this.showSongAction(),
       onSave: () => this.saveLevelAction(),
       onLoad: () => this.showLoadAction(),
       onExport: () => this.exportLevel(),
@@ -173,6 +191,7 @@ export class LevelDesignerScene extends Phaser.Scene {
       onWaveAdd: () => this.addWave(),
       onWaveDelete: () => this.deleteWave(),
       onWaveDuplicate: () => this.duplicateWave(),
+      onWaveBarsChange: (text, commit) => this.setWaveBars(text, commit),
     });
 
     document.body.appendChild(elements.container);
@@ -201,6 +220,32 @@ export class LevelDesignerScene extends Phaser.Scene {
     );
     refreshProps(this.ui.propsEl, this.selected, this.wave(), this.shipRx, this.shipRy);
     refreshWaveBar(this.waves, this.currentWave, (i) => this.switchWave(i));
+    // Not while typing in it, so a refresh can't rewrite what the user is entering.
+    if (document.activeElement !== this.ui.barsInput) this.syncBarsInput();
+  }
+
+  /** Shows the current wave's bars (empty = default) and clears any error highlight. */
+  private syncBarsInput() {
+    if (!this.ui) return;
+    const bars = this.wave().bars;
+    this.ui.barsInput.value = bars !== undefined ? String(bars) : "";
+    this.ui.barsInput.style.borderColor = "";
+  }
+
+  /** The wave's minimum section length from the bars field: empty clears it, invalid text is flagged and ignored. */
+  private setWaveBars(text: string, commit: boolean) {
+    const wave = this.wave();
+    const trimmed = text.trim();
+    const bars = trimmed === "" ? undefined : normalizeWaveBars(Number(trimmed));
+    const valid = trimmed === "" || bars !== undefined;
+    if (valid) {
+      if (bars === undefined) delete wave.bars;
+      else wave.bars = bars;
+      this.persistState();
+      if (this.ui) refreshWaveBar(this.waves, this.currentWave, (i) => this.switchWave(i));
+    }
+    if (commit) this.syncBarsInput();
+    else if (this.ui) this.ui.barsInput.style.borderColor = valid ? "" : "#ff4444";
   }
 
   // ── Wave Management ───────────────────────────────────────────
@@ -425,6 +470,34 @@ export class LevelDesignerScene extends Phaser.Scene {
     this.persistState();
     // toLevelDef() is a deep copy, so the game can't mutate the editor's state.
     this.scene.start("GameScene", { mode: "level", levelDef: this.toLevelDef() });
+  }
+
+  private showSongAction() {
+    showSongModal({
+      music: this.music,
+      playerPalette: getPalette(options.themeId),
+      isThemeUnlocked,
+      onApply: (music) => {
+        this.music = music;
+        this.persistState();
+      },
+      onPreview: (music, onEnd) => this.startPreview(music, onEnd),
+    });
+  }
+
+  /** Plays PREVIEW_BARS bars of the song settings as the player would hear them; returns a stop function. */
+  private startPreview(music: LevelMusic | undefined, onEnd: () => void): () => void {
+    this.stopPreview?.();
+    const palette = levelPalette(getPalette(options.themeId), normalizeLevelMusic(music), isThemeUnlocked);
+    let stop: () => void = () => {};
+    const preview = new PreviewMusic(palette, PREVIEW_BARS, () => {
+      if (this.stopPreview === stop) this.stopPreview = null;
+      onEnd();
+    });
+    stop = () => preview.stop();
+    this.stopPreview = stop;
+    void preview.start();
+    return stop;
   }
 
   private saveLevelAction() {

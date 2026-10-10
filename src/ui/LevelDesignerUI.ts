@@ -1,7 +1,14 @@
 import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
-import type { LevelDef, LevelWave } from "../systems/Levels";
-import { normalizeLevelDef, MAX_LEVEL_NAME_LENGTH } from "../systems/LevelValidation";
+import type { LevelDef, LevelMusic, LevelWave } from "../systems/Levels";
+import {
+  normalizeLevelDef, normalizeLevelMusic, normalizeBpm, progressionError,
+  MAX_LEVEL_NAME_LENGTH, MAX_WAVE_BARS, MIN_LEVEL_BPM, MAX_LEVEL_BPM,
+} from "../systems/LevelValidation";
+import { parseProgression } from "../music/Harmony";
+import { levelPalette } from "../music/levelMusic";
+import { ALL_PALETTES, type Palette } from "../music/palettes";
+import { HEPTATONIC_MODES } from "../music/theory";
 import { ENEMY_TYPES, WALL_TYPE_LIST, ASTEROID_SIZES, getEnemyVis, type Tool, type Selection } from "./LevelDesignerData";
 
 // ── CSS ─────────────────────────────────────────────────────────
@@ -83,6 +90,14 @@ export function injectEditorStyles() {
     }
     .ld-modal-textarea:focus { border-color:#ffaa44; }
     .ld-modal-error { color:#ff6666;font-size:11px;margin-top:8px;white-space:pre-wrap; }
+    .ld-bars { width:52px; }
+    .ld-form-row { display:flex;align-items:center;gap:8px;margin-top:10px; }
+    .ld-form-label { width:92px;flex-shrink:0;color:#887766;font-size:11px;letter-spacing:1px; }
+    .ld-form-row .ld-input, .ld-form-row .ld-select { flex:1;width:auto;min-width:0; }
+    .ld-form-msg { margin:3px 0 0 100px;font-size:10px;color:#555;min-height:12px; }
+    .ld-form-msg.error { color:#ff6666; }
+    .ld-form-msg.ok { color:#88aa66; }
+    .ld-btn:disabled { opacity:0.4;cursor:default; }
     .ld-toast {
       position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
       background:rgba(10,8,6,0.95);border:1px solid #ffaa44;border-radius:6px;
@@ -101,12 +116,15 @@ export interface EditorUIElements {
   subtoolEl: HTMLDivElement;
   propsEl: HTMLDivElement;
   toolBtns: HTMLButtonElement[];
+  /** The current wave's minimum section length in bars (empty = default 1). */
+  barsInput: HTMLInputElement;
 }
 
 export interface EditorUICallbacks {
   onNameChange: (name: string) => void;
   onToolSelect: (tool: Tool) => void;
   onPlayTest: () => void;
+  onSong: () => void;
   onSave: () => void;
   onLoad: () => void;
   onExport: () => void;
@@ -115,6 +133,8 @@ export interface EditorUICallbacks {
   onWaveAdd: () => void;
   onWaveDelete: () => void;
   onWaveDuplicate: () => void;
+  /** The bars field changed; `commit` is true when editing ends (Enter or leaving the field). */
+  onWaveBarsChange: (text: string, commit: boolean) => void;
 }
 
 export function createEditorPanels(levelName: string, activeTool: Tool, callbacks: EditorUICallbacks): EditorUIElements {
@@ -140,6 +160,7 @@ export function createEditorPanels(levelName: string, activeTool: Tool, callback
 
   for (const [label, cls, fn] of [
     ["TEST", "primary", callbacks.onPlayTest],
+    ["SONG", "", callbacks.onSong],
     ["SAVE", "", callbacks.onSave],
     ["LOAD", "", callbacks.onLoad],
     ["EXPORT", "", callbacks.onExport],
@@ -198,6 +219,27 @@ export function createEditorPanels(levelName: string, activeTool: Tool, callback
   waveTabs.style.cssText = "display:flex;gap:4px;align-items:center;";
   waveBar.appendChild(waveTabs);
 
+  const barsSep = document.createElement("span");
+  barsSep.className = "ld-sep";
+  barsSep.textContent = "|";
+  waveBar.appendChild(barsSep);
+
+  const barsHelp = "Minimum section length: the next wave starts no sooner than this many bars after this one (default 1)";
+  const barsLabel = makeLabel("BARS");
+  barsLabel.title = barsHelp;
+  waveBar.appendChild(barsLabel);
+  const barsInput = document.createElement("input");
+  barsInput.className = "ld-input ld-bars";
+  barsInput.type = "number";
+  barsInput.min = "1";
+  barsInput.max = String(MAX_WAVE_BARS);
+  barsInput.step = "1";
+  barsInput.placeholder = "1";
+  barsInput.title = barsHelp;
+  barsInput.addEventListener("input", () => callbacks.onWaveBarsChange(barsInput.value, false));
+  barsInput.addEventListener("change", () => callbacks.onWaveBarsChange(barsInput.value, true));
+  waveBar.appendChild(barsInput);
+
   const waveSpacer = document.createElement("div");
   waveSpacer.style.flex = "1";
   waveBar.appendChild(waveSpacer);
@@ -220,7 +262,7 @@ export function createEditorPanels(levelName: string, activeTool: Tool, callback
     container.addEventListener(evt, (e) => e.stopPropagation());
   }
 
-  return { container, nameInput, subtoolEl, propsEl, toolBtns };
+  return { container, nameInput, subtoolEl, propsEl, toolBtns, barsInput };
 }
 
 // ── Refresh Helpers ─────────────────────────────────────────────
@@ -296,8 +338,11 @@ export function refreshWaveBar(waves: LevelWave[], currentWave: number, onSwitch
   tabs.innerHTML = "";
   for (let i = 0; i < waves.length; i++) {
     const btn = document.createElement("button");
+    const bars = waves[i].bars;
     btn.className = `ld-wave-tab${i === currentWave ? " active" : ""}`;
-    btn.textContent = `W${i + 1}`;
+    // "W2:4" = wave 2 lasts at least 4 bars (the progression's ":BARS" notation).
+    btn.textContent = bars !== undefined ? `W${i + 1}:${bars}` : `W${i + 1}`;
+    btn.title = `Wave ${i + 1}: at least ${bars ?? 1} bar${(bars ?? 1) === 1 ? "" : "s"} before the next wave`;
     btn.addEventListener("click", (e) => { e.stopPropagation(); onSwitch(i); });
     tabs.appendChild(btn);
   }
@@ -410,6 +455,204 @@ export function showImportExportModal(mode: "IMPORT" | "EXPORT", content: string
   document.body.appendChild(modal);
 }
 
+// ── Song settings ───────────────────────────────────────────────
+
+const KEY_CHOICES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+
+export interface SongModalOptions {
+  /** The level's current music (normalized), or undefined. */
+  music: LevelMusic | undefined;
+  /** The player's own theme: what "player's choice" (and a locked theme) plays. */
+  playerPalette: Palette;
+  isThemeUnlocked: (id: string) => boolean;
+  /** APPLY with valid fields: the new music, or undefined when every field is the theme's. */
+  onApply: (music: LevelMusic | undefined) => void;
+  /** Starts auditioning `music`; `onEnd` runs when it stops; returns a stop function. */
+  onPreview?: (music: LevelMusic | undefined, onEnd: () => void) => () => void;
+}
+
+/**
+ * Edits a level's song settings: theme (player's choice or a palette), tempo, key, mode and
+ * progression, with validation feedback. Empty fields fall back to the theme. Unknown music fields
+ * are kept. PREVIEW auditions the current fields; the preview stops when the modal closes.
+ */
+export function showSongModal(opts: SongModalOptions) {
+  let stopPreview: (() => void) | null = null;
+  const previewBtn = document.createElement("button");
+  const endPreview = () => {
+    const stop = stopPreview;
+    stopPreview = null;
+    previewBtn.textContent = "PREVIEW";
+    stop?.();
+  };
+  const modal = createModal(endPreview);
+  const close = () => {
+    endPreview();
+    modal.remove();
+  };
+  const box = createModalBox(modal, "SONG");
+  box.style.maxWidth = "460px";
+
+  const { theme, bpm, key, mode, progression, ...extra } = opts.music ?? {};
+
+  const themeSel = makeSelect(["", ...ALL_PALETTES.map((p) => p.id)], theme ?? "", () => refresh(), false);
+  for (const o of Array.from(themeSel.options)) {
+    const p = ALL_PALETTES.find((x) => x.id === o.value);
+    o.textContent = p ? `${p.name}${opts.isThemeUnlocked(p.id) ? "" : " (locked)"}` : `Player's choice (${opts.playerPalette.name})`;
+  }
+  const themeMsg = addFormRow(box, "THEME", themeSel);
+
+  const bpmInput = document.createElement("input");
+  bpmInput.className = "ld-input";
+  bpmInput.type = "number";
+  bpmInput.min = String(MIN_LEVEL_BPM);
+  bpmInput.max = String(MAX_LEVEL_BPM);
+  bpmInput.step = "1";
+  bpmInput.value = bpm !== undefined ? String(bpm) : "";
+  bpmInput.addEventListener("input", () => refresh());
+  const bpmMsg = addFormRow(box, "TEMPO (BPM)", bpmInput);
+
+  const keys = key !== undefined && !KEY_CHOICES.includes(key) ? [...KEY_CHOICES, key] : KEY_CHOICES;
+  const keySel = makeSelect(["", ...keys], key ?? "", () => refresh(), false);
+  addFormRow(box, "KEY", keySel);
+
+  const modeSel = makeSelect(["", ...HEPTATONIC_MODES], mode ?? "", () => refresh(), false);
+  addFormRow(box, "MODE", modeSel);
+
+  const progInput = document.createElement("input");
+  progInput.className = "ld-input";
+  progInput.value = progression ?? "";
+  progInput.spellcheck = false;
+  progInput.addEventListener("input", () => refresh());
+  const progMsg = addFormRow(box, "PROGRESSION", progInput);
+
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;";
+  const applyBtn = document.createElement("button");
+  applyBtn.className = "ld-btn primary";
+  applyBtn.textContent = "APPLY";
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "ld-btn";
+  clearBtn.textContent = "CLEAR";
+  clearBtn.title = "Every field back to the theme's";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "ld-btn";
+  cancelBtn.textContent = "CANCEL";
+  previewBtn.className = "ld-btn";
+  previewBtn.textContent = "PREVIEW";
+  previewBtn.title = "Play 4 bars of the progression";
+  btnRow.append(applyBtn, ...(opts.onPreview ? [previewBtn] : []), clearBtn, cancelBtn);
+  box.appendChild(btnRow);
+
+  /** The music the fields describe (valid fields only) and whether any field is invalid. */
+  const read = (): { music: LevelMusic | undefined; invalid: boolean } => {
+    const raw: Record<string, unknown> = { ...extra };
+    let invalid = false;
+    if (themeSel.value) raw.theme = themeSel.value;
+    const bpmText = bpmInput.value.trim();
+    if (bpmText) {
+      const n = Number(bpmText);
+      if (normalizeBpm(n) === undefined) invalid = true;
+      else raw.bpm = n;
+    }
+    if (keySel.value) raw.key = keySel.value;
+    if (modeSel.value) raw.mode = modeSel.value;
+    const progText = progInput.value.trim();
+    if (progText) {
+      if (progressionError(progText) !== null) invalid = true;
+      else raw.progression = progText;
+    }
+    return { music: normalizeLevelMusic(raw), invalid };
+  };
+
+  const setMsg = (el: HTMLDivElement, text: string, kind: "" | "error" | "ok" = "") => {
+    el.textContent = text;
+    el.className = `ld-form-msg${kind ? ` ${kind}` : ""}`;
+  };
+
+  function refresh() {
+    // What an empty field falls back to: the chosen theme (if this player has it) or their own.
+    const chosen = themeSel.value;
+    const base = levelPalette(opts.playerPalette, chosen ? { theme: chosen } : undefined, opts.isThemeUnlocked);
+    if (!chosen) setMsg(themeMsg, "Each player hears their own sound theme");
+    else if (opts.isThemeUnlocked(chosen)) setMsg(themeMsg, "Used for players who have unlocked it");
+    else setMsg(themeMsg, `You haven't unlocked it: you'll hear ${opts.playerPalette.name}`, "error");
+
+    bpmInput.placeholder = `${base.bpm} (theme)`;
+    keySel.options[0].textContent = `Theme's (${base.key})`;
+    modeSel.options[0].textContent = `Theme's (${base.mode})`;
+    progInput.placeholder = base.progression;
+
+    const bpmText = bpmInput.value.trim();
+    if (!bpmText) setMsg(bpmMsg, "");
+    else if (normalizeBpm(Number(bpmText)) === undefined) setMsg(bpmMsg, `Tempo must be ${MIN_LEVEL_BPM}–${MAX_LEVEL_BPM}`, "error");
+    else setMsg(bpmMsg, "");
+
+    const progText = progInput.value.trim();
+    const err = progText ? progressionError(progText) : null;
+    if (!progText) setMsg(progMsg, "Roman numerals, e.g. i VI III VII or i:2 iv V7");
+    else if (err !== null) setMsg(progMsg, err, "error");
+    else {
+      const chords = parseProgression(progText);
+      const bars = chords.reduce((sum, c) => sum + c.bars, 0);
+      setMsg(progMsg, `✓ ${chords.length} chord${chords.length === 1 ? "" : "s"} over ${bars} bar${bars === 1 ? "" : "s"}`, "ok");
+    }
+
+    applyBtn.disabled = read().invalid;
+  }
+
+  applyBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const { music, invalid } = read();
+    if (invalid) return;
+    opts.onApply(music);
+    close();
+    showToast("Song settings applied");
+  });
+  clearBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    themeSel.value = "";
+    bpmInput.value = "";
+    keySel.value = "";
+    modeSel.value = "";
+    progInput.value = "";
+    refresh();
+  });
+  cancelBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    close();
+  });
+  previewBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (stopPreview || !opts.onPreview) {
+      endPreview();
+      return;
+    }
+    previewBtn.textContent = "STOP";
+    stopPreview = opts.onPreview(read().music, () => {
+      stopPreview = null;
+      previewBtn.textContent = "PREVIEW";
+    });
+  });
+
+  refresh();
+  document.body.appendChild(modal);
+}
+
+/** A labelled form row in `box`; returns the message line under it. */
+function addFormRow(box: HTMLDivElement, label: string, control: HTMLElement): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "ld-form-row";
+  const labelEl = document.createElement("span");
+  labelEl.className = "ld-form-label";
+  labelEl.textContent = label;
+  row.append(labelEl, control);
+  const msg = document.createElement("div");
+  msg.className = "ld-form-msg";
+  box.append(row, msg);
+  return msg;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 function makeLabel(text: string): HTMLSpanElement {
@@ -433,10 +676,15 @@ function makeSelect(options: string[], value: string, onChange: (v: string) => v
   return sel;
 }
 
-function createModal(): HTMLDivElement {
+/** A full-screen modal; clicking the backdrop closes it (and calls `onClose`). */
+function createModal(onClose?: () => void): HTMLDivElement {
   const modal = document.createElement("div");
   modal.className = "ld-modal";
-  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+  modal.addEventListener("click", (e) => {
+    if (e.target !== modal) return;
+    modal.remove();
+    onClose?.();
+  });
   for (const evt of ["pointerdown", "pointerup", "pointermove", "keydown"] as const) {
     modal.addEventListener(evt, (e) => e.stopPropagation());
   }
