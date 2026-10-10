@@ -213,6 +213,7 @@ export class GameScene extends Phaser.Scene {
     } else if (!isTutorialDone()) {
       this.tutorial = new TutorialManager(this);
     } else {
+      // Wave 1 starts on the first bar line (the conductor's first tick).
       this.waves.spawnEndlessWave();
     }
   }
@@ -262,7 +263,7 @@ export class GameScene extends Phaser.Scene {
     this.pickups.update(delta, ts);
     this.particles.update(delta, ts);
     this.chain.update(delta, ts);
-    this.waves.update(delta, ts);
+    this.waves.update();
 
     // Last, so this frame's ticks and gameplay events are all in the director's queue.
     this.music.update(ts);

@@ -5,45 +5,82 @@ import { createEnemy, type Enemy, type EnemyType } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import type { Bullet } from "../objects/Bullet";
 import type { Wall } from "../objects/Wall";
+import { PendingSpawn, nextBarLine } from "../core/barSchedule";
 import { EndlessMode } from "../systems/EndlessMode";
 import { isMutatorWave } from "../systems/WaveMutators";
 import { updateHighWave } from "../systems/Unlocks";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
 
-/** Game-time ms after the field is cleared before the next endless wave starts. */
-const WAVE_DELAY_MS = 1500;
-
-/** Wave pacing for both modes, endless waves (mutators, bosses), and dev spawning helpers. */
+/**
+ * Song structure for both modes: waves are sections that start on bar lines. Level waves follow
+ * the LevelRunner; endless waves are 8-bar sections that spawn continuously (EndlessMode), each
+ * starting on the bar line after the previous one is spent and cleared. Also: endless mutators,
+ * boss kills and dev spawning helpers.
+ */
 export class WaveDirector {
   bossActive = false;
-  /** Game-time ms since the current endless wave started. */
-  private waveTimer = 0;
   private readonly endless: EndlessMode;
+  /** The next endless wave, waiting for its bar line (guarded: queued at most once). */
+  private readonly nextWave = new PendingSpawn<"wave">();
 
   constructor(private readonly scene: GameScene) {
     this.endless = new EndlessMode(scene);
   }
 
-  /** Every conductor tick, before the music hears it: level waves spawn on their bar lines. */
-  onTick(t: TickEvent) {
-    this.scene.level?.onTick(t);
+  /** Ticks on which endless enemy groups spawned (the latest 256), for diagnostics and the smoke test. */
+  get spawnTicks(): readonly number[] {
+    return this.endless.spawnTicks;
   }
 
-  /** Per live frame: schedules the next level wave once the field is clear, or starts the next endless wave. */
-  update(delta: number, ts: number) {
+  /** The tick the next endless wave is queued for, or null. */
+  get nextWaveTick(): number | null {
+    return this.nextWave.tick;
+  }
+
+  /**
+   * Every conductor tick, before the music and the enemies hear it. Levels: waves spawn on their
+   * bar lines. Endless: a queued wave starts on its bar line, then the section spawns this downbeat.
+   */
+  onTick(t: TickEvent) {
+    const s = this.scene;
+    if (s.level) {
+      s.level.onTick(t);
+      return;
+    }
+    if (this.nextWave.take(t.tick)) this.startEndlessWave(t);
+    if (t.isBar) this.endless.onBar(t);
+  }
+
+  /** Per live frame: once the field is clear, queues the next level wave, or the next endless wave once the section is spent. */
+  update() {
     const s = this.scene;
     if (s.level) {
       s.level.update();
       return;
     }
-    this.waveTimer += delta * ts;
-    if (s.enemies.getLength() === 0 && this.waveTimer > WAVE_DELAY_MS) this.spawnEndlessWave();
+    if (this.endless.isFinished()) this.queueEndlessWave();
   }
 
-  spawnEndlessWave() {
+  /**
+   * Queues the next endless wave for the next bar line and ends the current section's spawning.
+   * Run start, the tutorial and the dev panel call this. Returns false if a wave is already queued
+   * (that one starts instead) or in level mode.
+   */
+  spawnEndlessWave(): boolean {
+    if (this.scene.level) return false;
+    this.endless.cancel();
+    return this.queueEndlessWave();
+  }
+
+  private queueEndlessWave(): boolean {
+    const c = this.scene.conductor;
+    return this.nextWave.schedule(nextBarLine(c.currentTick + 1, c.ticksPerBar), "wave");
+  }
+
+  /** On the queued bar line: the next wave number, its mutator, and its section. */
+  private startEndlessWave(t: TickEvent) {
     const s = this.scene;
     s.wave++;
-    this.waveTimer = 0;
     s.hud.setWaveLabel(`WAVE ${s.wave}`);
     updateHighWave(s.wave);
     s.progression.processUnlocks();
@@ -57,8 +94,8 @@ export class WaveDirector {
       }
     }
 
-    s.gameEvents.emit("waveStarted", { wave: s.wave, mode: "endless" });
-    this.endless.spawnWave();
+    s.gameEvents.emit("waveStarted", { wave: s.wave, mode: "endless", tick: t.tick, lateBy: t.lateBy });
+    this.endless.startSection(t);
   }
 
   onBossKilled(x: number, y: number, bossType: EnemyType) {

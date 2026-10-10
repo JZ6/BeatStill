@@ -294,18 +294,27 @@ function checkPlayerFire(label, fire, audioBefore, audioAfter) {
   if (!(lead > 0)) problems.push(`${label}: the lead role scheduled no notes`);
 }
 
-/** Holds the left button for `ms` while circling the mouse around (cx, cy). */
-async function holdFire(cdp, ms, { cx, cy, rx = 200, ry = 150, onSample } = {}) {
+/**
+ * Holds the left button for `ms` while circling the mouse around (cx, cy). With `until`, stops as
+ * soon as it resolves truthy (checked every 5 moves) and returns whether it did.
+ */
+async function holdFire(cdp, ms, { cx, cy, rx = 200, ry = 150, onSample, until } = {}) {
   await mouse(cdp, "mouseMoved", cx, cy, false);
   await mouse(cdp, "mousePressed", cx, cy, true);
   const start = Date.now();
+  let satisfied = false;
   for (let i = 0; Date.now() - start < ms; i++) {
     const a = i * 0.25;
     await mouse(cdp, "mouseMoved", cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, true);
     if (onSample && i % 5 === 0) await onSample();
+    if (until && i % 5 === 0 && (await until())) {
+      satisfied = true;
+      break;
+    }
     await sleep(50);
   }
   await mouse(cdp, "mouseReleased", cx, cy, false);
+  return satisfied;
 }
 
 /** Starts GameScene from the menu, the same way the menu buttons do. `dataExpr` is a JS expression. */
@@ -392,7 +401,8 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
 }
 
 /**
- * Endless boss waves, started like the DevPanel's "Set Wave". A hit past the phase-2 threshold
+ * Endless boss waves, started like the DevPanel's "Set Wave" (the boss arrives two bars after the
+ * wave's bar line, so the probe shoots to keep time moving). A hit past the phase-2 threshold
  * queues phase 2; it must take effect on a bar line (bossPhaseChanged on a tick that is a multiple
  * of the bar), and the boss must fire on the grid. God mode keeps the probe alive.
  */
@@ -410,7 +420,15 @@ async function bossCheck(cdp) {
       `(() => { const s = ${scene}; s.godMode = true; s.wave = ${wave - 1}; s.waves.clearField(); s.waves.spawnEndlessWave(); return true; })()`,
     );
     const findBoss = `${scene}.enemies.getChildren().find((e) => e.enemyType === "${type}")`;
-    const arrived = await waitFor(() => evaluate(cdp, `!!${findBoss}`), 8000, `${type} to arrive`).catch(() => false);
+    // The wave starts on the next bar line and the boss arrives on the downbeat after a two-bar
+    // warning, all in conductor time: keep time moving (shooting down, away from the arrival point).
+    const arrived = await holdFire(cdp, 20000, {
+      cx: VIEWPORT.width / 2,
+      cy: VIEWPORT.height * 0.92,
+      rx: 250,
+      ry: 20,
+      until: () => evaluate(cdp, `!!${findBoss}`),
+    });
     if (!arrived) {
       problems.push(`${tag}: boss did not arrive`);
       continue;
