@@ -3,6 +3,7 @@ import { addWeaponKill } from "./Unlocks";
 import { addKill } from "./Achievements";
 import { getLuckyStarBonus } from "./Shop";
 import { px } from "./GameConfig";
+import { shakeCamera } from "./feedback";
 import {
   CHAIN_GRACE_BEATS,
   METRONOME_CHAIN_BONUS,
@@ -132,7 +133,7 @@ export class ChainSystem {
 
       const shakeIntensity = [0, 0.003, 0.005, 0.008, 0.012, 0.012][this.chainTier];
       const shakeDuration = [0, 80, 100, 120, 150, 150][this.chainTier];
-      if (shakeIntensity > 0) s.cameras.main.shake(shakeDuration, shakeIntensity);
+      if (shakeIntensity > 0) shakeCamera(s.cameras.main, shakeDuration, shakeIntensity);
     }
 
     this.chainTimer = effectiveWindow;

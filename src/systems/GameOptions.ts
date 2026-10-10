@@ -11,6 +11,12 @@ export interface GameOptions {
   shipColor: number;       // hex color for ship outline
   themeId: string;         // sound theme id
   starterWeapon: string;   // weapon id for run start
+  audioLatencyMs: number;  // 0-200: the music's scheduling latency (game, menu and previews)
+  droneVolume: number;     // 0-100: the slow-motion drone's loudness (70 = as designed)
+  heartbeat: boolean;      // the heartbeat on beats 1 and 3
+  beatVisualizer: boolean; // a subtle screen-edge pulse on beats (for players who can't hear well)
+  reduceFlashing: boolean; // no beat flashes or grid pulse; gentler camera shake
+  haptics: boolean;        // short vibrations on player hits and bar downbeats (where supported)
 }
 
 export const FPS_VALUES: readonly number[] = [30, 60, 120, 240, 0];
@@ -18,6 +24,12 @@ export const PARTICLE_VALUES: readonly number[] = [0, 150, 300, 500, 800];
 const RESOLUTION_VALUES: readonly number[] = [0, 1, 2, 3];
 const CONTROLS_VALUES: readonly number[] = [0, 1, 2];
 const MAX_ID_LENGTH = 64;
+export const LATENCY_MIN_MS = 0;
+export const LATENCY_MAX_MS = 200;
+export const DEFAULT_LATENCY_MS = 50;
+export const DEFAULT_DRONE_VOLUME = 70;
+/** Camera shake intensity and duration are scaled by this with reduceFlashing on. */
+export const REDUCED_SHAKE = 0.3;
 
 function detectResolution(): number {
   // Not in a browser (e.g. unit tests): fall back to medium.
@@ -41,6 +53,12 @@ const DEFAULTS: GameOptions = {
   shipColor: 0x00ffff,
   themeId: "theremin",
   starterWeapon: "standard",
+  audioLatencyMs: DEFAULT_LATENCY_MS,
+  droneVolume: DEFAULT_DRONE_VOLUME,
+  heartbeat: true,
+  beatVisualizer: false,
+  reduceFlashing: false,
+  haptics: false,
 };
 
 /** A fresh copy of the default options. */
@@ -60,9 +78,14 @@ function pickBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-function pickVolume(value: unknown, fallback: number): number {
+/** A finite number clamped to [min, max] and rounded; anything else falls back. */
+function pickRange(value: unknown, min: number, max: number, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-  return Math.round(Math.min(100, Math.max(0, value)));
+  return Math.round(Math.min(max, Math.max(min, value)));
+}
+
+function pickVolume(value: unknown, fallback: number): number {
+  return pickRange(value, 0, 100, fallback);
 }
 
 function pickColor(value: unknown, fallback: number): number {
@@ -94,7 +117,28 @@ export function normalizeOptions(raw: unknown): GameOptions {
     shipColor: pickColor(raw.shipColor, d.shipColor),
     themeId: pickId(raw.themeId, d.themeId),
     starterWeapon: pickId(raw.starterWeapon, d.starterWeapon),
+    audioLatencyMs: pickRange(raw.audioLatencyMs, LATENCY_MIN_MS, LATENCY_MAX_MS, d.audioLatencyMs),
+    droneVolume: pickVolume(raw.droneVolume, d.droneVolume),
+    heartbeat: pickBoolean(raw.heartbeat, d.heartbeat),
+    beatVisualizer: pickBoolean(raw.beatVisualizer, d.beatVisualizer),
+    reduceFlashing: pickBoolean(raw.reduceFlashing, d.reduceFlashing),
+    haptics: pickBoolean(raw.haptics, d.haptics),
   };
+}
+
+/** The music's scheduling latency in seconds for an audioLatencyMs value (clamped; bad values → default). */
+export function latencySeconds(ms: number): number {
+  return pickRange(ms, LATENCY_MIN_MS, LATENCY_MAX_MS, DEFAULT_LATENCY_MS) / 1000;
+}
+
+/** Drone gain multiplier for a droneVolume value: 1 at the default (70), 0 at 0, ≈1.43 at 100. */
+export function droneGainFor(volume: number): number {
+  return pickVolume(volume, DEFAULT_DRONE_VOLUME) / DEFAULT_DRONE_VOLUME;
+}
+
+/** Camera shake scale: 1, or REDUCED_SHAKE with reduceFlashing on. */
+export function shakeScale(reduceFlashing: boolean): number {
+  return reduceFlashing ? REDUCED_SHAKE : 1;
 }
 
 const STORAGE_KEY = "beatstill_options";

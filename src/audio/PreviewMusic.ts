@@ -4,8 +4,6 @@ import { registerMidi, type Palette } from "../music/palettes";
 import { getAudioEngine } from "./AudioEngine";
 import { MusicDriver } from "./MusicDriver";
 
-/** Same fixed latency as the director's default, so the pad lands with the heartbeat. */
-const LATENCY = 0.05;
 const PAD_VELOCITY = 0.45;
 const FALLBACK_PAD: [number, number] = [48, 72];
 
@@ -83,6 +81,8 @@ export class PreviewMusic {
     const [lo] = registerMidi(this.palette.instruments.pad) ?? FALLBACK_PAD;
     const midi = this.director.harmony.chordTones(t.bar, lo, lo + 12);
     const barSeconds = this.conductor.beatsToGameSeconds(this.conductor.beatsPerBar);
-    this.engine.play({ role: "pad", midi, when: Math.max(0, LATENCY - t.lateBy), duration: barSeconds * 0.95, velocity: PAD_VELOCITY });
+    // The director's latency (Options → Audio Latency), so the pad lands with the heartbeat.
+    const when = Math.max(0, this.director.latencySeconds - t.lateBy);
+    this.engine.play({ role: "pad", midi, when, duration: barSeconds * 0.95, velocity: PAD_VELOCITY });
   }
 }

@@ -492,8 +492,10 @@ export class StartScene extends Phaser.Scene {
   }
 
   private triggerHeartbeat() {
-    this.titlePulse = 1;
     this.ekgPhase = 1;
+    // The title pulse, ring and glow are beat flashes: off with Options → Reduce Flashing (the EKG stays).
+    if (options.reduceFlashing) return;
+    this.titlePulse = 1;
 
     this.pulseRings.push({
       x: GAME_W / 2,

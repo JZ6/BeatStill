@@ -5,7 +5,7 @@ import { LevelSelectScene } from "./scenes/LevelSelectScene";
 import { LevelDesignerScene } from "./scenes/LevelDesignerScene";
 import { createDevPanel } from "./systems/DevPanel";
 import { initCrashReporter } from "./systems/CrashReporter";
-import { options, registerGame, saveOptions } from "./systems/GameOptions";
+import { droneGainFor, options, registerGame, saveOptions } from "./systems/GameOptions";
 import { initDimensions, GAME_W, GAME_H } from "./systems/GameConfig";
 import { ALL_LEVELS, type LevelDef } from "./systems/Levels";
 import { getAudioEngine, type AudioEngineStats } from "./audio/AudioEngine";
@@ -14,6 +14,7 @@ import type { MusicControl } from "./audio/MusicDriver";
 initDimensions(options.resolution);
 const engine = getAudioEngine();
 engine.setVolume(options.masterVolume / 100);
+engine.setDroneGain(droneGainFor(options.droneVolume));
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

@@ -7,6 +7,7 @@ import { addShards, addWeaponPickup, recordEvolution } from "../systems/Unlocks"
 import { addPickup, recordWeaponUsed } from "../systems/Achievements";
 import { MAGNET_SPEEDS } from "../systems/ChainSystem";
 import { px } from "../systems/GameConfig";
+import { shakeCamera } from "../systems/feedback";
 
 /** Upgrade pickups: drops, magnets, collection, and applying upgrades (incl. weapon evolution). */
 export class PickupSystem {
@@ -72,7 +73,7 @@ export class PickupSystem {
       recordEvolution(evo.evolvedWeaponId);
       s.particles.burst(s.ship.x, s.ship.y, 0xffaa22, 50, 200, 6);
       s.particles.burst(s.ship.x, s.ship.y, 0xffffff, 30, 150, 4);
-      s.cameras.main.shake(400, 0.03);
+      shakeCamera(s.cameras.main, 400, 0.03);
       s.toasts.push(`EVOLVED: ${getWeapon(evo.evolvedWeaponId).name.toUpperCase()}`);
     }
   }

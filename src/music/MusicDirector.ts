@@ -64,11 +64,16 @@ export interface DirectorClock {
 }
 
 export interface MusicDirectorOptions {
-  /** Fixed scheduling latency in seconds (default 0.05). */
+  /** Fixed scheduling latency in seconds (default 0.05; see setLatency). */
   latency?: number;
   /** Longest real wait (seconds) for snapping an event to the next 16th (default 0.12). */
   maxQuantizeWait?: number;
+  /** Whether the heartbeat plays (default true; see setHeartbeat). */
+  heartbeat?: boolean;
 }
+
+/** Longest scheduling latency setLatency accepts, in seconds. */
+export const MAX_LATENCY = 0.5;
 
 /** Enemy type → musical role, from the enemy registry. */
 export const ENEMY_ROLES: Readonly<Record<EnemyKind, Role>> = Object.freeze(
@@ -174,7 +179,8 @@ type Handlers = { [K in keyof GameEventMap]: (payload: GameEventMap[K]) => void 
 
 export class MusicDirector {
   private readonly clock: DirectorClock;
-  private readonly latency: number;
+  private latency: number;
+  private heartbeatOn: boolean;
   private readonly maxQuantizeWait: number;
   private _palette!: Palette;
   private _harmony!: Harmony;
@@ -195,7 +201,9 @@ export class MusicDirector {
 
   constructor(palette: Palette, clock: DirectorClock, options: MusicDirectorOptions = {}) {
     this.clock = clock;
-    this.latency = Math.max(0, options.latency ?? 0.05);
+    this.latency = 0.05;
+    this.setLatency(options.latency ?? 0.05);
+    this.heartbeatOn = options.heartbeat ?? true;
     this.maxQuantizeWait = Math.max(0, options.maxQuantizeWait ?? 0.12);
     this.handlers = this.createHandlers();
     this.setPalette(palette);
@@ -208,6 +216,26 @@ export class MusicDirector {
 
   get harmony(): Harmony {
     return this._harmony;
+  }
+
+  /** The scheduling latency in seconds: tick sounds play at latency − lateBy, events at latency (+ the wait for their 16th). */
+  get latencySeconds(): number {
+    return this.latency;
+  }
+
+  /** Changes the scheduling latency for every later request (clamped to 0..MAX_LATENCY; non-finite values are ignored). */
+  setLatency(seconds: number): void {
+    if (!Number.isFinite(seconds)) return;
+    this.latency = clamp(seconds, 0, MAX_LATENCY);
+  }
+
+  get heartbeatEnabled(): boolean {
+    return this.heartbeatOn;
+  }
+
+  /** Turns the heartbeat on or off from the next tick (the rest of the music is unaffected). */
+  setHeartbeat(on: boolean): void {
+    this.heartbeatOn = on;
   }
 
   /** Increments whenever droneChord() changes (checked on bar ticks) and on palette changes. */
@@ -517,8 +545,9 @@ export class MusicDirector {
   // Tick-driven sounds
   // -------------------------------------------------------------------------------------------
 
-  /** Lub on beats 1 and 3, dub a 16th later and softer. Louder as time slows. */
+  /** Lub on beats 1 and 3, dub a 16th later and softer. Louder as time slows. Silent while switched off. */
   private heartbeat(t: TickEvent, slot: Slot): void {
+    if (!this.heartbeatOn) return;
     const lubs = heartbeatLubTicks(this.beatsPerBar);
     const lub = 0.45 + 0.3 * (1 - unitScale(this.clock.timeScale));
     for (const at of lubs) {

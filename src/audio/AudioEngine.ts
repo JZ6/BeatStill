@@ -105,6 +105,8 @@ export class AudioEngine {
   private timeScale = 1;
   private paused = false;
   private volume = 1;
+  /** Player's drone loudness multiplier (Options → Drone Volume): 1 = as designed. */
+  private droneGainMult = 1;
   private wantedDrone: number[] = [];
   private heldDrone: number[] = [];
   private lastCutoff = -1;
@@ -221,6 +223,12 @@ export class AudioEngine {
     this.volume = Number.isFinite(fraction) ? clamp(fraction, 0, 1) : 1;
     const g = this.graph;
     if (g) g.volume.volume.rampTo(this.volumeDb(), VOLUME_RAMP, this.now());
+  }
+
+  /** Drone loudness multiplier (0..2, ramped with the time-scale follow): 0 silences the drone, 1 is as designed. */
+  setDroneGain(multiplier: number): void {
+    this.droneGainMult = Number.isFinite(multiplier) ? clamp(multiplier, 0, 2) : 1;
+    if (this.graph) this.applyTimeScale(this.graph, false);
   }
 
   /** Releases every sounding note and the drone (e.g. on a scene change). */
@@ -378,7 +386,7 @@ export class AudioEngine {
   private applyTimeScale(g: Graph, immediate: boolean): void {
     const now = this.now();
     const cutoff = lowpassCutoff(this.timeScale);
-    const gain = droneLevel(this.timeScale) * DRONE_MAX;
+    const gain = droneLevel(this.timeScale) * DRONE_MAX * this.droneGainMult;
     if (immediate || Math.abs(cutoff - this.lastCutoff) > this.lastCutoff * 0.01) {
       if (immediate) g.lowpass.frequency.setValueAtTime(cutoff, now);
       else g.lowpass.frequency.setTargetAtTime(cutoff, now, FOLLOW_TIME_CONSTANT);

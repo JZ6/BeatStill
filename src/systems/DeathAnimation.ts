@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_H, px } from "./GameConfig";
+import { shakeCamera } from "./feedback";
 
 interface Fragment {
   gfx: Phaser.GameObjects.Graphics;
@@ -24,7 +25,7 @@ export class DeathAnimation {
     this.scene = scene;
     this.onComplete = onComplete;
 
-    scene.cameras.main.shake(300, 0.015);
+    shakeCamera(scene.cameras.main, 300, 0.015);
 
     const size = px(6);
     for (let i = 0; i < FRAGMENT_COUNT; i++) {

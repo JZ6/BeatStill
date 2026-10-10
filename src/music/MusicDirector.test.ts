@@ -5,6 +5,7 @@ import type { GameEventMap } from "../core/GameEvents";
 import { chordFromNumeral } from "./Harmony";
 import {
   ENEMY_ROLES,
+  MAX_LATENCY,
   MIN_STRETCH,
   MusicDirector,
   droneLevel,
@@ -175,6 +176,21 @@ describe("timing", () => {
     const d = new MusicDirector(getPalette("synth"), clock, { latency: 0.03, maxQuantizeWait: 0.2 });
     d.handleEvent("bulletClash", { x: 0, y: 0 });
     expect(d.drain()[0].when).toBeCloseTo(0.03 + 5.9 / 48, 6);
+  });
+
+  it("setLatency changes later requests, clamped to 0..MAX_LATENCY", () => {
+    const { d } = setup();
+    expect(d.latencySeconds).toBeCloseTo(0.05);
+    d.setLatency(0.12);
+    d.onTick(tickEvent(0, 0.02));
+    expect(d.drain()[0].when).toBeCloseTo(0.1);
+    d.setLatency(-1);
+    expect(d.latencySeconds).toBe(0);
+    d.setLatency(5);
+    expect(d.latencySeconds).toBe(MAX_LATENCY);
+    d.setLatency(NaN);
+    expect(d.latencySeconds).toBe(MAX_LATENCY);
+    expect(new MusicDirector(getPalette("synth"), new FakeClock(), { latency: NaN }).latencySeconds).toBeCloseTo(0.05);
   });
 
   it("never quantizes playerDied, and slows the run down", () => {
@@ -644,6 +660,24 @@ describe("heartbeat", () => {
     clock.timeScale = 0.05;
     d.onTick(tickEvent(TPB));
     expect(d.drain()[0].velocity).toBeGreaterThan(fast);
+  });
+
+  it("can be switched off and on, at construction or live, without touching other sounds", () => {
+    const { d } = setup();
+    expect(d.heartbeatEnabled).toBe(true);
+    d.setHeartbeat(false);
+    d.onTick(tickEvent(0));
+    d.onTick(tickEvent(6));
+    expect(byRole(d.drain(), "heart")).toHaveLength(0);
+    d.handleEvent("enemyFired", { ...fired("tank"), tick: 0, lateBy: 0 });
+    expect(byRole(d.drain(), "bass")).toHaveLength(1);
+    d.setHeartbeat(true);
+    d.onTick(tickEvent(TPB));
+    expect(byRole(d.drain(), "heart")).toHaveLength(1);
+    const off = new MusicDirector(getPalette("theremin"), new FakeClock(), { heartbeat: false });
+    expect(off.heartbeatEnabled).toBe(false);
+    off.onTick(tickEvent(0));
+    expect(byRole(off.drain(), "heart")).toHaveLength(0);
   });
 
   it("isHeartbeatTick marks exactly the lub ticks", () => {

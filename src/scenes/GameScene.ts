@@ -25,6 +25,7 @@ import { PauseMenu } from "../systems/PauseMenu";
 import { RelicSystem } from "../systems/Relics";
 import { MutatorSystem } from "../systems/WaveMutators";
 import { Backdrop } from "../game/Backdrop";
+import { BeatFeedback } from "../game/BeatFeedback";
 import { GameOverFlow } from "../game/GameOverFlow";
 import { Hud } from "../game/Hud";
 import { MusicSystem } from "../game/MusicSystem";
@@ -88,6 +89,7 @@ export class GameScene extends Phaser.Scene {
 
   private collisions!: CollisionSystem;
   private backdrop!: Backdrop;
+  private beatFeedback!: BeatFeedback;
   private frozen = false;
   private readonly tickDispatcher = new TickDispatcher();
 
@@ -143,6 +145,9 @@ export class GameScene extends Phaser.Scene {
 
     this.backdrop = new Backdrop(this);
     this.onTick((t) => this.backdrop.onTick(t));
+    // Beat visualizer and haptics (Options; both off by default).
+    this.beatFeedback = new BeatFeedback(this);
+    this.onTick((t) => this.beatFeedback.onTick(t));
     // Song structure first: a wave (or key change) on a bar line is in place before the music and
     // the enemies hear that tick. `this.waves` is read at dispatch time (created below).
     this.onTick((t) => this.waves.onTick(t));
@@ -232,6 +237,7 @@ export class GameScene extends Phaser.Scene {
     const delta = Math.min(rawDelta, MAX_FRAME_MS);
     const realDt = delta / 1000;
     this.backdrop.update(realDt);
+    this.beatFeedback.update(realDt);
     if (this.gameOver) {
       this.gameOverFlow.update(delta);
       this.particles.update(delta, 0.3);

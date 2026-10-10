@@ -340,7 +340,8 @@ export class Ship extends Phaser.GameObjects.Container {
       );
       gameScene.playerBullets.add(bullet);
     }
-    if (shot.tick !== undefined && shot.tick % TICKS_PER_BEAT === 0) {
+    // The on-beat ring is a beat flash: off with Options → Reduce Flashing.
+    if (shot.tick !== undefined && shot.tick % TICKS_PER_BEAT === 0 && !options.reduceFlashing) {
       this.beatPulse.trigger(shot.tick % gameScene.conductor.ticksPerBar === 0 ? 1 : 0.7);
       this.applyBeatRing();
     }

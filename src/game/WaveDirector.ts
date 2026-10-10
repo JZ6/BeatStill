@@ -10,6 +10,7 @@ import { EndlessMode } from "../systems/EndlessMode";
 import { MUTATOR_PHRASE_BARS, isMutatorWave, nextKeyOffset, type SpawnParams } from "../systems/WaveMutators";
 import { updateHighWave } from "../systems/Unlocks";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { shakeCamera } from "../systems/feedback";
 
 /**
  * Song structure for both modes: waves are sections that start on bar lines. Level waves follow
@@ -140,7 +141,7 @@ export class WaveDirector {
     s.particles.burst(x, y, 0xffaa22, 40, 150, 5);
     s.particles.burst(x, y, 0xffcc66, 40, 120, 4);
     s.particles.burst(x, y, 0xffffff, 30, 100, 3);
-    s.cameras.main.shake(300, 0.02);
+    shakeCamera(s.cameras.main, 300, 0.02);
 
     s.gameEvents.emit("bossDefeated", { bossType, x, y });
     s.relicFlow.offer();

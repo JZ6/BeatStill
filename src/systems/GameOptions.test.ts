@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { defaultOptions, normalizeOptions, type GameOptions } from "./GameOptions";
+import {
+  DEFAULT_DRONE_VOLUME,
+  DEFAULT_LATENCY_MS,
+  REDUCED_SHAKE,
+  defaultOptions,
+  droneGainFor,
+  latencySeconds,
+  normalizeOptions,
+  shakeScale,
+  type GameOptions,
+} from "./GameOptions";
 
 const VALID: GameOptions = {
   targetFps: 0,
@@ -12,7 +22,36 @@ const VALID: GameOptions = {
   shipColor: 0xff8800,
   themeId: "piano",
   starterWeapon: "laser",
+  audioLatencyMs: 120,
+  droneVolume: 35,
+  heartbeat: false,
+  beatVisualizer: true,
+  reduceFlashing: true,
+  haptics: true,
 };
+
+describe("option helpers", () => {
+  it("latencySeconds converts and clamps", () => {
+    expect(latencySeconds(50)).toBeCloseTo(0.05);
+    expect(latencySeconds(0)).toBe(0);
+    expect(latencySeconds(500)).toBeCloseTo(0.2);
+    expect(latencySeconds(NaN)).toBeCloseTo(DEFAULT_LATENCY_MS / 1000);
+  });
+
+  it("droneGainFor is 1 at the default volume and scales linearly", () => {
+    expect(droneGainFor(DEFAULT_DRONE_VOLUME)).toBe(1);
+    expect(droneGainFor(0)).toBe(0);
+    expect(droneGainFor(35)).toBeCloseTo(0.5);
+    expect(droneGainFor(100)).toBeCloseTo(100 / 70);
+    expect(droneGainFor(NaN)).toBe(1);
+  });
+
+  it("shakeScale reduces shake with reduceFlashing", () => {
+    expect(shakeScale(false)).toBe(1);
+    expect(shakeScale(true)).toBe(REDUCED_SHAKE);
+    expect(REDUCED_SHAKE).toBeLessThan(1);
+  });
+});
 
 describe("normalizeOptions", () => {
   it("returns defaults for garbage input", () => {
@@ -59,6 +98,12 @@ describe("normalizeOptions", () => {
       shipColor: 0x1000000,
       themeId: "",
       starterWeapon: 12,
+      audioLatencyMs: "fast",
+      droneVolume: null,
+      heartbeat: "on",
+      beatVisualizer: 1,
+      reduceFlashing: [],
+      haptics: {},
     });
     expect(result).toEqual({
       ...VALID,
@@ -71,7 +116,49 @@ describe("normalizeOptions", () => {
       shipColor: d.shipColor,
       themeId: d.themeId,
       starterWeapon: d.starterWeapon,
+      audioLatencyMs: d.audioLatencyMs,
+      droneVolume: d.droneVolume,
+      heartbeat: d.heartbeat,
+      beatVisualizer: d.beatVisualizer,
+      reduceFlashing: d.reduceFlashing,
+      haptics: d.haptics,
     });
+  });
+
+  it("defaults the audio and accessibility options", () => {
+    const d = defaultOptions();
+    expect(d.audioLatencyMs).toBe(50);
+    expect(d.droneVolume).toBe(70);
+    expect(d.heartbeat).toBe(true);
+    expect(d.beatVisualizer).toBe(false);
+    expect(d.reduceFlashing).toBe(false);
+    expect(d.haptics).toBe(false);
+  });
+
+  it("keeps old saves without the new fields working (shallow merge adds defaults)", () => {
+    const old = { ...VALID } as Record<string, unknown>;
+    for (const k of ["audioLatencyMs", "droneVolume", "heartbeat", "beatVisualizer", "reduceFlashing", "haptics"]) delete old[k];
+    const d = defaultOptions();
+    expect(normalizeOptions(old)).toEqual({
+      ...VALID,
+      audioLatencyMs: d.audioLatencyMs,
+      droneVolume: d.droneVolume,
+      heartbeat: d.heartbeat,
+      beatVisualizer: d.beatVisualizer,
+      reduceFlashing: d.reduceFlashing,
+      haptics: d.haptics,
+    });
+  });
+
+  it("clamps and rounds audioLatencyMs to 0–200 and droneVolume to 0–100", () => {
+    const d = defaultOptions();
+    expect(normalizeOptions({ audioLatencyMs: 250 }).audioLatencyMs).toBe(200);
+    expect(normalizeOptions({ audioLatencyMs: -10 }).audioLatencyMs).toBe(0);
+    expect(normalizeOptions({ audioLatencyMs: 37.4 }).audioLatencyMs).toBe(37);
+    expect(normalizeOptions({ audioLatencyMs: NaN }).audioLatencyMs).toBe(d.audioLatencyMs);
+    expect(normalizeOptions({ droneVolume: 101 }).droneVolume).toBe(100);
+    expect(normalizeOptions({ droneVolume: -1 }).droneVolume).toBe(0);
+    expect(normalizeOptions({ droneVolume: "70" }).droneVolume).toBe(d.droneVolume);
   });
 
   it("clamps and rounds masterVolume, falling back when it isn't a finite number", () => {

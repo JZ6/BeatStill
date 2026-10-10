@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { TickEvent } from "../core/Conductor";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
+import { options } from "../systems/GameOptions";
 import { PulseEnvelope, pulseStrength } from "./PulseEnvelope";
 
 const GRID_SPACING = 64;
@@ -17,6 +18,7 @@ function drawGrid(g: Phaser.GameObjects.Graphics) {
  * The static background plus a beat pulse: a second, warmer copy of the grid drawn once
  * whose alpha flashes on each beat (stronger on bar downbeats) and decays in real time.
  * Only the layer alpha changes per frame, and the layer is hidden while it is dark.
+ * Options → Reduce Flashing turns the pulse off (read live).
  */
 export class Backdrop {
   private readonly base: Phaser.GameObjects.Graphics;
@@ -36,10 +38,10 @@ export class Backdrop {
     this.apply();
   }
 
-  /** Feed every conductor tick; beats and downbeats trigger a flash. */
+  /** Feed every conductor tick; beats and downbeats trigger a flash (none with Reduce Flashing). */
   onTick(t: TickEvent) {
     const strength = pulseStrength(t);
-    if (strength <= 0) return;
+    if (strength <= 0 || options.reduceFlashing) return;
     this.envelope.trigger(strength);
     this.apply();
   }
@@ -47,7 +49,8 @@ export class Backdrop {
   /** Decays the flash. Call every frame with REAL seconds (also while paused or after game over). */
   update(realDt: number) {
     if (this.envelope.level <= 0) return;
-    this.envelope.update(realDt);
+    if (options.reduceFlashing) this.envelope.level = 0;
+    else this.envelope.update(realDt);
     this.apply();
   }
 

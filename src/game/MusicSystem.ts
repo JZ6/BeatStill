@@ -6,7 +6,7 @@ import { MusicDirector } from "../music/MusicDirector";
 import type { Palette } from "../music/palettes";
 import { getAudioEngine } from "../audio/AudioEngine";
 import { MusicDriver, type MusicControl } from "../audio/MusicDriver";
-import { options } from "../systems/GameOptions";
+import { droneGainFor, options } from "../systems/GameOptions";
 
 /** After game over the engine's time scale sinks to this in real time (lowpass closes, drone swells). */
 const DEATH_TIME_SCALE = 0.03;
@@ -37,9 +37,10 @@ export class MusicSystem implements MusicControl {
     this.baseBpm = palette.bpm;
     this.director = new MusicDirector(palette, scene.conductor);
     this.driver = new MusicDriver(this.director, this.engine);
-    // Kept by the engine until audio starts; volume is re-applied on every run.
+    // Kept by the engine until audio starts; volume and drone level are re-applied on every run.
     this.engine.setPalette(palette);
     this.engine.setVolume(options.masterVolume / 100);
+    this.engine.setDroneGain(droneGainFor(options.droneVolume));
 
     for (const type of GAME_EVENT_TYPES) this.cleanups.push(this.forward(type));
     this.cleanups.push(scene.onTick((t) => this.director.onTick(t)));
