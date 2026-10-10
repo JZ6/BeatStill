@@ -48,6 +48,8 @@ export class LevelRunner {
         );
       }
     }
+
+    this.scene.gameEvents.emit("waveStarted", { wave: index + 1, mode: "level" });
   }
 
   advance() {
@@ -80,6 +82,7 @@ export class LevelRunner {
 
     s.progression.processUnlocks();
     s.progression.processAchievements(false, true);
+    s.gameEvents.emit("levelCompleted", { levelId: this.levelDef.id });
 
     s.hud.gameOverText.setColor("#ffaa44");
     s.hud.gameOverText.setText("LEVEL COMPLETE");

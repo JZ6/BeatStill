@@ -62,6 +62,7 @@ export class EndlessMode {
     s.waves.bossActive = true;
     s.progression.startBossFight();
     s.hud.setWaveLabel(`WAVE ${s.wave} — BOSS`);
+    const bossType: EnemyType = s.wave % 10 === 0 && s.wave >= 10 ? "phantom" : "sentinel";
 
     const warningText = s.add.text(GAME_W / 2, GAME_H / 2, "WARNING", {
       fontFamily: "monospace", fontSize: `${px(42)}px`, color: "#ff4444", align: "center",
@@ -77,12 +78,11 @@ export class EndlessMode {
         warningText.destroy();
         // The run may have ended (or the scene shut down) during the warning.
         if (s.gameOver || !s.scene.isActive()) return;
-        const bossType = (s.wave % 10 === 0 && s.wave >= 10) ? "phantom" as const : "sentinel" as const;
         s.enemies.add(createEnemy(s, GAME_W / 2, -40, bossType));
       },
     });
 
-    if (s.audioStarted) s.audioManager.onBossWarning();
+    s.gameEvents.emit("bossWarning", { bossType });
   }
 
   buildEnemyPool(wave: number): EnemyType[] {

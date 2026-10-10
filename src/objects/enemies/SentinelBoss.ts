@@ -166,5 +166,6 @@ export class SentinelBoss extends Enemy {
     this.fireCooldown = Math.min(this.fireCooldown, this.fireRate);
     this.minionTimer = MINION_FIRST_DELAY;
     this.draw(0xffffff);
+    this.emitGameEvent("bossPhaseChanged", { bossType: this.enemyType, phase });
   }
 }

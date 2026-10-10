@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { Bullet } from "../Bullet";
 import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
+import { gameEventsOf, type GameEventMap } from "../../core/GameEvents";
 import { GAME_W, GAME_H, px } from "../../systems/GameConfig";
 
 export type EnemyType = "basic" | "tracker" | "sniper" | "spiral" | "tank" | "swarm" | "snake" | "circler" | "sentinel" | "phantom" | "phantom_decoy";
@@ -191,11 +192,31 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
   fire(gameScene: GameScene) {
     const angleToPlayer = Phaser.Math.Angle.Between(this.x, this.y, gameScene.ship.x, gameScene.ship.y);
     const configs = this.getFirePattern(angleToPlayer, gameScene);
+    this.spawnVolley(gameScene, configs, this.x, this.y);
+  }
+
+  /** Spawns enemy bullets from (x, y) and announces the volley (enemyFired). */
+  protected spawnVolley(gameScene: GameScene, configs: readonly BulletConfig[], x: number, y: number) {
+    if (configs.length === 0) return;
     for (const cfg of configs) {
-      const bullet = new Bullet(this.scene, this.x, this.y, cfg.angle, cfg.speed, "enemy");
+      const bullet = new Bullet(this.scene, x, y, cfg.angle, cfg.speed, "enemy");
       bullet.sourceEnemy = this;
       gameScene.enemyBullets.add(bullet);
     }
+    gameScene.gameEvents.emit("enemyFired", {
+      enemyType: this.enemyType,
+      x,
+      y,
+      bulletCount: configs.length,
+      elite: this.isElite,
+    });
+  }
+
+  /** Emits on the scene's GameEvents bus (for code paths that only have the Phaser scene). */
+  protected emitGameEvent<K extends keyof GameEventMap>(type: K, payload: GameEventMap[K]) {
+    // Phaser clears `scene` when a game object is destroyed.
+    const scene: Phaser.Scene | undefined = this.scene;
+    if (scene) gameEventsOf(scene)?.emit(type, payload);
   }
 
   takeDamage(amount: number): boolean {

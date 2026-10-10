@@ -2,7 +2,7 @@ import type { GameScene } from "../scenes/GameScene";
 import type { Bullet } from "../objects/Bullet";
 import type { Enemy } from "../objects/enemies";
 import type { Asteroid } from "../objects/Asteroid";
-import type { Wall } from "../objects/Wall";
+import type { Wall, WallHitResult } from "../objects/Wall";
 import { CHAIN_TIERS } from "./ChainSystem";
 
 const KILL_BURST_COUNTS = [20, 25, 30, 35, 35, 35];
@@ -88,6 +88,7 @@ export class CollisionSystem {
         if (!circleOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) continue;
         b.markHit(e);
 
+        const hpBefore = e.hp;
         const killed = e.takeDamage(b.damage);
         if (killed) {
           const isBoss = e.enemyType === "sentinel" || e.enemyType === "phantom";
@@ -99,16 +100,34 @@ export class CollisionSystem {
           s.particles.burst(e.x, e.y, b.bulletColor, pCount, 100, pSize);
           s.particles.burst(e.x, e.y, tier > 0 ? tierColor : 0xffcc66, pCount2, 60, pSize - 1);
           s.chain.registerKill(e.x, e.y, isBoss);
+          // After registerKill, so the chain count and tier include this kill.
+          s.gameEvents.emit("enemyKilled", {
+            enemyType: e.enemyType,
+            x: e.x,
+            y: e.y,
+            isBoss,
+            elite: e.isElite,
+            chainCount: s.chain.chainCount,
+            chainTier: s.chain.chainTier,
+          });
           if (s.relics.hasRelic("vampiric") && Math.random() < 0.15 && s.ship.hp < s.ship.maxHp) {
             s.ship.hp = Math.min(s.ship.hp + 1, s.ship.maxHp);
             s.ship.drawHealthBar();
             s.particles.burst(s.ship.x, s.ship.y, 0x44ff44, 8, 40, 2);
           }
-          if (isBoss) s.waves.onBossKilled(e.x, e.y);
+          if (isBoss) s.waves.onBossKilled(e.x, e.y, e.enemyType);
           if (e.isElite && !isBoss) s.relicFlow.offer();
         } else {
           s.particles.burst(b.x, b.y, b.bulletColor, 6, 40, 2);
-          s.audioManager.onEnemyHit();
+          s.gameEvents.emit("enemyHit", {
+            enemyType: e.enemyType,
+            x: e.x,
+            y: e.y,
+            // A boss shrugs off hits mid-transition: report what was actually dealt.
+            damage: Math.max(0, hpBefore - e.hp),
+            hpLeft: e.hp,
+            maxHp: e.maxHp,
+          });
         }
         s.particles.trail(b.x, b.y, b.bulletColor, 3);
         b.hit();
@@ -141,8 +160,9 @@ export class CollisionSystem {
         s.addScore(25);
         s.particles.burst(a.x, a.y, b.bulletColor, 8, 70, 2);
         s.particles.burst(a.x, a.y, 0xcc8866, 8, 50, 2);
+        const broken = { size: a.size, x: a.x, y: a.y };
         a.split(s);
-        s.audioManager.onAsteroidBreak();
+        s.gameEvents.emit("asteroidBreak", broken);
         b.hit();
         if (!b.alive) break;
       }
@@ -157,9 +177,9 @@ export class CollisionSystem {
         if (!eb.alive) continue;
         if (circleOverlap(pb.x, pb.y, pb.radius, eb.x, eb.y, eb.radius)) {
           s.particles.burst(pb.x, pb.y, pb.bulletColor, 8, 50, 2);
+          s.gameEvents.emit("bulletClash", { x: pb.x, y: pb.y });
           pb.kill();
           eb.kill();
-          s.audioManager.onBulletClash();
           break;
         }
       }
@@ -179,7 +199,7 @@ export class CollisionSystem {
           s.gameOverFlow.trigger();
           return true;
         }
-        s.audioManager.onPlayerHit();
+        this.emitPlayerHit();
         break;
       }
     }
@@ -198,10 +218,16 @@ export class CollisionSystem {
           s.gameOverFlow.trigger();
           return;
         }
-        s.audioManager.onPlayerHit();
+        this.emitPlayerHit();
         break;
       }
     }
+  }
+
+  /** A non-fatal hit on the ship (fatal ones go through GameOverFlow → playerDied). */
+  private emitPlayerHit() {
+    const ship = this.scene.ship;
+    this.scene.gameEvents.emit("playerHit", { x: ship.x, y: ship.y, hpLeft: ship.hp, maxHp: ship.maxHp });
   }
 
   private walls(wallArr: Wall[], playerBullets: Bullet[], enemyBullets: Bullet[], enemyArr: Enemy[]) {
@@ -213,11 +239,32 @@ export class CollisionSystem {
         if (e.active) w.pushOut(e, e.radius);
       }
       for (const b of playerBullets) {
-        if (b.alive) w.handleBullet(b, s.particles);
+        if (b.alive) this.emitWallHit(w, b, w.handleBullet(b, s.particles));
       }
       for (const b of enemyBullets) {
-        if (b.alive) w.handleBullet(b, s.particles);
+        if (b.alive) this.emitWallHit(w, b, w.handleBullet(b, s.particles));
       }
+    }
+  }
+
+  private emitWallHit(w: Wall, b: Bullet, result: WallHitResult) {
+    const events = this.scene.gameEvents;
+    switch (result) {
+      case "bounce":
+        events.emit("wallBounce", { x: b.x, y: b.y, axis: w.lastBounceAxis, owner: b.owner });
+        break;
+      case "absorb":
+        events.emit("wallAbsorb", { x: b.x, y: b.y, owner: b.owner });
+        break;
+      case "crack":
+        events.emit("glassCrack", { x: b.x, y: b.y, hp: w.hp, maxHp: w.maxHp });
+        break;
+      case "shatter":
+        events.emit("glassShatter", { x: w.wallX + w.wallW / 2, y: w.wallY + w.wallH / 2 });
+        break;
+      case "none":
+      case "pass":
+        break;
     }
   }
 }

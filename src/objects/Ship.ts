@@ -270,7 +270,7 @@ export class Ship extends Phaser.GameObjects.Container {
       );
       gameScene.playerBullets.add(bullet);
     }
-    gameScene.audioManager.onShoot();
+    gameScene.gameEvents.emit("playerFired", { weaponId: weapon.id, x: this.x, y: this.y, angle, bulletCount: count });
 
     const cooldownReduction = BASE.fireCooldown - this.stats.fireCooldown;
     const cd = Math.max(weapon.baseCooldown - cooldownReduction, 30);

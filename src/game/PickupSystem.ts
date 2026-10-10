@@ -28,6 +28,7 @@ export class PickupSystem {
         }
         addShards(1);
         addPickup();
+        s.gameEvents.emit("pickupCollected", { x: p.x, y: p.y, upgradeId: p.upgrade.id, isWeapon: !!p.upgrade.isWeapon });
         s.particles.burst(p.x, p.y, p.pickupColor, 10, 50, 2);
         p.kill();
         s.hud.refreshShards();
@@ -73,7 +74,6 @@ export class PickupSystem {
       s.particles.burst(s.ship.x, s.ship.y, 0xffffff, 30, 150, 4);
       s.cameras.main.shake(400, 0.03);
       s.toasts.push(`EVOLVED: ${getWeapon(evo.evolvedWeaponId).name.toUpperCase()}`);
-      if (s.audioStarted) s.audioManager.onBossDeath();
     }
   }
 

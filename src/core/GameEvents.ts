@@ -40,7 +40,44 @@ export interface GameEventMap {
 }
 
 export type GameEvents = EventBus<GameEventMap>;
+export type GameEventType = keyof GameEventMap;
+
+// The mapped type makes the compiler reject a missing or unknown event name.
+const EVENT_TYPE_SET: { readonly [K in GameEventType]: true } = {
+  playerFired: true,
+  enemyFired: true,
+  enemyHit: true,
+  enemyKilled: true,
+  chainBreak: true,
+  bulletClash: true,
+  asteroidBreak: true,
+  wallBounce: true,
+  wallAbsorb: true,
+  glassCrack: true,
+  glassShatter: true,
+  playerHit: true,
+  playerDied: true,
+  pickupCollected: true,
+  bossWarning: true,
+  bossPhaseChanged: true,
+  bossDefeated: true,
+  waveStarted: true,
+  levelCompleted: true,
+};
+
+/** Every event name, for subscribers that forward all of them (e.g. the music). */
+export const GAME_EVENT_TYPES: readonly GameEventType[] = Object.freeze(Object.keys(EVENT_TYPE_SET) as GameEventType[]);
 
 export function createGameEvents(): GameEvents {
   return new EventBus<GameEventMap>();
+}
+
+/**
+ * The bus a host (a scene) exposes as `gameEvents`, or null if it has none. Lets objects that only
+ * know their Phaser scene (e.g. enemies) emit without importing GameScene.
+ */
+export function gameEventsOf(host: object): GameEvents | null {
+  if (!("gameEvents" in host)) return null;
+  const bus = host.gameEvents;
+  return bus instanceof EventBus ? bus : null;
 }

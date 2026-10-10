@@ -5,7 +5,6 @@ import { aimed, radial, spiral } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
-import { Bullet } from "../Bullet";
 
 const TELEPORT_INTERVALS = [0, 4000, 3000, 2000];
 const MAX_DECOYS = 2;
@@ -163,12 +162,7 @@ export class PhantomBoss extends Enemy {
     this.teleportProgress = 0;
 
     if (this.phase >= 2) {
-      const configs = radial(8, 60);
-      for (const cfg of configs) {
-        const bullet = new Bullet(this.scene, this.teleportFromX, this.teleportFromY, cfg.angle, cfg.speed, "enemy");
-        bullet.sourceEnemy = this;
-        gameScene.enemyBullets.add(bullet);
-      }
+      this.spawnVolley(gameScene, radial(8, 60), this.teleportFromX, this.teleportFromY);
     }
 
     if (this.phase >= 3 && this.decoys.size < MAX_DECOYS) {
@@ -237,6 +231,7 @@ export class PhantomBoss extends Enemy {
     // Don't carry a longer phase-1/2 countdown into a faster phase.
     this.fireCooldown = Math.min(this.fireCooldown, this.fireRate);
     this.teleportTimer = Math.min(this.teleportTimer, TELEPORT_INTERVALS[phase] ?? 2000);
+    this.emitGameEvent("bossPhaseChanged", { bossType: this.enemyType, phase });
   }
 
   /** Called by a decoy this boss spawned, exactly once, when it is destroyed. */

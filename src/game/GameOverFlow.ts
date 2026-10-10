@@ -30,7 +30,7 @@ export class GameOverFlow {
     s.ship.setVisible(false);
 
     s.progression.recordRunEnd();
-    if (s.audioStarted) s.audioManager.onPlayerDeath();
+    s.gameEvents.emit("playerDied", { x: s.ship.x, y: s.ship.y });
 
     this.deathAnim = new DeathAnimation(s, s.ship.x, s.ship.y, s.ship.shipColor, () => {
       this.showScreen();

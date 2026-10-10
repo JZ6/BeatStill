@@ -4,6 +4,7 @@ import type { Enemy } from "../objects/enemies";
 import type { Asteroid } from "../objects/Asteroid";
 import type { Bullet } from "../objects/Bullet";
 import { Conductor, type TickEvent } from "../core/Conductor";
+import { createGameEvents, type GameEvents } from "../core/GameEvents";
 import { TimeDilation } from "../core/TimeDilation";
 import { AudioManager } from "../systems/AudioManager";
 import { ParticleSystem } from "../systems/Particles";
@@ -45,6 +46,8 @@ export class GameScene extends Phaser.Scene {
   conductor!: Conductor;
   /** Player activity → time scale. Recreated each run. */
   dilation!: TimeDilation;
+  /** Gameplay occurrences (shots, hits, kills, walls, bosses…) for audio and other listeners. Recreated each run. */
+  gameEvents!: GameEvents;
   audioManager!: AudioManager;
   audioStarted = false;
   particles!: ParticleSystem;
@@ -118,6 +121,7 @@ export class GameScene extends Phaser.Scene {
     this.frozen = false;
     this.time.paused = false;
     this.tickDispatcher.clear();
+    this.gameEvents = createGameEvents();
 
     const selectedTheme = allThemes.find((t) => t.name.toLowerCase() === options.themeId) ?? theremin;
     recordThemeUsed(selectedTheme.name.toLowerCase());
@@ -186,6 +190,7 @@ export class GameScene extends Phaser.Scene {
 
     this.events.once("shutdown", () => {
       this.tickDispatcher.clear();
+      this.gameEvents.clear();
       this.toasts.clear();
       this.pauseMenu.cleanup();
       this.relicFlow.cleanup();

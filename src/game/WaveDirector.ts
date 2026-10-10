@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
-import { createEnemy, type Enemy } from "../objects/enemies";
+import { createEnemy, type Enemy, type EnemyType } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import type { Bullet } from "../objects/Bullet";
 import type { Wall } from "../objects/Wall";
@@ -57,10 +57,11 @@ export class WaveDirector {
       }
     }
 
+    s.gameEvents.emit("waveStarted", { wave: s.wave, mode: "endless" });
     this.endless.spawnWave();
   }
 
-  onBossKilled(x: number, y: number) {
+  onBossKilled(x: number, y: number, bossType: EnemyType) {
     const s = this.scene;
     this.bossActive = false;
     s.progression.recordBossKill();
@@ -70,7 +71,7 @@ export class WaveDirector {
     s.particles.burst(x, y, 0xffffff, 30, 100, 3);
     s.cameras.main.shake(300, 0.02);
 
-    if (s.audioStarted) s.audioManager.onBossDeath();
+    s.gameEvents.emit("bossDefeated", { bossType, x, y });
     s.relicFlow.offer();
 
     ([...s.enemies.getChildren()] as Enemy[]).forEach((e) => {

@@ -49,6 +49,8 @@ export class Wall extends Phaser.GameObjects.Graphics {
   maxHp: number;
   oneWay: "up" | "down" | "left" | "right" | null;
   color: number;
+  /** Axis of the face the last "bounce" result exited through: "x" = left/right face, "y" = top/bottom. */
+  lastBounceAxis: "x" | "y" = "y";
 
   constructor(
     scene: Phaser.Scene,
@@ -235,6 +237,7 @@ export class Wall extends Phaser.GameObjects.Graphics {
     // Exit through the face of least penetration; only reflect if moving into that face,
     // so a bullet already heading out is never turned back in (no double bounce).
     if (Math.min(penLeft, penRight) < Math.min(penTop, penBottom)) {
+      this.lastBounceAxis = "x";
       if (penLeft <= penRight) {
         b.x = left - r;
         if (b.vx > 0) b.vx = -b.vx;
@@ -243,9 +246,11 @@ export class Wall extends Phaser.GameObjects.Graphics {
         if (b.vx < 0) b.vx = -b.vx;
       }
     } else if (penTop <= penBottom) {
+      this.lastBounceAxis = "y";
       b.y = top - r;
       if (b.vy > 0) b.vy = -b.vy;
     } else {
+      this.lastBounceAxis = "y";
       b.y = bottom + r;
       if (b.vy < 0) b.vy = -b.vy;
     }

@@ -94,9 +94,9 @@ export class ChainSystem {
     const points = Math.floor(basePoints * tier.mult);
     s.addScore(points);
 
+    // The kill's sound comes from the enemyKilled event (CollisionSystem), which carries the chain state.
     if (this.chainTier > 0) {
       const chainText = s.hud.chainText;
-      s.audioManager.onChainKill(this.chainCount, this.chainTier);
       chainText.setText(`${tier.name} x${this.chainCount}`);
       chainText.setColor(tier.textColor);
       chainText.setAlpha(1);
@@ -116,8 +116,6 @@ export class ChainSystem {
       const shakeIntensity = [0, 0.003, 0.005, 0.008, 0.012, 0.012][this.chainTier];
       const shakeDuration = [0, 80, 100, 120, 150, 150][this.chainTier];
       if (shakeIntensity > 0) s.cameras.main.shake(shakeDuration, shakeIntensity);
-    } else {
-      s.audioManager.onEnemyKill();
     }
 
     this.chainTimer = effectiveWindow;
@@ -146,7 +144,7 @@ export class ChainSystem {
           this.graceTimer = 400;
           this.graceTier = prevTier - 1;
         }
-        this.scene.audioManager.onChainBreak(prevTier);
+        this.scene.gameEvents.emit("chainBreak", { tier: prevTier, x: this.lastKillX, y: this.lastKillY });
         if (prevTier >= 2) {
           const tier = CHAIN_TIERS[prevTier];
           this.scene.particles.burst(this.lastKillX, this.lastKillY, tier.color, 15, 60, 2);
