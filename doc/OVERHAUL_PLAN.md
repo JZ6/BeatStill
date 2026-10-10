@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Planning complete. Phase 0 is next.
+- **Status:** Phase 0 complete. Phase 1 (bug sweep) is next.
 
 ## 1. Vision
 
@@ -141,7 +141,12 @@ real time (AudioContext clock) ─► TimeDilation (input → timeScale 0.03–1
 ### Testing strategy
 
 - **vitest** covers the pure modules: conductor math, step crossing, harmony and note picking, rhythm patterns, time-dilation formula, save normalisation and migration, and the level-def normaliser.
-- **Browser smoke test** uses the Chrome CLI (`cli-chrome` skill, per the README TODO): load the page, start endless, play briefly, and assert no console errors and that the conductor advances.
+- **Browser smoke test** (`npm run smoke`, `scripts/smoke.mjs`), per the README TODO. It is dependency-free: it serves `dist/` with `vite preview` and drives local headless Chrome over the DevTools protocol, reaching game state through the `window.__BEATSTILL__` debug hook.
+  - It plays two endless runs, with a menu round-trip between them.
+  - It fails on uncaught exceptions, console errors, failed resource loads, the crash overlay, audio not starting, no wave or enemies, time not speeding up while shooting, or time not slowing when idle.
+  - It saves screenshots to `smoke-artifacts/`.
+  - The `cli-chrome` skill was not usable: no paired browser.
+  - Add assertions as the core changes (e.g. the conductor advances, enemy fire is audible).
 - **Manual playtest checklist** for each phase.
 
 ## 5. Musical mapping (initial sketch — tune in playtests)
@@ -379,11 +384,13 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 
 ### Phase 0 — Foundations
 - [x] Branch `overhaul/music-core`
-- [ ] `npm install`; add `vitest`; scripts `typecheck` (`tsc --noEmit`) and `test` (`vitest run`)
-- [ ] CI: run typecheck + test before build; add a PR workflow; bump Node; `cancel-in-progress: false`
-- [ ] Typed `GameEvents` bus (pure, tested)
-- [ ] `main.ts`: Phaser `audio: { noAudio: true }`
-- [ ] Browser smoke test via the Chrome CLI (load, start endless, no console errors)
+- [x] `npm install`; add `vitest` 5; scripts `typecheck` (`tsc --noEmit`), `test` (`vitest run`), `test:watch`
+- [x] CI: tests before build in deploy; new `ci.yml` for PRs and non-main pushes; Node 24; deploy `cancel-in-progress: false`
+- [x] Typed `GameEvents` bus (`src/core/EventBus.ts`, `src/core/GameEvents.ts`) with tests (not yet wired into gameplay)
+- [x] `main.ts`: Phaser `audio: { noAudio: true }`
+- [x] Browser smoke test: `npm run smoke` (headless Chrome via CDP; see §4 Testing strategy). Verified it fails on an injected exception.
+- [ ] Follow-up: run the smoke test in CI once headless audio on Linux runners is confirmed
+- [ ] Follow-up: `npm audit` reports 4 high-severity issues in dev tooling (vite ≤6.4.2, postcss, nanoid, source-map-js); fix via `npm audit fix`
 
 ### Phase 1 — Bug sweep
 - [ ] Engine/scene bugs (§7): StartScene reset, GameScene field resets, ESC stacking, live-array iteration, pause freezing tweens/timers/physics, particle damping, FPS cap via `fps.limit`
