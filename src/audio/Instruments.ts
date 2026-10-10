@@ -43,6 +43,8 @@ export interface EngineInstrument {
 }
 
 export interface HeldInstrument extends EngineInstrument {
+  /** Voices Tone considers busy (held plus still releasing), for diagnostics. */
+  readonly activeVoices: number;
   /** Starts sustained notes (no release scheduled). */
   hold(freqs: readonly number[], time: number, velocity: number): void;
   /** Releases notes started with hold(). */
@@ -61,6 +63,8 @@ interface MonoVoice extends Voiced {
 }
 
 interface PolyVoices extends Voiced {
+  /** Tone's count of voices it considers busy (attacking, sustaining or releasing). */
+  readonly activeVoices: number;
   triggerAttackRelease(notes: number[], duration: number, time: number, velocity: number): unknown;
   triggerAttack(notes: number[], time: number, velocity: number): unknown;
   triggerRelease(notes: number[], time: number): unknown;
@@ -178,6 +182,10 @@ class PolyInstrument implements HeldInstrument {
     return { scheduled: fit, dropped: freqs.length - fit };
   }
 
+  get activeVoices(): number {
+    return this.voices.activeVoices;
+  }
+
   hold(freqs: readonly number[], time: number, velocity: number): void {
     if (freqs.length > 0) this.voices.triggerAttack([...freqs], time, velocity);
   }
@@ -293,11 +301,19 @@ export function createInstrument(spec: InstrumentSpec, fallbackHz: number): Engi
 }
 
 /**
+ * Tone voices per held note: every re-voice (a chord change, a key change, a scene change) keeps the
+ * old notes busy for their whole release tail (the drones' is 2.5 s) while the new ones attack, so
+ * several re-voicings within one tail (fast tempo plus a key change, or quick scene changes) need
+ * room. Tone creates voices lazily, so unused headroom costs nothing.
+ */
+const HELD_VOICES_PER_NOTE = 6;
+
+/**
  * Builds a polyphonic instrument that can also sustain held notes (the drone), with room for
  * old notes releasing while new ones attack. Returns null for kinds that can't be polyphonic.
  */
 export function createHeldInstrument(spec: InstrumentSpec): HeldInstrument | null {
   if (spec.kind === "noise" || spec.kind === "pluck") return null;
   const voices = Math.max(1, Math.floor(spec.maxVoices));
-  return new PolyInstrument(makePoly(spec.kind, cloneOptions(spec.options), Math.max(8, voices * 4)), spec, voices);
+  return new PolyInstrument(makePoly(spec.kind, cloneOptions(spec.options), Math.max(16, voices * HELD_VOICES_PER_NOTE)), spec, voices);
 }

@@ -35,6 +35,8 @@ export interface AudioEngineStats {
   /** Unexpected exceptions while building or playing. */
   errors: number;
   palette: string | null;
+  /** Drone voices Tone considers busy (held + releasing); a steady climb means stuck notes. */
+  droneVoices: number;
 }
 
 /** Drone gain at droneLevel() = 1 (the palette's drone volume already sets its loudness). */
@@ -233,11 +235,22 @@ export class AudioEngine {
 
   /** Releases every sounding note and the drone (e.g. on a scene change). */
   releaseAll(): void {
+    const held = this.heldDrone;
     this.wantedDrone = [];
     this.heldDrone = [];
     const kit = this.kit;
     if (!this.graph || !kit) return;
     const now = this.now();
+    // Release the held drone notes by name first. Tone's PolySynth.releaseAll() doesn't mark its
+    // voices released, so a later unhold of the same note would match the old, fading voice and
+    // leave the newly held one sustaining forever (stuck drone notes, then dropped notes).
+    if (kit.drone && held.length > 0) {
+      try {
+        kit.drone.unhold(held.map(midiToHz), now);
+      } catch (err) {
+        this.fail("drone", err);
+      }
+    }
     for (const [role, voice] of kit.voices) {
       try {
         voice.instrument.releaseAll(now);
@@ -262,6 +275,7 @@ export class AudioEngine {
       errors: this.errors,
       merged: this.merged,
       palette: this.palette?.id ?? null,
+      droneVoices: this.kit?.drone?.activeVoices ?? 0,
     };
   }
 
