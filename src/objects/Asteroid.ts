@@ -84,6 +84,7 @@ export class Asteroid extends Phaser.GameObjects.Graphics {
   }
 
   split(gameScene: GameScene) {
+    if (!this.active) return;
     const next = NEXT_SIZE[this.size];
     if (next) {
       for (let i = 0; i < 2; i++) {

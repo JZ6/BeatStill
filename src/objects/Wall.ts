@@ -4,11 +4,40 @@ import type { ParticleSystem } from "../systems/Particles";
 
 export type WallType = "solid" | "bounce" | "glass";
 
+/**
+ * Outcome of `Wall.handleBullet`:
+ * - "none": no contact (or wall/bullet inactive)
+ * - "pass": overlapping a one-way wall from its allowed side
+ * - "bounce": ricocheted off a bounce wall
+ * - "absorb": stopped by a solid wall
+ * - "crack": damaged a glass wall without breaking it
+ * - "shatter": broke a glass wall
+ */
+export type WallHitResult = "none" | "pass" | "bounce" | "absorb" | "crack" | "shatter";
+
 const WALL_COLORS: Record<WallType, number> = {
   solid: 0x887766,
   bounce: 0x4488ff,
   glass: 0xff6644,
 };
+
+function hashRect(x: number, y: number, w: number, h: number): number {
+  let hash = 2166136261;
+  for (const v of [x, y, w, h]) {
+    hash = Math.imul(hash ^ (Math.round(v) | 0), 16777619);
+  }
+  return hash >>> 0;
+}
+
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 export class Wall extends Phaser.GameObjects.Graphics {
   wallType: WallType;
@@ -37,7 +66,8 @@ export class Wall extends Phaser.GameObjects.Graphics {
     this.wallY = y;
     this.wallW = w;
     this.wallH = h;
-    this.maxHp = type === "glass" ? (hp ?? 3) : 0;
+    const glassHp = hp !== undefined && Number.isFinite(hp) ? hp : 3;
+    this.maxHp = type === "glass" ? Math.max(1, glassHp) : 0;
     this.hp = this.maxHp;
     this.oneWay = oneWay ?? null;
     this.color = WALL_COLORS[type];
@@ -107,14 +137,17 @@ export class Wall extends Phaser.GameObjects.Graphics {
     this.lineStyle(1, color, 0.6);
     const damage = 1 - this.hp / this.maxHp;
     const crackCount = Math.ceil(damage * 4);
-    const seed = this.wallX * 7 + this.wallY * 13;
+    // Same seed every redraw, same draws per crack: existing cracks stay put as new ones appear.
+    const rand = mulberry32(hashRect(x, y, w, h));
+    const clampX = (v: number) => Phaser.Math.Clamp(v, x, x + w);
+    const clampY = (v: number) => Phaser.Math.Clamp(v, y, y + h);
     for (let i = 0; i < crackCount; i++) {
-      const cx = x + w * (0.2 + ((seed * (i + 1) * 37) % 100) / 160);
-      const cy = y + h * (0.2 + ((seed * (i + 1) * 53) % 100) / 160);
+      const cx = x + w * (0.2 + rand() * 0.6);
+      const cy = y + h * (0.15 + rand() * 0.5);
       this.beginPath();
       this.moveTo(cx, cy);
-      this.lineTo(cx + w * 0.15 * ((i % 2) * 2 - 1), cy + h * 0.2);
-      this.lineTo(cx + w * 0.05, cy + h * 0.35);
+      this.lineTo(clampX(cx + w * 0.15 * ((i % 2) * 2 - 1)), clampY(cy + h * 0.2));
+      this.lineTo(clampX(cx + w * 0.05), clampY(cy + h * 0.35));
       this.strokePath();
     }
   }
@@ -165,39 +198,56 @@ export class Wall extends Phaser.GameObjects.Graphics {
     return false;
   }
 
-  handleBullet(b: Bullet, particles?: ParticleSystem): boolean {
-    if (!this.active) return false;
-    if (!this.overlaps(b.x, b.y, b.radius)) return false;
+  handleBullet(b: Bullet, particles?: ParticleSystem): WallHitResult {
+    if (!this.active || !b.alive) return "none";
+    if (!this.overlaps(b.x, b.y, b.radius)) return "none";
 
     const dx = b.x - (this.wallX + this.wallW / 2);
     const dy = b.y - (this.wallY + this.wallH / 2);
-    if (!this.blocksFrom(dx, dy)) return false;
+    if (!this.blocksFrom(dx, dy)) return "pass";
 
     if (this.wallType === "bounce") {
       this.ricochet(b);
-      return true;
+      return "bounce";
     }
 
+    let result: WallHitResult = "absorb";
     if (this.wallType === "glass") {
-      this.takeDamage(b.damage, particles);
+      result = this.takeDamage(b.damage, particles) ? "shatter" : "crack";
     }
 
     b.kill();
-    return true;
+    return result;
   }
 
   private ricochet(b: Bullet) {
-    const cx = this.wallX + this.wallW / 2;
-    const cy = this.wallY + this.wallH / 2;
-    const dx = b.x - cx;
-    const dy = b.y - cy;
-    const nx = Math.abs(dx / this.wallW) > Math.abs(dy / this.wallH);
-    if (nx) {
-      b.vx = -b.vx;
-      b.x = dx > 0 ? this.wallX + this.wallW + b.radius : this.wallX - b.radius;
+    const r = b.radius;
+    const left = this.wallX;
+    const right = this.wallX + this.wallW;
+    const top = this.wallY;
+    const bottom = this.wallY + this.wallH;
+    // How far the bullet's edge has crossed each face.
+    const penLeft = b.x + r - left;
+    const penRight = right - (b.x - r);
+    const penTop = b.y + r - top;
+    const penBottom = bottom - (b.y - r);
+
+    // Exit through the face of least penetration; only reflect if moving into that face,
+    // so a bullet already heading out is never turned back in (no double bounce).
+    if (Math.min(penLeft, penRight) < Math.min(penTop, penBottom)) {
+      if (penLeft <= penRight) {
+        b.x = left - r;
+        if (b.vx > 0) b.vx = -b.vx;
+      } else {
+        b.x = right + r;
+        if (b.vx < 0) b.vx = -b.vx;
+      }
+    } else if (penTop <= penBottom) {
+      b.y = top - r;
+      if (b.vy > 0) b.vy = -b.vy;
     } else {
-      b.vy = -b.vy;
-      b.y = dy > 0 ? this.wallY + this.wallH + b.radius : this.wallY - b.radius;
+      b.y = bottom + r;
+      if (b.vy < 0) b.vy = -b.vy;
     }
   }
 
@@ -224,13 +274,17 @@ export class Wall extends Phaser.GameObjects.Graphics {
     if (!this.blocksFrom(dirX, dirY)) return false;
 
     if (distSq === 0) {
-      const overlapX = this.wallX + this.wallW / 2 - entity.x;
-      const overlapY = this.wallY + this.wallH / 2 - entity.y;
-      if (Math.abs(overlapX) > Math.abs(overlapY)) {
-        entity.x += overlapX > 0 ? -radius : radius;
-      } else {
-        entity.y += overlapY > 0 ? -radius : radius;
-      }
+      // Center inside the wall: exit through the nearest face (least penetration),
+      // moving the full penetration depth plus the radius.
+      const toLeft = entity.x - this.wallX;
+      const toRight = this.wallX + this.wallW - entity.x;
+      const toTop = entity.y - this.wallY;
+      const toBottom = this.wallY + this.wallH - entity.y;
+      const least = Math.min(toLeft, toRight, toTop, toBottom);
+      if (least === toLeft) entity.x = this.wallX - radius;
+      else if (least === toRight) entity.x = this.wallX + this.wallW + radius;
+      else if (least === toTop) entity.y = this.wallY - radius;
+      else entity.y = this.wallY + this.wallH + radius;
       return true;
     }
 

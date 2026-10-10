@@ -1,12 +1,16 @@
+import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { BulletConfig } from "../BulletPattern";
+import type { PhantomBoss } from "./PhantomBoss";
 
 export class PhantomDecoy extends Enemy {
   readonly enemyType = "phantom_decoy" as const;
   private flickerTimer = 0;
+  private owner: PhantomBoss | null;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, owner: PhantomBoss | null = null) {
     super(scene, x, y, 1, 0, 99999, 0x4488ff, 28);
+    this.owner = owner;
     this.draw(this.color);
   }
 
@@ -36,10 +40,18 @@ export class PhantomDecoy extends Enemy {
 
   protected updateMovement(delta: number, timeScale: number) {
     this.flickerTimer += delta * timeScale;
-    this.draw(this.color);
+    this.draw(this.currentColor());
   }
 
   protected getFirePattern(): BulletConfig[] {
     return [];
+  }
+
+  /** Runs once per destroy (GameObject.destroy() is a no-op after the first call); tells the owner exactly once. */
+  protected preDestroy() {
+    const owner = this.owner;
+    this.owner = null;
+    owner?.onDecoyDestroyed(this);
+    super.preDestroy();
   }
 }

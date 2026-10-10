@@ -6,6 +6,9 @@ import { GAME_W, GAME_H, px } from "../../systems/GameConfig";
 
 export type EnemyType = "basic" | "tracker" | "sniper" | "spiral" | "tank" | "swarm" | "snake" | "circler" | "sentinel" | "phantom" | "phantom_decoy";
 
+const HIT_FLASH_MS = 80;
+const HIT_FLASH_COLOR = 0xffffff;
+
 export abstract class Enemy extends Phaser.GameObjects.Graphics {
   hp: number;
   maxHp: number;
@@ -18,6 +21,8 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
   targetY!: number;
   protected color: number;
   isElite = false;
+  /** Remaining hit-flash time in real ms (not time-scaled). */
+  private flashTimer = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, hp: number, speed: number, fireRate: number, color: number, radius: number) {
     super(scene, { x, y });
@@ -148,12 +153,36 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
   }
 
   update(delta: number, timeScale: number, gameScene: GameScene) {
+    this.updateFlash(delta);
     this.updateMovement(delta, timeScale, gameScene);
     this.fireCooldown -= delta * timeScale;
-    if (this.fireCooldown <= 0) {
+    // A volley that comes due while firing is blocked waits (cooldown stays <= 0) instead of being lost.
+    if (this.fireCooldown <= 0 && this.canFire()) {
       this.fire(gameScene);
       this.fireCooldown = this.fireRate;
     }
+  }
+
+  /** Override to temporarily block firing (e.g. mid-teleport). A due volley fires once this returns true. */
+  protected canFire(): boolean {
+    return true;
+  }
+
+  /** Body color to draw with: white while the hit flash is active. Subclasses that redraw every frame must use this. */
+  protected currentColor(): number {
+    return this.flashTimer > 0 ? HIT_FLASH_COLOR : this.color;
+  }
+
+  protected startFlash() {
+    this.flashTimer = HIT_FLASH_MS;
+    this.draw(HIT_FLASH_COLOR);
+  }
+
+  private updateFlash(delta: number) {
+    if (this.flashTimer <= 0) return;
+    this.flashTimer -= delta;
+    // Restore the normal look for enemies that only draw on demand.
+    if (this.flashTimer <= 0) this.draw(this.currentColor());
   }
 
   protected abstract updateMovement(delta: number, timeScale: number, gameScene: GameScene): void;
@@ -175,10 +204,7 @@ export abstract class Enemy extends Phaser.GameObjects.Graphics {
       this.destroy();
       return true;
     }
-    this.draw(0xffffff);
-    this.scene.time.delayedCall(80, () => {
-      if (this.active) this.draw(this.color);
-    });
+    this.startFlash();
     return false;
   }
 

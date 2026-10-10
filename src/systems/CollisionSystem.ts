@@ -5,6 +5,15 @@ import type { Asteroid } from "../objects/Asteroid";
 import type { Wall } from "../objects/Wall";
 import { CHAIN_TIERS } from "./ChainSystem";
 
+const KILL_BURST_COUNTS = [20, 25, 30, 35, 35, 35];
+const KILL_BURST_COUNTS_2 = [10, 12, 15, 18, 18, 18];
+const KILL_BURST_SIZES = [3, 3, 4, 5, 5, 5];
+
+/** Index `arr` by chain tier, clamped to its bounds (out-of-range or NaN tiers can't yield undefined). */
+function atTier<T>(arr: readonly T[], tier: number): T {
+  const i = Number.isFinite(tier) ? Math.min(Math.max(Math.trunc(tier), 0), arr.length - 1) : 0;
+  return arr[i];
+}
 
 export function circleOverlap(
   x1: number, y1: number, r1: number,
@@ -64,7 +73,8 @@ export class CollisionSystem {
 
     if (!s.ship.isInvincible() && !s.godMode && !s.level?.isComplete) {
       if (this.shipVsBullets(enemyBullets)) return;
-      this.shipVsAsteroids(asteroidArr);
+      // A non-fatal bullet hit just started i-frames: don't also take an asteroid hit this frame.
+      if (!s.ship.isInvincible()) this.shipVsAsteroids(asteroidArr);
     }
   }
 
@@ -73,17 +83,19 @@ export class CollisionSystem {
     for (const b of playerBullets) {
       if (!b.alive) continue;
       for (const e of enemyArr) {
-        if (!e.active) continue;
+        // A piercing bullet still overlapping an enemy on later frames must not hit it again.
+        if (!e.active || b.hasHit(e)) continue;
         if (!circleOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius)) continue;
+        b.markHit(e);
 
         const killed = e.takeDamage(b.damage);
         if (killed) {
           const isBoss = e.enemyType === "sentinel" || e.enemyType === "phantom";
           const tier = s.chain.chainTier;
-          const pCount = [20, 25, 30, 35, 35, 35][tier];
-          const pCount2 = [10, 12, 15, 18, 18, 18][tier];
-          const pSize = [3, 3, 4, 5, 5, 5][tier];
-          const tierColor = CHAIN_TIERS[tier]?.color ?? 0xffcc66;
+          const pCount = atTier(KILL_BURST_COUNTS, tier);
+          const pCount2 = atTier(KILL_BURST_COUNTS_2, tier);
+          const pSize = atTier(KILL_BURST_SIZES, tier);
+          const tierColor = atTier(CHAIN_TIERS, tier).color;
           s.particles.burst(e.x, e.y, b.bulletColor, pCount, 100, pSize);
           s.particles.burst(e.x, e.y, tier > 0 ? tierColor : 0xffcc66, pCount2, 60, pSize - 1);
           s.chain.registerKill(e.x, e.y, isBoss);
@@ -94,10 +106,6 @@ export class CollisionSystem {
           }
           if (isBoss) s.onBossKill(e.x, e.y);
           if (e.isElite && !isBoss) s.offerRelicChoice();
-          if (e.enemyType === "phantom_decoy") {
-            const phantoms = ([...s.enemies.getChildren()] as Enemy[]).filter((en) => en.enemyType === "phantom");
-            for (const p of phantoms) (p as any).notifyDecoyKilled?.();
-          }
         } else {
           s.particles.burst(b.x, b.y, b.bulletColor, 6, 40, 2);
           s.audioManager.onEnemyHit();
@@ -127,6 +135,8 @@ export class CollisionSystem {
     for (const b of playerBullets) {
       if (!b.alive) continue;
       for (const a of asteroidArr) {
+        // The snapshot can hold asteroids already split this frame.
+        if (!a.active) continue;
         if (!circleOverlap(b.x, b.y, b.radius, a.x, a.y, a.radius)) continue;
         s.score += 25;
         s.scoreText.setText(`SCORE: ${s.score}`);

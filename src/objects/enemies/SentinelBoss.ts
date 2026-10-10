@@ -7,11 +7,13 @@ import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
 
+const MINION_FIRST_DELAY = 3000;
+
 export class SentinelBoss extends Enemy {
   readonly enemyType = "sentinel" as const;
   private phase = 1;
   private innerAngle = 0;
-  private minionTimer = 3000;
+  private minionTimer = MINION_FIRST_DELAY;
   private phaseTransition = false;
   private phaseTimer = 0;
 
@@ -67,7 +69,7 @@ export class SentinelBoss extends Enemy {
       this.phaseTimer -= delta * timeScale;
       if (this.phaseTimer <= 0) {
         this.phaseTransition = false;
-        this.draw(this.color);
+        this.draw(this.currentColor());
       }
       return;
     }
@@ -106,11 +108,20 @@ export class SentinelBoss extends Enemy {
       this.minionTimer = this.phase === 1 ? 6000 : 8000;
     }
 
-    this.draw(this.color);
+    this.draw(this.currentColor());
+  }
+
+  /** Stays white for the whole phase transition, not just the hit flash. */
+  protected currentColor(): number {
+    return this.phaseTransition ? 0xffffff : super.currentColor();
+  }
+
+  /** Volleys due during a phase transition are held, not lost. */
+  protected canFire(): boolean {
+    return !this.phaseTransition;
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    if (this.phaseTransition) return [];
     switch (this.phase) {
       case 1:
         return radial(8, 90);
@@ -132,17 +143,19 @@ export class SentinelBoss extends Enemy {
       return true;
     }
 
-    if (this.hp <= 10 && this.phase === 2) {
-      this.enterPhase(3);
-    } else if (this.hp <= 20 && this.phase === 1) {
-      this.enterPhase(2);
-    }
+    // Derived from current hp, so one big hit can jump straight to phase 3.
+    const target = this.phaseForHp();
+    if (target > this.phase) this.enterPhase(target);
 
-    this.draw(0xffffff);
-    this.scene.time.delayedCall(80, () => {
-      if (this.active && !this.phaseTransition) this.draw(this.color);
-    });
+    this.startFlash();
     return false;
+  }
+
+  /** Phase 2 at <= 2/3 max hp, phase 3 at <= 1/3 (20 / 10 at 30 hp). */
+  private phaseForHp(): number {
+    if (this.hp <= this.maxHp / 3) return 3;
+    if (this.hp <= (this.maxHp * 2) / 3) return 2;
+    return 1;
   }
 
   private enterPhase(phase: number) {
@@ -150,6 +163,8 @@ export class SentinelBoss extends Enemy {
     this.phaseTransition = true;
     this.phaseTimer = 1000;
     this.fireRate = phase === 2 ? 1500 : 800;
+    this.fireCooldown = Math.min(this.fireCooldown, this.fireRate);
+    this.minionTimer = MINION_FIRST_DELAY;
     this.draw(0xffffff);
   }
 }

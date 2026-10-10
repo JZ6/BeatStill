@@ -7,6 +7,9 @@ import type { GameScene } from "../../scenes/GameScene";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
 import { Bullet } from "../Bullet";
 
+const TELEPORT_INTERVALS = [0, 4000, 3000, 2000];
+const MAX_DECOYS = 2;
+
 export class PhantomBoss extends Enemy {
   readonly enemyType = "phantom" as const;
   private phase = 1;
@@ -22,7 +25,7 @@ export class PhantomBoss extends Enemy {
   private prevPositions: { x: number; y: number }[] = [];
   private trailTimer = 0;
   private spiralAngle = 0;
-  private decoyCount = 0;
+  private readonly decoys = new Set<PhantomDecoy>();
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 40, 40, 2500, 0x4488ff, 28);
@@ -126,7 +129,7 @@ export class PhantomBoss extends Enemy {
         this.teleportProgress = 0;
         gameScene.particles.burst(this.x, this.y, this.color, 12, 50, 2);
       }
-      this.draw(this.color);
+      this.draw(this.currentColor());
       return;
     }
 
@@ -147,7 +150,7 @@ export class PhantomBoss extends Enemy {
       }
     }
 
-    this.draw(this.color);
+    this.draw(this.currentColor());
   }
 
   private startTeleport(gameScene: GameScene) {
@@ -167,20 +170,23 @@ export class PhantomBoss extends Enemy {
       }
     }
 
-    if (this.phase >= 3 && this.decoyCount < 2) {
-      const decoy = new PhantomDecoy(this.scene, this.teleportFromX, this.teleportFromY);
+    if (this.phase >= 3 && this.decoys.size < MAX_DECOYS) {
+      const decoy = new PhantomDecoy(this.scene, this.teleportFromX, this.teleportFromY, this);
+      this.decoys.add(decoy);
       gameScene.enemies.add(decoy);
-      this.decoyCount++;
     }
 
     gameScene.particles.burst(this.teleportFromX, this.teleportFromY, this.color, 15, 60, 2);
 
-    const intervals = [0, 4000, 3000, 2000];
-    this.teleportTimer = intervals[this.phase] ?? 2000;
+    this.teleportTimer = TELEPORT_INTERVALS[this.phase] ?? 2000;
+  }
+
+  /** Volleys due mid-teleport are held and fire on arrival, not lost. */
+  protected canFire(): boolean {
+    return !this.teleporting;
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    if (this.teleporting) return [];
     const chargeBonus = Math.min(Math.floor(this.chargeCounter / 300), 6);
     this.chargeCounter = 0;
 
@@ -209,22 +215,39 @@ export class PhantomBoss extends Enemy {
       return true;
     }
 
-    if (this.hp <= 13 && this.phase === 2) {
-      this.phase = 3;
-      this.fireRate = 1500;
-    } else if (this.hp <= 27 && this.phase === 1) {
-      this.phase = 2;
-      this.fireRate = 2000;
-    }
+    // Derived from current hp, so one big hit can jump straight to phase 3.
+    const target = this.phaseForHp();
+    if (target > this.phase) this.enterPhase(target);
 
-    this.draw(0xffffff);
-    this.scene.time.delayedCall(80, () => {
-      if (this.active) this.draw(this.color);
-    });
+    this.startFlash();
     return false;
   }
 
-  notifyDecoyKilled() {
-    this.decoyCount = Math.max(0, this.decoyCount - 1);
+  /** Phase 2 at <= 67.5% max hp, phase 3 at <= 32.5% (27 / 13 at 40 hp). */
+  private phaseForHp(): number {
+    if (this.hp <= this.maxHp * 0.325) return 3;
+    if (this.hp <= this.maxHp * 0.675) return 2;
+    return 1;
+  }
+
+  private enterPhase(phase: number) {
+    this.phase = phase;
+    this.fireRate = phase === 3 ? 1500 : 2000;
+    // Don't carry a longer phase-1/2 countdown into a faster phase.
+    this.fireCooldown = Math.min(this.fireCooldown, this.fireRate);
+    this.teleportTimer = Math.min(this.teleportTimer, TELEPORT_INTERVALS[phase] ?? 2000);
+  }
+
+  /** Called by a decoy this boss spawned, exactly once, when it is destroyed. */
+  onDecoyDestroyed(decoy: PhantomDecoy) {
+    this.decoys.delete(decoy);
+  }
+
+  /** Decoys never outlive the boss (they would block the wave from clearing). */
+  protected preDestroy() {
+    const decoys = [...this.decoys];
+    this.decoys.clear();
+    for (const decoy of decoys) decoy.destroy();
+    super.preDestroy();
   }
 }

@@ -28,6 +28,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   canDestroyBullets: boolean;
   private canRicochet: boolean;
   private bounced = false;
+  private readonly hitTargets = new Set<object>();
 
   constructor(
     scene: Phaser.Scene,
@@ -81,18 +82,44 @@ export class Bullet extends Phaser.GameObjects.Graphics {
     this.x += this.vx * timeScale * dt;
     this.y += this.vy * timeScale * dt;
 
+    if (this.canRicochet && !this.bounced) this.edgeBounce();
+
     const oob = this.x < -20 || this.x > GAME_W + 20 || this.y < -20 || this.y > GAME_H + 20;
-    if (oob) {
-      if (this.canRicochet && !this.bounced) {
-        this.bounced = true;
-        if (this.x < -20 || this.x > GAME_W + 20) this.vx = -this.vx;
-        if (this.y < -20 || this.y > GAME_H + 20) this.vy = -this.vy;
-        this.x = Phaser.Math.Clamp(this.x, 0, GAME_W);
-        this.y = Phaser.Math.Clamp(this.y, 0, GAME_H);
-      } else {
-        this.kill();
-      }
+    if (oob) this.kill();
+  }
+
+  /** Single bounce off the screen edges: reflect when the bullet's edge crosses one while moving outward. */
+  private edgeBounce() {
+    const r = this.radius;
+    let bounced = false;
+    if (this.x - r < 0 && this.vx < 0) {
+      this.x = r;
+      this.vx = -this.vx;
+      bounced = true;
+    } else if (this.x + r > GAME_W && this.vx > 0) {
+      this.x = GAME_W - r;
+      this.vx = -this.vx;
+      bounced = true;
     }
+    if (this.y - r < 0 && this.vy < 0) {
+      this.y = r;
+      this.vy = -this.vy;
+      bounced = true;
+    } else if (this.y + r > GAME_H && this.vy > 0) {
+      this.y = GAME_H - r;
+      this.vy = -this.vy;
+      bounced = true;
+    }
+    if (bounced) this.bounced = true;
+  }
+
+  /** True if this bullet already damaged `target` (piercing bullets hit each target at most once). */
+  hasHit(target: object): boolean {
+    return this.hitTargets.has(target);
+  }
+
+  markHit(target: object) {
+    this.hitTargets.add(target);
   }
 
   steerToward(tx: number, ty: number, strength: number, dt: number) {
@@ -117,6 +144,7 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   }
 
   hit(): boolean {
+    if (!this.alive) return false;
     if (this.pierce > 0) {
       this.pierce--;
       return false;
@@ -126,7 +154,10 @@ export class Bullet extends Phaser.GameObjects.Graphics {
   }
 
   kill() {
+    if (!this.alive) return;
     this.alive = false;
+    this.sourceEnemy = null;
+    this.hitTargets.clear();
     this.destroy();
   }
 }
