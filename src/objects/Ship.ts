@@ -7,9 +7,10 @@ import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 import { options } from "../systems/GameOptions";
 import type { TouchControls } from "../systems/TouchControls";
 import { AngularSpeedTracker, type DilationInput } from "../core/TimeDilation";
-import type { TickEvent } from "../core/Conductor";
+import { TICKS_PER_BEAT, type TickEvent } from "../core/Conductor";
 import { keyboardVector } from "../core/InputMath";
 import { BASE_FIRE_GRACE, FireClock, type FireShot } from "../game/FireClock";
+import { PulseEnvelope } from "../game/PulseEnvelope";
 import { fireIntervalTicks } from "../music/noteValues";
 
 const BASE = defaultStats();
@@ -18,6 +19,11 @@ const INVINCIBLE_DURATION = 1500;
 const INVINCIBLE_FLASH_MS = 80;
 const HEALTHBAR_WIDTH = 40;
 const HEALTHBAR_HEIGHT = 4;
+/** On-beat shot ring: radius (px at 1× UI scale), peak alpha, growth while it fades, decay per real second. */
+const BEAT_RING_RADIUS = 24;
+const BEAT_RING_ALPHA = 0.4;
+const BEAT_RING_GROWTH = 0.3;
+const BEAT_RING_DECAY = 10;
 
 /** Where this frame's aim angle came from: mouse/last pointer, the touch aim stick, or held (move stick only). */
 type AimSource = "pointer" | "touch" | "hold";
@@ -34,6 +40,9 @@ export class Ship extends Phaser.GameObjects.Container {
   keys: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key } | null = null;
   graphics: Phaser.GameObjects.Graphics;
   healthBar: Phaser.GameObjects.Graphics;
+  /** A faint ring that flashes when a shot lands exactly on a beat (stronger on a downbeat). */
+  private readonly beatRing: Phaser.GameObjects.Graphics;
+  private readonly beatPulse = new PulseEnvelope(BEAT_RING_DECAY);
   hp = 5;
   maxHp = 5;
   /** Remaining i-frames in ms of the player's own time (see update()). */
@@ -61,8 +70,11 @@ export class Ship extends Phaser.GameObjects.Container {
     this.shipColor = options.shipColor;
     this.graphics = new Phaser.GameObjects.Graphics(scene);
     this.healthBar = new Phaser.GameObjects.Graphics(scene);
+    this.beatRing = new Phaser.GameObjects.Graphics(scene);
+    this.add(this.beatRing);
     this.add(this.graphics);
     this.add(this.healthBar);
+    this.drawBeatRing();
     this.drawShip();
     this.drawHealthBar();
 
@@ -99,6 +111,20 @@ export class Ship extends Phaser.GameObjects.Container {
 
     this.graphics.fillStyle(0xffffff, 1);
     this.graphics.fillCircle(0, 0, 3 * s);
+  }
+
+  private drawBeatRing() {
+    this.beatRing.clear();
+    this.beatRing.lineStyle(px(1.5), this.shipColor, 1);
+    this.beatRing.strokeCircle(0, 0, px(BEAT_RING_RADIUS));
+    this.applyBeatRing();
+  }
+
+  /** Ring alpha follows the pulse; it widens a little as it fades. Hidden while dark. */
+  private applyBeatRing() {
+    const level = this.beatPulse.level;
+    this.beatRing.setVisible(level > 0);
+    if (level > 0) this.beatRing.setAlpha(level * BEAT_RING_ALPHA).setScale(1 + BEAT_RING_GROWTH * (1 - level));
   }
 
   getHitVertices(): [number, number, number, number, number, number] {
@@ -260,6 +286,12 @@ export class Ship extends Phaser.GameObjects.Container {
       this.graphics.setAlpha(1);
     }
 
+    // The on-beat ring fades in real time, like the backdrop's beat pulse.
+    if (this.beatPulse.level > 0) {
+      this.beatPulse.update(delta / 1000);
+      this.applyBeatRing();
+    }
+
     // After moving and aiming, so shots leave from this frame's position along this frame's aim.
     const grace = BASE_FIRE_GRACE + (Number.isFinite(this.stats.fireGrace) ? Math.max(0, this.stats.fireGrace) : 0);
     const first = this.fireClock.endFrame(gameScene.conductor, grace);
@@ -307,6 +339,10 @@ export class Ship extends Phaser.GameObjects.Container {
         },
       );
       gameScene.playerBullets.add(bullet);
+    }
+    if (shot.tick !== undefined && shot.tick % TICKS_PER_BEAT === 0) {
+      this.beatPulse.trigger(shot.tick % gameScene.conductor.ticksPerBar === 0 ? 1 : 0.7);
+      this.applyBeatRing();
     }
     gameScene.gameEvents.emit("playerFired", {
       weaponId: weapon.id,
