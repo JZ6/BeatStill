@@ -1,6 +1,6 @@
 import { Enemy } from "./Enemy";
-import { radial, aimed } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
+import { tankVolley } from "./volleys";
 
 export class TankEnemy extends Enemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -15,6 +15,6 @@ export class TankEnemy extends Enemy {
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return [...radial(8, 120), ...aimed(angleToPlayer, 4, 0.5, 180)];
+    return tankVolley(angleToPlayer);
   }
 }

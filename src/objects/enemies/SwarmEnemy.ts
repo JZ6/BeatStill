@@ -1,7 +1,7 @@
 import { Enemy } from "./Enemy";
-import { aimed } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
+import { swarmVolley } from "./volleys";
 
 export class SwarmEnemy extends Enemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -16,6 +16,6 @@ export class SwarmEnemy extends Enemy {
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return aimed(angleToPlayer, 2, 0.25, 170);
+    return swarmVolley(angleToPlayer);
   }
 }

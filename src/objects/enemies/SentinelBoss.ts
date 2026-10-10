@@ -4,8 +4,8 @@ import { rhythmHits } from "./registry";
 import { BossPhases, GridTimer } from "./bossPhases";
 import { SwarmEnemy } from "./SwarmEnemy";
 import { TrackerEnemy } from "./TrackerEnemy";
-import { radial, aimed, spiral } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
+import { sentinelVolley } from "./volleys";
 import type { GameScene } from "../../scenes/GameScene";
 import { STEPS_PER_BEAT, TICKS_PER_STEP, type TickEvent } from "../../core/Conductor";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
@@ -136,16 +136,7 @@ export class SentinelBoss extends Enemy {
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    switch (this.phase) {
-      case 1:
-        return radial(8, 90);
-      case 2:
-        return [...radial(12, 100), ...aimed(angleToPlayer, 3, 0.3, 160)];
-      case 3:
-        return [...spiral(5, 110, this.innerAngle), ...aimed(angleToPlayer, 2, 0.2, 200)];
-      default:
-        return radial(8, 90);
-    }
+    return sentinelVolley(this.phase, angleToPlayer, this.innerAngle);
   }
 
   takeDamage(amount: number): boolean {

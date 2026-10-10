@@ -1,10 +1,10 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
-import { spiral } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 import { TICKS_PER_STEP, type TickEvent } from "../../core/Conductor";
 import type { GameScene } from "../../scenes/GameScene";
 import { spiralAngle } from "./rhythm";
+import { spiralVolley } from "./volleys";
 
 export class SpiralEnemy extends Enemy {
   /** Arm angle at step 0, so spirals don't turn in unison. The arms advance per step, not per frame. */
@@ -24,6 +24,6 @@ export class SpiralEnemy extends Enemy {
 
   protected getFirePattern(_angleToPlayer: number, _gameScene: GameScene, at?: TickEvent): BulletConfig[] {
     const step = at ? at.tick / TICKS_PER_STEP : 0;
-    return spiral(4, 130, spiralAngle(step, this.anglePhase));
+    return spiralVolley(spiralAngle(step, this.anglePhase));
   }
 }

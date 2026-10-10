@@ -1,8 +1,9 @@
 import Phaser from "phaser";
 import { Bullet } from "./Bullet";
 import type { GameScene } from "../scenes/GameScene";
-import { defaultStats, fireRateLevel, type PlayerStats } from "../systems/Upgrades";
+import { fireRateLevel, type PlayerStats } from "../systems/Upgrades";
 import { getWeapon } from "../systems/Weapons";
+import { shotProfile } from "../systems/weaponMath";
 import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 import { options } from "../systems/GameOptions";
 import type { TouchControls } from "../systems/TouchControls";
@@ -12,8 +13,6 @@ import { keyboardVector } from "../core/InputMath";
 import { BASE_FIRE_GRACE, FireClock, type FireShot } from "../game/FireClock";
 import { PulseEnvelope } from "../game/PulseEnvelope";
 import { fireIntervalTicks } from "../music/noteValues";
-
-const BASE = defaultStats();
 
 const INVINCIBLE_DURATION = 1500;
 const INVINCIBLE_FLASH_MS = 80;
@@ -307,11 +306,7 @@ export class Ship extends Phaser.GameObjects.Container {
   fire(angle: number, gameScene: GameScene, shot: FireShot = { kind: "immediate", first: true }) {
     const weapon = getWeapon(this.stats.weaponId);
 
-    const count = weapon.baseBulletCount + (this.stats.bulletCount - BASE.bulletCount);
-    const spread = weapon.baseBulletSpread + (this.stats.bulletSpread - BASE.bulletSpread);
-    const speed = weapon.baseBulletSpeed + (this.stats.bulletSpeed - BASE.bulletSpeed);
-    const dmg = Math.max(1, Math.round(weapon.damageMultiplier * this.stats.damage * this.damageMultiplier));
-    const prc = weapon.basePierce + this.stats.pierce;
+    const { count, spread, speed, damage: dmg, pierce: prc } = shotProfile(weapon, this.stats, this.damageMultiplier);
 
     const startAngle = count > 1 ? angle - spread / 2 : angle;
     const step = count > 1 ? spread / (count - 1) : 0;

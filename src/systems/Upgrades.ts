@@ -1,6 +1,7 @@
 import { ALL_WEAPONS } from "./Weapons";
 import { applyShopBonuses } from "./Shop";
 import { CHAIN_SUSTAIN_BEATS } from "./chainRules";
+import { BASE_BULLET_COUNT, BASE_BULLET_SPEED, BASE_BULLET_SPREAD } from "./weaponMath";
 
 export interface PlayerStats {
   bulletCount: number;
@@ -22,14 +23,15 @@ export interface PlayerStats {
   upgradeLevels: Record<string, number>;
 }
 
-export function defaultStats(): PlayerStats {
-  const stats: PlayerStats = {
-    bulletCount: 1,
-    bulletSpread: 0.15,
+/** Starting stats before any shop bonus. */
+export function baseStats(): PlayerStats {
+  return {
+    bulletCount: BASE_BULLET_COUNT,
+    bulletSpread: BASE_BULLET_SPREAD,
     pierce: 0,
     maxHp: 5,
     fireRate: 0,
-    bulletSpeed: 600,
+    bulletSpeed: BASE_BULLET_SPEED,
     damage: 1,
     moveSpeed: 300,
     weaponId: "standard",
@@ -38,6 +40,11 @@ export function defaultStats(): PlayerStats {
     fireGrace: 0,
     upgradeLevels: {},
   };
+}
+
+/** Starting stats of a run: baseStats() plus the shop's permanent bonuses. */
+export function defaultStats(): PlayerStats {
+  const stats = baseStats();
   applyShopBonuses(stats);
   return stats;
 }

@@ -1,11 +1,11 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
-import { aimed } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
 import type { TickEvent } from "../../core/Conductor";
 import { px } from "../../systems/GameConfig";
 import { weave, weavePitchHint } from "./rhythm";
+import { snakeVolley } from "./volleys";
 
 /** Peak lateral offset of the weave (base px, UI-scaled). One weave cycle per beat of the conductor. */
 const WEAVE_AMPLITUDE = 22;
@@ -102,6 +102,6 @@ export class SnakeEnemy extends Enemy {
   }
 
   protected getFirePattern(angleToPlayer: number): BulletConfig[] {
-    return aimed(angleToPlayer, 3, 0.3, 200);
+    return snakeVolley(angleToPlayer);
   }
 }

@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
-import { radial } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
+import { circlerVolley } from "./volleys";
 
 const EDGE_MARGIN = 40;
 /** Minimum inward component of the unit heading that counts as "coming back" from an edge. */
@@ -43,6 +43,6 @@ export class CirclerEnemy extends Enemy {
   }
 
   protected getFirePattern(): BulletConfig[] {
-    return radial(16, 110);
+    return circlerVolley();
   }
 }

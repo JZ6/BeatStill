@@ -3,8 +3,8 @@ import { Enemy } from "./Enemy";
 import { PhantomDecoy } from "./PhantomDecoy";
 import { rhythmHits } from "./registry";
 import { BossPhases, GridTimer } from "./bossPhases";
-import { aimed, radial, spiral } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
+import { phantomTeleportVolley, phantomVolley } from "./volleys";
 import type { GameScene } from "../../scenes/GameScene";
 import { STEPS_PER_BEAT, TICKS_PER_STEP, type TickEvent } from "../../core/Conductor";
 import { GAME_W, GAME_H } from "../../systems/GameConfig";
@@ -182,7 +182,7 @@ export class PhantomBoss extends Enemy {
     this.teleportProgress = 0;
 
     if (this.phase >= 2) {
-      this.spawnVolley(gameScene, radial(8, 60), this.teleportFromX, this.teleportFromY, tick);
+      this.spawnVolley(gameScene, phantomTeleportVolley(), this.teleportFromX, this.teleportFromY, tick);
     }
 
     if (this.phase >= 3 && this.decoys.size < MAX_DECOYS) {
@@ -220,20 +220,7 @@ export class PhantomBoss extends Enemy {
     const chargeBonus = Math.min(Math.floor(this.chargeCounter / 300), 6);
     this.chargeCounter = 0;
 
-    switch (this.phase) {
-      case 1:
-        return aimed(angleToPlayer, 3 + chargeBonus, 0.4, 180);
-      case 2:
-        return [...aimed(angleToPlayer, 3 + chargeBonus, 0.4, 180), ...radial(6, 70)];
-      case 3:
-        return [
-          ...aimed(angleToPlayer, 3 + chargeBonus, 0.4, 180),
-          ...radial(6, 70),
-          ...spiral(3, 90, this.spiralAngle),
-        ];
-      default:
-        return aimed(angleToPlayer, 3, 0.4, 180);
-    }
+    return phantomVolley(this.phase, angleToPlayer, chargeBonus, this.spiralAngle);
   }
 
   takeDamage(amount: number): boolean {
