@@ -3,10 +3,12 @@
 //
 // Expects a fresh build in dist/ (`npm run smoke` builds first). Serves it with
 // `vite preview`, drives headless Chrome over the DevTools protocol, plays two
-// short endless runs (with a pause/resume check) and the first campaign level,
-// and fails on any uncaught exception, console error, or failed resource load,
-// when the time scale / conductor clock / pause freeze misbehave, or when the
-// audio engine doesn't start, schedules too few notes, or reports errors.
+// short endless runs (with a pause/resume check), a boss check (Sentinel and
+// Phantom phase changes on bar lines) and the first campaign level, and fails on
+// any uncaught exception, console error, or failed resource load, when the time
+// scale / conductor clock / pause freeze misbehave, when enemies don't fire on
+// the step grid, or when the audio engine doesn't start, schedules too few
+// notes, or reports errors. Prints the audio dropped/scheduled ratio.
 // No extra dependencies: uses Node's built-in WebSocket.
 //
 // Env overrides: CHROME_PATH, SMOKE_PREVIEW_PORT, SMOKE_DEBUG_PORT.
@@ -186,13 +188,16 @@ function readAudio(cdp) {
 
 /** Every run must schedule enough notes and never hit an engine error. */
 const MIN_RUN_NOTES = 20;
+/** Most dropped notes allowed per scheduled note over the whole smoke run. */
+const MAX_DROP_RATIO = 0.5;
 
 function checkAudio(label, before, after, minNotes) {
   const notes = after.scheduled - before.scheduled;
+  const dropped = after.dropped - before.dropped;
   log(
     `${label} audio: started=${after.started} context=${after.contextState} palette=${after.palette} ` +
-      `scheduled=+${notes} dropped=+${after.dropped - before.dropped} merged=+${after.merged - before.merged} ` +
-      `errors=${after.errors}`,
+      `scheduled=+${notes} dropped=+${dropped} merged=+${after.merged - before.merged} ` +
+      `dropped/scheduled=${fmt(notes > 0 ? dropped / notes : NaN)} errors=${after.errors}`,
   );
   if (!after.started) problems.push(`${label}: audio engine not started`);
   if (!(notes > minNotes)) problems.push(`${label}: only ${notes} notes scheduled (want > ${minNotes})`);
@@ -200,6 +205,37 @@ function checkAudio(label, before, after, minNotes) {
 }
 
 const fmt = (n, digits = 2) => (typeof n === "number" ? n.toFixed(digits) : String(n));
+
+/**
+ * Counts the current run's enemyFired and bossPhaseChanged events (GameScene recreates its bus
+ * every run, so call this after each start). A volley is on the grid if it carries the 16th-note
+ * tick it fired on and that tick's lateBy.
+ */
+async function watchEnemyFire(cdp) {
+  await evaluate(
+    cdp,
+    `(() => {
+      const s = ${GAME}.scene.getScene("GameScene");
+      const w = (window.__smokeFire = { volleys: 0, onGrid: 0, types: {}, phases: [] });
+      s.gameEvents.on("enemyFired", (p) => {
+        w.volleys++;
+        if (typeof p.lateBy === "number" && Number.isInteger(p.tick) && p.tick % 6 === 0) w.onGrid++;
+        w.types[p.enemyType] = (w.types[p.enemyType] ?? 0) + 1;
+      });
+      s.gameEvents.on("bossPhaseChanged", (p) => w.phases.push({ ...p, ticksPerBar: s.conductor.ticksPerBar }));
+      return true;
+    })()`,
+  );
+}
+
+const readEnemyFire = (cdp) => evaluate(cdp, `window.__smokeFire ?? null`);
+
+/** Enemies must have fired, every volley on the step grid. */
+function checkEnemyFire(label, fire) {
+  log(`${label} enemy fire: volleys=${fire?.volleys} onGrid=${fire?.onGrid} byType=${JSON.stringify(fire?.types ?? {})}`);
+  if (!fire || !(fire.volleys > 0)) problems.push(`${label}: no enemy fired during the run`);
+  else if (fire.onGrid !== fire.volleys) problems.push(`${label}: ${fire.volleys - fire.onGrid} of ${fire.volleys} volleys were off the step grid`);
+}
 
 /** Holds the left button for `ms` while circling the mouse around (cx, cy). */
 async function holdFire(cdp, ms, { cx, cy, rx = 200, ry = 150, onSample } = {}) {
@@ -240,6 +276,7 @@ async function returnToMenu(cdp) {
 
 async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   await startGameScene(cdp, `{ mode: "endless" }`, label);
+  await watchEnemyFire(cdp);
   const audioBefore = await readAudio(cdp);
 
   // Hold fire while circling the mouse: should start audio and speed time (and the clock) up.
@@ -291,6 +328,59 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
 
   if (checkPause) await pauseCheck(cdp, label);
   checkAudio(label, audioBefore, await readAudio(cdp), MIN_RUN_NOTES);
+  checkEnemyFire(label, await readEnemyFire(cdp));
+}
+
+/**
+ * Endless boss waves, started like the DevPanel's "Set Wave". A hit past the phase-2 threshold
+ * queues phase 2; it must take effect on a bar line (bossPhaseChanged on a tick that is a multiple
+ * of the bar), and the boss must fire on the grid. God mode keeps the probe alive.
+ */
+async function bossCheck(cdp) {
+  const label = "boss";
+  await startGameScene(cdp, `{ mode: "endless" }`, label);
+  await watchEnemyFire(cdp);
+  const audioBefore = await readAudio(cdp);
+  const scene = `${GAME}.scene.getScene("GameScene")`;
+  for (const [type, wave] of [["sentinel", 5], ["phantom", 10]]) {
+    const tag = `${label} ${type}`;
+    await evaluate(
+      cdp,
+      `(() => { const s = ${scene}; s.godMode = true; s.wave = ${wave - 1}; s.waves.clearField(); s.waves.spawnEndlessWave(); return true; })()`,
+    );
+    const findBoss = `${scene}.enemies.getChildren().find((e) => e.enemyType === "${type}")`;
+    const arrived = await waitFor(() => evaluate(cdp, `!!${findBoss}`), 8000, `${type} to arrive`).catch(() => false);
+    if (!arrived) {
+      problems.push(`${tag}: boss did not arrive`);
+      continue;
+    }
+    const phasesBefore = (await readEnemyFire(cdp)).phases.length;
+    const volleysBefore = (await readEnemyFire(cdp)).types[type] ?? 0;
+    // 40% of max hp: past the phase-2 threshold of both bosses.
+    await evaluate(cdp, `(() => { const b = ${findBoss}; b.takeDamage(Math.ceil(b.maxHp * 0.4)); return true; })()`);
+    // Shoot down, away from the boss, so time runs past at least one bar line (≈ 8 beats).
+    await holdFire(cdp, 6000, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height * 0.92, rx: 250, ry: 20 });
+    const fire = await readEnemyFire(cdp);
+    const changes = fire.phases.slice(phasesBefore).filter((p) => p.bossType === type);
+    const volleys = (fire.types[type] ?? 0) - volleysBefore;
+    const alive = await evaluate(cdp, `!!${findBoss}`);
+    log(`${tag}: phaseChanges=${JSON.stringify(changes.map(({ phase, tick, ticksPerBar }) => ({ phase, tick, ticksPerBar })))} volleys=${volleys} alive=${alive}`);
+    if (changes.length === 0) problems.push(`${tag}: no phase change after crossing the phase-2 threshold`);
+    for (const c of changes) {
+      if (c.phase !== 2) problems.push(`${tag}: expected phase 2, got ${c.phase}`);
+      if (!Number.isInteger(c.tick) || c.tick % c.ticksPerBar !== 0 || typeof c.lateBy !== "number") {
+        problems.push(`${tag}: phase change off the bar line (tick=${c.tick}, lateBy=${c.lateBy})`);
+      }
+    }
+    if (!(volleys > 0)) problems.push(`${tag}: boss never fired`);
+  }
+  log(`${label}: screenshot=${await screenshot(cdp, `${label}-phantom`)}`);
+  // Idle like the endless runs, so the run's last heartbeat has died away before the menu's first
+  // one: released voices stay busy until their tails end, and the heart has only two.
+  await sleep(2000);
+  await evaluate(cdp, `${scene}.godMode = false; true`);
+  checkAudio(label, audioBefore, await readAudio(cdp), MIN_RUN_NOTES);
+  checkEnemyFire(label, await readEnemyFire(cdp));
 }
 
 /** Pause via the ESC path freezes the conductor, scene clock and tweens; resume restarts them. */
@@ -432,14 +522,22 @@ async function main() {
     await playEndlessRun(cdp, "run2");
 
     await returnToMenu(cdp);
+    await bossCheck(cdp);
+
+    await returnToMenu(cdp);
     await playCampaignLevel(cdp);
 
     const audio = await readAudio(cdp);
     log(
       `audio totals: scheduled=${audio.scheduled} dropped=${audio.dropped} merged=${audio.merged} ` +
+        `dropped/scheduled=${fmt(audio.scheduled > 0 ? audio.dropped / audio.scheduled : NaN)} ` +
         `errors=${audio.errors} drops=${JSON.stringify(audio.drops)}`,
     );
     if (audio.errors > 0) problems.push(`audio engine reported ${audio.errors} error(s) in total`);
+    // Phase 3 (enemies on ms timers) dropped more notes than it scheduled; on the grid it must stay well below.
+    if (audio.dropped > MAX_DROP_RATIO * audio.scheduled) {
+      problems.push(`audio dropped ${audio.dropped} notes for ${audio.scheduled} scheduled (want ≤ ${MAX_DROP_RATIO}×)`);
+    }
 
     const crashShown = await evaluate(
       cdp,
