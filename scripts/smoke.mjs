@@ -2,9 +2,11 @@
 // Headless browser smoke test for Beat Still.
 //
 // Expects a fresh build in dist/ (`npm run smoke` builds first). Serves it with
-// `vite preview`, drives headless Chrome over the DevTools protocol, plays a
-// short endless run, and fails on any uncaught exception, console error, or
-// failed resource load. No extra dependencies: uses Node's built-in WebSocket.
+// `vite preview`, drives headless Chrome over the DevTools protocol, plays two
+// short endless runs (with a pause/resume check) and the first campaign level,
+// and fails on any uncaught exception, console error, or failed resource load,
+// or when the time scale / conductor clock / pause freeze misbehave.
+// No extra dependencies: uses Node's built-in WebSocket.
 //
 // Env overrides: CHROME_PATH, SMOKE_PREVIEW_PORT, SMOKE_DEBUG_PORT.
 import { spawn } from "node:child_process";
@@ -161,6 +163,13 @@ function readGameState(cdp) {
         score: s.score,
         enemies: s.enemies?.getLength() ?? 0,
         timeScale: typeof s.timeScale === "number" ? s.timeScale : null,
+        beat: s.conductor ? s.conductor.beat : null,
+        bpm: s.conductor ? s.conductor.bpm : null,
+        conductorPaused: !!s.conductor?.paused,
+        menuOpen: !!s.pauseMenu?.isActive,
+        clockPaused: !!s.time?.paused,
+        tweensPaused: !!s.tweens?.paused,
+        levelId: s.level ? s.level.levelDef.id : null,
         audioStarted: !!s.audioStarted,
         audioReady: !!s.audioManager?.isStarted,
         gameOver: !!s.gameOver,
@@ -169,42 +178,70 @@ function readGameState(cdp) {
   );
 }
 
-async function playEndlessRun(cdp, label) {
-  await evaluate(cdp, `${GAME}.scene.getScene("StartScene").scene.start("GameScene"); true`);
+const fmt = (n, digits = 2) => (typeof n === "number" ? n.toFixed(digits) : String(n));
+
+/** Holds the left button for `ms` while circling the mouse around (cx, cy). */
+async function holdFire(cdp, ms, { cx, cy, rx = 200, ry = 150, onSample } = {}) {
+  await mouse(cdp, "mouseMoved", cx, cy, false);
+  await mouse(cdp, "mousePressed", cx, cy, true);
+  const start = Date.now();
+  for (let i = 0; Date.now() - start < ms; i++) {
+    const a = i * 0.25;
+    await mouse(cdp, "mouseMoved", cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, true);
+    if (onSample && i % 5 === 0) await onSample();
+    await sleep(50);
+  }
+  await mouse(cdp, "mouseReleased", cx, cy, false);
+}
+
+/** Starts GameScene from the menu, the same way the menu buttons do. `dataExpr` is a JS expression. */
+async function startGameScene(cdp, dataExpr, label) {
+  await evaluate(cdp, `${GAME}.scene.getScene("StartScene").scene.start("GameScene", ${dataExpr}); true`);
   await waitFor(
     () => evaluate(cdp, `${GAME}.scene.isActive("GameScene") && !!${GAME}.scene.getScene("GameScene").ship`),
     10000,
     `GameScene to start (${label})`,
   );
+}
 
-  // Hold fire while circling the mouse: should start audio and speed time up.
+async function returnToMenu(cdp) {
+  await evaluate(cdp, `${GAME}.scene.getScene("GameScene").scene.start("StartScene"); true`);
+  await waitFor(() => evaluate(cdp, `${GAME}.scene.isActive("StartScene")`), 10000, "return to StartScene");
+  await sleep(500);
+}
+
+async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
+  await startGameScene(cdp, `{ mode: "endless" }`, label);
+
+  // Hold fire while circling the mouse: should start audio and speed time (and the clock) up.
   const cx = VIEWPORT.width / 2;
   const cy = VIEWPORT.height / 2;
-  await mouse(cdp, "mouseMoved", cx, cy, false);
-  await mouse(cdp, "mousePressed", cx, cy, true);
+  const beforeHold = await readGameState(cdp);
   let maxTimeScale = 0;
-  const holdStart = Date.now();
-  for (let i = 0; Date.now() - holdStart < 3000; i++) {
-    const a = i * 0.25;
-    await mouse(cdp, "mouseMoved", cx + Math.cos(a) * 200, cy + Math.sin(a) * 150, true);
-    if (i % 5 === 0) {
+  await holdFire(cdp, 3000, {
+    cx,
+    cy,
+    onSample: async () => {
       const st = await readGameState(cdp);
       if (st.timeScale !== null) maxTimeScale = Math.max(maxTimeScale, st.timeScale);
-    }
-    await sleep(50);
-  }
-  await mouse(cdp, "mouseReleased", cx, cy, false);
+    },
+  });
   const afterHold = await readGameState(cdp);
   const shot = await screenshot(cdp, `${label}-playing`);
+  const holdBeats = afterHold.beat - beforeHold.beat;
 
-  // Idle: time should slow back down.
+  // Idle: time should slow back down, and the conductor nearly stop.
   await sleep(1500);
   const idle = await readGameState(cdp);
+  await sleep(1000);
+  const idleEnd = await readGameState(cdp);
+  const idleBeats = idleEnd.beat - idle.beat;
 
   log(
     `${label}: wave=${afterHold.wave} score=${afterHold.score} enemies=${afterHold.enemies} ` +
-      `maxTimeScale=${maxTimeScale.toFixed(2)} idleTimeScale=${idle.timeScale?.toFixed(3)} ` +
-      `audio=${afterHold.audioReady} gameOver=${idle.gameOver} screenshot=${shot}`,
+      `maxTimeScale=${fmt(maxTimeScale)} idleTimeScale=${fmt(idle.timeScale, 3)} ` +
+      `bpm=${afterHold.bpm} holdBeats=${fmt(holdBeats)} idleBeats=${fmt(idleBeats, 3)} ` +
+      `audio=${afterHold.audioReady} gameOver=${idleEnd.gameOver} screenshot=${shot}`,
   );
 
   if (!afterHold.audioStarted) problems.push(`${label}: audio did not start after pointer input`);
@@ -214,6 +251,77 @@ async function playEndlessRun(cdp, label) {
   if (!idle.gameOver && idle.timeScale !== null && idle.timeScale > 0.2) {
     problems.push(`${label}: time did not slow down when idle (${idle.timeScale})`);
   }
+  if (typeof beforeHold.beat !== "number" || typeof afterHold.beat !== "number") {
+    problems.push(`${label}: conductor missing (beat=${afterHold.beat})`);
+  } else if (!(holdBeats >= 0.5)) {
+    problems.push(`${label}: conductor advanced only ${fmt(holdBeats, 3)} beats over the 3 s hold (want ≥ 0.5)`);
+  }
+  if (!idleEnd.gameOver && !(idleBeats <= 0.15)) {
+    problems.push(`${label}: conductor advanced ${fmt(idleBeats, 3)} beats over 1 s idle (want ≤ 0.15)`);
+  }
+
+  if (checkPause) await pauseCheck(cdp, label);
+}
+
+/** Pause via the ESC path freezes the conductor, scene clock and tweens; resume restarts them. */
+async function pauseCheck(cdp, label) {
+  const tag = `${label} pause`;
+  const scene = `${GAME}.scene.getScene("GameScene")`;
+  // God mode only for this segment, so a stray bullet can't end the run and stop the clock.
+  await evaluate(cdp, `(() => { const s = ${scene}; s.godMode = true; s.togglePause(); return true; })()`);
+  const opened = await readGameState(cdp);
+  await sleep(500);
+  const held = await readGameState(cdp);
+  const shot = await screenshot(cdp, `${label}-paused`);
+
+  if (!opened.menuOpen) problems.push(`${tag}: pause menu did not open`);
+  if (held.beat !== opened.beat) problems.push(`${tag}: conductor advanced while paused (${opened.beat} → ${held.beat})`);
+  if (!held.conductorPaused) problems.push(`${tag}: conductor not paused`);
+  if (!held.clockPaused) problems.push(`${tag}: scene clock not paused`);
+  if (!held.tweensPaused) problems.push(`${tag}: tweens not paused`);
+
+  await evaluate(cdp, `${scene}.togglePause(); true`);
+  const resumed = await readGameState(cdp);
+  await holdFire(cdp, 1000, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height / 2 });
+  const after = await readGameState(cdp);
+  await evaluate(cdp, `${scene}.godMode = false; true`);
+  const resumedBeats = after.beat - resumed.beat;
+
+  log(
+    `${tag}: pausedFor=500ms beatDelta=${fmt(held.beat - opened.beat, 4)} clockPaused=${held.clockPaused} ` +
+      `tweensPaused=${held.tweensPaused} resumedBeats=${fmt(resumedBeats)} screenshot=${shot}`,
+  );
+
+  if (resumed.menuOpen || resumed.conductorPaused || resumed.clockPaused || resumed.tweensPaused) {
+    problems.push(`${tag}: did not fully resume (${JSON.stringify(resumed)})`);
+  }
+  if (!(resumedBeats >= 0.2)) {
+    problems.push(`${tag}: conductor advanced only ${fmt(resumedBeats, 3)} beats in 1 s of shooting after resume`);
+  }
+}
+
+/** Campaign level 1, started like LevelSelectScene does. */
+async function playCampaignLevel(cdp) {
+  const label = "campaign";
+  await startGameScene(
+    cdp,
+    `{ mode: "level", levelDef: window.__BEATSTILL__.levels.find((l) => l.id === 1) }`,
+    label,
+  );
+  const before = await readGameState(cdp);
+  // Aim up the hallway at the tanks.
+  await holdFire(cdp, 2000, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height * 0.3, rx: 120, ry: 60 });
+  const after = await readGameState(cdp);
+  const shot = await screenshot(cdp, `${label}-level1`);
+
+  log(
+    `${label}: levelId=${after.levelId} score=${after.score} enemies=${after.enemies} ` +
+      `beats=${fmt(after.beat - before.beat)} gameOver=${after.gameOver} screenshot=${shot}`,
+  );
+
+  if (!after.active) problems.push(`${label}: GameScene is not active`);
+  if (after.levelId !== 1) problems.push(`${label}: level runner missing or wrong level (levelId=${after.levelId})`);
+  if (!(after.beat > before.beat)) problems.push(`${label}: conductor did not advance (${before.beat} → ${after.beat})`);
 }
 
 async function main() {
@@ -284,13 +392,14 @@ async function main() {
     await sleep(1000);
     log(`menu screenshot: ${await screenshot(cdp, "menu")}`);
 
-    await playEndlessRun(cdp, "run1");
+    await playEndlessRun(cdp, "run1", { checkPause: true });
 
     // Back to the menu and play again to exercise scene restart paths.
-    await evaluate(cdp, `${GAME}.scene.getScene("GameScene").scene.start("StartScene"); true`);
-    await waitFor(() => evaluate(cdp, `${GAME}.scene.isActive("StartScene")`), 10000, "return to StartScene");
-    await sleep(500);
+    await returnToMenu(cdp);
     await playEndlessRun(cdp, "run2");
+
+    await returnToMenu(cdp);
+    await playCampaignLevel(cdp);
 
     const crashShown = await evaluate(
       cdp,

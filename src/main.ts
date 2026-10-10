@@ -7,6 +7,7 @@ import { createDevPanel } from "./systems/DevPanel";
 import { initCrashReporter } from "./systems/CrashReporter";
 import { options, registerGame, saveOptions } from "./systems/GameOptions";
 import { initDimensions, GAME_W, GAME_H } from "./systems/GameConfig";
+import { ALL_LEVELS, type LevelDef } from "./systems/Levels";
 
 initDimensions(options.resolution);
 
@@ -41,7 +42,10 @@ const game = new Phaser.Game({
 registerGame(game);
 
 // Debug/test hook: used by scripts/smoke.mjs and for manual console inspection.
-(window as unknown as { __BEATSTILL__?: { game: Phaser.Game } }).__BEATSTILL__ = { game };
+(window as unknown as { __BEATSTILL__?: { game: Phaser.Game; levels: readonly LevelDef[] } }).__BEATSTILL__ = {
+  game,
+  levels: ALL_LEVELS,
+};
 
 const canvas = game.canvas;
 if (canvas) {
