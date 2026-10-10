@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { parsePattern } from "../../music/patterns";
-import { EnemyRhythm, SPAWN_GRACE_STEPS, densityDoublings, pickOffset } from "./rhythm";
+import {
+  EnemyRhythm,
+  SPAWN_GRACE_STEPS,
+  SPIRAL_STEP_ANGLE,
+  densityDoublings,
+  pickOffset,
+  spiralAngle,
+  weave,
+  weavePitchHint,
+} from "./rhythm";
 
 const hits = (text: string) => parsePattern(text).hits;
 
@@ -37,6 +46,30 @@ describe("pickOffset", () => {
     expect(pickOffset(0, 4, () => 3)).toBe(0);
     expect(pickOffset(16, 4, () => 99)).toBe(12);
     expect(pickOffset(16, 4, () => -5)).toBe(0);
+  });
+});
+
+describe("motion locked to the grid", () => {
+  it("turns the spiral 3π/16 per 8th note, from its own phase", () => {
+    expect(SPIRAL_STEP_ANGLE * 2).toBeCloseTo((3 * Math.PI) / 16);
+    // ≈ the old continuous 2 rad/s: 0.6 rad per 300 ms volley.
+    expect(Math.abs(SPIRAL_STEP_ANGLE * 2 - 0.6)).toBeLessThan(0.02);
+    expect(spiralAngle(0, 1)).toBeCloseTo(1);
+    expect(spiralAngle(2, 1) - spiralAngle(0, 1)).toBeCloseTo((3 * Math.PI) / 16);
+    for (const step of [0, 31, 64, 1000]) {
+      const a = spiralAngle(step, 5);
+      expect(a >= 0 && a < Math.PI * 2).toBe(true);
+    }
+  });
+
+  it("weaves the snake once per beat and offers the swing as a pitch hint", () => {
+    expect(weave(0, 0)).toBeCloseTo(0);
+    expect(weave(0.25, 0)).toBeCloseTo(1);
+    expect(weave(1.25, 0)).toBeCloseTo(1);
+    expect(weave(0, 0.75)).toBeCloseTo(-1);
+    expect(weavePitchHint(0.25, 0)).toBeCloseTo(1);
+    expect(weavePitchHint(0.75, 0)).toBeCloseTo(0);
+    expect(weavePitchHint(3, 0)).toBeCloseTo(0.5);
   });
 });
 

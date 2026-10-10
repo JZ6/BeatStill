@@ -3,9 +3,11 @@ import { Enemy } from "./Enemy";
 import { aimed } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
+import type { TickEvent } from "../../core/Conductor";
 import { px } from "../../systems/GameConfig";
+import { weave, weavePitchHint } from "./rhythm";
 
-/** Peak lateral offset of the weave (base px, UI-scaled). */
+/** Peak lateral offset of the weave (base px, UI-scaled). One weave cycle per beat of the conductor. */
 const WEAVE_AMPLITUDE = 22;
 /** The weave fades out within this distance of the target so the sideways axis can't flip at close range. */
 const WEAVE_FADE_DIST = 80;
@@ -16,14 +18,23 @@ const WEAVE_FADE_DIST = 80;
 const FORWARD_FACTOR = 0.912;
 
 export class SnakeEnemy extends Enemy {
-  private snakePhase = 0;
+  /** Where in its weave this snake is on each beat (0..1 of a cycle), so snakes don't sway in unison. */
+  private readonly weavePhase: number;
+  /** Conductor beat of the first weave frame (null until then). */
+  private weaveStartBeat: number | null = null;
   /** Lateral offset applied last frame; x/y = path position + this offset. */
   private offsetX = 0;
   private offsetY = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, "snake");
+    this.weavePhase = Phaser.Math.FloatBetween(0, 1);
     this.draw(this.color);
+  }
+
+  /** The weave at the moment of the shot: the melody follows the sway. */
+  protected pitchHint(at?: TickEvent): number | undefined {
+    return at ? weavePitchHint(at.beat, this.weavePhase) : undefined;
   }
 
   /** Wavy body along local +x (head end); `rotation` follows the chase heading. */
@@ -59,7 +70,6 @@ export class SnakeEnemy extends Enemy {
   protected updateMovement(delta: number, timeScale: number, gameScene: GameScene) {
     this.targetX = gameScene.ship.x;
     this.targetY = gameScene.ship.y;
-    this.snakePhase += delta * timeScale * 0.005;
 
     // Steer the underlying path (position minus last offset), not the weaving body.
     const dx = this.targetX - (this.x - this.offsetX);
@@ -74,10 +84,14 @@ export class SnakeEnemy extends Enemy {
       this.x += ux * this.speed * FORWARD_FACTOR * timeScale * dt;
       this.y += uy * this.speed * FORWARD_FACTOR * timeScale * dt;
 
-      // The offset is a pure function of phase, applied as a delta from last frame's offset:
-      // frame-rate independent, time-scaled via snakePhase, and wall push-outs are preserved.
-      const fade = Math.min(dist / px(WEAVE_FADE_DIST), 1);
-      const lateral = px(WEAVE_AMPLITUDE) * fade * Math.sin(this.snakePhase * 3);
+      // The offset is a pure function of the conductor's beat, applied as a delta from last frame's
+      // offset: frame-rate independent, time-scaled with the music, and wall push-outs are preserved.
+      const beat = gameScene.conductor.beat;
+      this.weaveStartBeat ??= beat;
+      // Swells in over the first beat, so a snake joining mid-sway doesn't jump sideways.
+      const swell = Math.min(beat - this.weaveStartBeat, 1);
+      const fade = Math.min(dist / px(WEAVE_FADE_DIST), 1) * swell;
+      const lateral = px(WEAVE_AMPLITUDE) * fade * weave(beat, this.weavePhase);
       const ox = -uy * lateral;
       const oy = ux * lateral;
       this.x += ox - this.offsetX;

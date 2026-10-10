@@ -35,6 +35,26 @@ export function pickOffset(length: number, offsetStep: number, randomInt: (n: nu
   return mod(k * step, len);
 }
 
+const TAU = Math.PI * 2;
+
+/** Spiral arms turn this much per 16th step: 3π/16 per 8th, the old 2 rad/s look at 100 bpm. */
+export const SPIRAL_STEP_ANGLE = (3 * Math.PI) / 32;
+
+/** The spiral's arm angle on `step` (radians in [0, 2π)), from its per-instance `phase`. */
+export function spiralAngle(step: number, phase: number): number {
+  return mod(phase + step * SPIRAL_STEP_ANGLE, TAU);
+}
+
+/** The snake's weave, locked to the beat: one cycle per beat, shifted by `phase` (beats). In [-1, 1]. */
+export function weave(beat: number, phase: number): number {
+  return Math.sin(TAU * (beat + phase));
+}
+
+/** The weave as a 0..1 pitch suggestion: the snake's sideways swing becomes the melody's contour. */
+export function weavePitchHint(beat: number, phase: number): number {
+  return 0.5 + 0.5 * weave(beat, phase);
+}
+
 /** Number of doublings (0, 1, 2, …) for a density factor (1, 2, 4, …); factors ≤ 1 give 0. */
 export function densityDoublings(factor: number): number {
   return Number.isFinite(factor) && factor > 1 ? Math.max(0, Math.round(Math.log2(factor))) : 0;
