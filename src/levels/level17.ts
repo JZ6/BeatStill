@@ -4,6 +4,7 @@ export const level17: LevelDef = {
   id: 17,
   name: "Sentinel",
   description: "Your first boss fight",
+  music: { bpm: 112, key: "C" },
   shipRx: 0.5, shipRy: 0.8,
   waves: [
     {

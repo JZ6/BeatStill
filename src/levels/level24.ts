@@ -4,6 +4,7 @@ export const level24: LevelDef = {
   id: 24,
   name: "The Phantom",
   description: "Face the shadow",
+  music: { bpm: 121, key: "D" },
   shipRx: 0.5, shipRy: 0.8,
   waves: [
     {

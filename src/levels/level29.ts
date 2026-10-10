@@ -4,6 +4,7 @@ export const level29: LevelDef = {
   id: 29,
   name: "Bullet Cathedral",
   description: "Navigate the architecture",
+  music: { bpm: 127, key: "F" },
   shipRx: 0.5, shipRy: 0.9,
   waves: [
     {

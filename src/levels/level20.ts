@@ -4,6 +4,7 @@ export const level20: LevelDef = {
   id: 20,
   name: "Shield Wall",
   description: "One-way walls close in",
+  music: { bpm: 116, key: "C" },
   shipRx: 0.5, shipRy: 0.8,
   waves: [
     {

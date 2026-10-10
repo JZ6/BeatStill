@@ -5,6 +5,7 @@ export const level05: LevelDef = {
   id: 5,
   name: "The Swarm",
   description: "They pour through the gaps",
+  music: { bpm: 97, key: "E" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

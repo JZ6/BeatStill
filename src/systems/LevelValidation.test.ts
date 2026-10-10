@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { normalizeLevelDef } from "./LevelValidation";
+import {
+  MAX_LEVEL_BPM,
+  MIN_LEVEL_BPM,
+  normalizeBpm,
+  normalizeKey,
+  normalizeLevelDef,
+  normalizeLevelMusic,
+  normalizeMode,
+  normalizeProgression,
+  normalizeTheme,
+  progressionError,
+} from "./LevelValidation";
 import { ALL_LEVELS } from "./Levels";
 
 function level(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -15,9 +26,10 @@ function level(overrides: Record<string, unknown> = {}): Record<string, unknown>
 }
 
 describe("normalizeLevelDef", () => {
-  it("round-trips a valid level, preserving unknown fields on level, waves and entries", () => {
+  it("round-trips a valid level, preserving unknown fields on level, music, waves and entries", () => {
     const raw = level({
-      music: { bpm: 120, key: "A", mode: "minor" },
+      music: { theme: "bell", bpm: 120, key: "A", mode: "aeolian", progression: "i VI III VII", swing: 0.1 },
+      tags: ["hard"],
       waves: [
         {
           bars: 8,
@@ -195,6 +207,13 @@ describe("normalizeLevelDef", () => {
     expect(out).not.toHaveProperty("shipRy");
   });
 
+  it("keeps a wave's bars only when it is a number from 1 to 64 (floored)", () => {
+    const bars = [4, 1, 64, 2.9, 0, -2, 65, "4", null, Number.NaN];
+    const out = normalizeLevelDef(level({ waves: bars.map((b) => ({ enemies: [], bars: b })) }))!;
+    expect(out.waves.map((w) => w.bars)).toEqual([4, 1, 64, 2, undefined, undefined, undefined, undefined, undefined, undefined]);
+    expect(out.waves[4]).not.toHaveProperty("bars");
+  });
+
   it("survives a JSON round-trip", () => {
     const first = normalizeLevelDef(level({ music: { bpm: 90 } }))!;
     expect(normalizeLevelDef(JSON.parse(JSON.stringify(first)))).toEqual(first);
@@ -204,5 +223,69 @@ describe("normalizeLevelDef", () => {
     for (const def of ALL_LEVELS) {
       expect(normalizeLevelDef(def), `level ${def.id}`).toEqual(def);
     }
+  });
+
+  it("validates the level's music and drops invalid fields", () => {
+    const out = normalizeLevelDef(level({
+      music: { theme: "lava", bpm: 200, key: "H", mode: "majorPentatonic", progression: "I IIII", mood: "dark" },
+    }))!;
+    expect(out.music).toEqual({ mood: "dark" });
+  });
+
+  it("drops music that is not an object or ends up empty", () => {
+    for (const music of [null, 5, "fast", [], {}, { bpm: "120" }, { key: 4, mode: null }]) {
+      expect(normalizeLevelDef(level({ music })), JSON.stringify(music)).not.toHaveProperty("music");
+    }
+  });
+});
+
+describe("level music fields", () => {
+  it("bpm: 60–180", () => {
+    expect(normalizeBpm(60)).toBe(60);
+    expect(normalizeBpm(180)).toBe(180);
+    expect(normalizeBpm(97.5)).toBe(97.5);
+    for (const bad of [59.9, 181, -100, Number.NaN, Infinity, "120", null]) expect(normalizeBpm(bad)).toBeUndefined();
+    expect([MIN_LEVEL_BPM, MAX_LEVEL_BPM]).toEqual([60, 180]);
+  });
+
+  it("key: a valid note name, letter capitalised", () => {
+    expect(normalizeKey("E")).toBe("E");
+    expect(normalizeKey(" bb ")).toBe("Bb");
+    expect(normalizeKey("f#")).toBe("F#");
+    expect(normalizeKey("C♯")).toBe("C♯");
+    for (const bad of ["H", "E4", "", "Ebbb", "BB", 4, null]) expect(normalizeKey(bad)).toBeUndefined();
+  });
+
+  it("mode: a 7-note mode (any case), with major/minor aliases", () => {
+    expect(normalizeMode("dorian")).toBe("dorian");
+    expect(normalizeMode("Phrygian")).toBe("phrygian");
+    expect(normalizeMode("harmonicminor")).toBe("harmonicMinor");
+    expect(normalizeMode("major")).toBe("ionian");
+    expect(normalizeMode("minor")).toBe("aeolian");
+    for (const bad of ["majorPentatonic", "minorPentatonic", "blues", "", 3]) expect(normalizeMode(bad)).toBeUndefined();
+  });
+
+  it("progression: parseable by Harmony, whitespace collapsed, at most 32 chords", () => {
+    expect(normalizeProgression("i VI III VII")).toBe("i VI III VII");
+    expect(normalizeProgression("  i:2   iv |  V7 ")).toBe("i:2 iv | V7");
+    expect(progressionError("I vi IV V7")).toBeNull();
+    expect(progressionError("I IIII")).toMatch(/Invalid chord numeral/);
+    expect(progressionError("")).toMatch(/empty/);
+    expect(progressionError(Array(33).fill("i").join(" "))).toMatch(/32/);
+    for (const bad of ["", "   ", "X Y", "Iv", 5]) expect(normalizeProgression(bad)).toBeUndefined();
+  });
+
+  it("theme: a known palette id, lowercased", () => {
+    expect(normalizeTheme("Guitar")).toBe("guitar");
+    expect(normalizeTheme("piano")).toBe("piano");
+    for (const bad of ["kazoo", "", 1, null]) expect(normalizeTheme(bad)).toBeUndefined();
+  });
+
+  it("normalizeLevelMusic keeps valid fields and unknown ones", () => {
+    expect(normalizeLevelMusic({ bpm: 128, key: "f#", mode: "Minor", extra: true })).toEqual({
+      bpm: 128, key: "F#", mode: "aeolian", extra: true,
+    });
+    expect(normalizeLevelMusic({ bpm: 1000 })).toBeUndefined();
+    expect(normalizeLevelMusic(undefined)).toBeUndefined();
   });
 });

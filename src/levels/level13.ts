@@ -4,6 +4,7 @@ export const level13: LevelDef = {
   id: 13,
   name: "The Fortress",
   description: "Break into the glass compound",
+  music: { bpm: 107, key: "A" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [
     {

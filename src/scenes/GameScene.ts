@@ -6,6 +6,7 @@ import type { Bullet } from "../objects/Bullet";
 import { Conductor, type TickEvent } from "../core/Conductor";
 import { createGameEvents, type GameEvents } from "../core/GameEvents";
 import { TimeDilation } from "../core/TimeDilation";
+import { levelPalette } from "../music/levelMusic";
 import { getPalette } from "../music/palettes";
 import { ParticleSystem } from "../systems/Particles";
 import { defaultStats, type PlayerStats } from "../systems/Upgrades";
@@ -18,6 +19,8 @@ import { recordThemeUsed } from "../systems/Achievements";
 import { ChainSystem } from "../systems/ChainSystem";
 import { CollisionSystem } from "../systems/CollisionSystem";
 import { LevelRunner } from "../systems/LevelRunner";
+import { normalizeLevelMusic } from "../systems/LevelValidation";
+import { isThemeUnlocked } from "../systems/Unlocks";
 import { PauseMenu } from "../systems/PauseMenu";
 import { RelicSystem } from "../systems/Relics";
 import { MutatorSystem } from "../systems/WaveMutators";
@@ -128,7 +131,9 @@ export class GameScene extends Phaser.Scene {
     this.tickDispatcher.clear();
     this.gameEvents = createGameEvents();
 
-    const palette = getPalette(options.themeId);
+    // A level may set its own tempo, key, mode, progression and (if unlocked) theme.
+    const levelMusic = this.level ? normalizeLevelMusic(this.level.levelDef.music) : undefined;
+    const palette = levelPalette(getPalette(options.themeId), levelMusic, isThemeUnlocked);
     recordThemeUsed(palette.id);
     this.conductor = new Conductor({ bpm: palette.bpm });
     this.dilation = new TimeDilation();

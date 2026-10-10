@@ -4,6 +4,7 @@ export const level23: LevelDef = {
   id: 23,
   name: "The Squeeze",
   description: "The arena shrinks each wave",
+  music: { bpm: 119, key: "D" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

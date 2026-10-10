@@ -4,6 +4,7 @@ export const level08: LevelDef = {
   id: 8,
   name: "Sniper Alley",
   description: "Snipers line the walls, bullets ricochet",
+  music: { bpm: 101, key: "G" },
   shipRx: 0.5, shipRy: 0.8,
   waves: [
     {

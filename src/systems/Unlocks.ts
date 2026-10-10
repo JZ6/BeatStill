@@ -1,3 +1,4 @@
+import { DEFAULT_PALETTE_ID } from "../music/palettes";
 import { loadJSON, saveJSON } from "./storage";
 import { normalizeUnlockState, type UnlockState, type WeaponMasteryEntry } from "./saveSchemas";
 
@@ -74,6 +75,11 @@ export function getState(): UnlockState {
 
 export function isUnlocked(id: string): boolean {
   return state.unlockedIds.includes(id);
+}
+
+/** Whether the player may play sound theme `id`: the default theme always, the others once "theme_<id>" is unlocked. */
+export function isThemeUnlocked(id: string): boolean {
+  return id === DEFAULT_PALETTE_ID || isUnlocked(`theme_${id}`);
 }
 
 function meetsRequirement(req: UnlockRequirement): boolean {

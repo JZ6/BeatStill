@@ -5,6 +5,7 @@ export const level10: LevelDef = {
   id: 10,
   name: "The Maze",
   description: "Hunt them through the corridors",
+  music: { bpm: 103, key: "G" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [
     {

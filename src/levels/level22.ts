@@ -4,6 +4,7 @@ export const level22: LevelDef = {
   id: 22,
   name: "Checkerboard",
   description: "Glass and bounce in a grid",
+  music: { bpm: 118, key: "D" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [
     {

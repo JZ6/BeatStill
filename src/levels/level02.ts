@@ -4,6 +4,7 @@ export const level02: LevelDef = {
   id: 2,
   name: "First Contact",
   description: "Six hostiles, no cover",
+  music: { bpm: 93, key: "E" },
   shipRx: 0.5, shipRy: 0.8,
   waves: [
     {

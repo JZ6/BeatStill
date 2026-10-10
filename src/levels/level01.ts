@@ -4,6 +4,7 @@ export const level01: LevelDef = {
   id: 1,
   name: "The Hallway",
   description: "Two tanks guard the far end",
+  music: { bpm: 92, key: "E" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [{
     enemies: [

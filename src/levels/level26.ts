@@ -4,6 +4,7 @@ export const level26: LevelDef = {
   id: 26,
   name: "Double Trouble",
   description: "Two arenas, one fight",
+  music: { bpm: 123, key: "F" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

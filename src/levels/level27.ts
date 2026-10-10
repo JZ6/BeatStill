@@ -4,6 +4,7 @@ export const level27: LevelDef = {
   id: 27,
   name: "Storm",
   description: "Every non-boss enemy, all at once",
+  music: { bpm: 124, key: "F" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

@@ -1,5 +1,6 @@
 import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
+import type { HeptatonicMode } from "../music/theory";
 import { loadJSON, saveJSON } from "./storage";
 import { normalizeLevelProgress, type LevelProgress } from "./saveSchemas";
 
@@ -71,12 +72,27 @@ export interface LevelWave {
   initialBullets?: LevelBullet[];
 }
 
+/** Optional musical settings of a level; anything missing comes from the player's theme. */
+export interface LevelMusic {
+  /** A palette id; used only if the player has unlocked that theme. */
+  theme?: string;
+  /** Tempo, 60–180. */
+  bpm?: number;
+  /** Tonic note name, e.g. "E", "Bb", "F#". */
+  key?: string;
+  /** A 7-note mode, e.g. "aeolian", "dorian", "harmonicMinor". */
+  mode?: HeptatonicMode;
+  /** Roman-numeral progression (Harmony syntax), e.g. "i VI III VII" or "i:2 iv v". */
+  progression?: string;
+}
+
 export interface LevelDef {
   id: number;
   name: string;
   description: string;
   shipRx?: number;
   shipRy?: number;
+  music?: LevelMusic;
   waves: LevelWave[];
 }
 

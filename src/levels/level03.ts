@@ -4,6 +4,7 @@ export const level03: LevelDef = {
   id: 3,
   name: "Crossfire",
   description: "Snipers on all sides, glass cover in the center",
+  music: { bpm: 94, key: "E" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

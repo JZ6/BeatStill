@@ -4,6 +4,7 @@ export const level15: LevelDef = {
   id: 15,
   name: "Killbox",
   description: "Caught in a narrow corridor",
+  music: { bpm: 109, key: "A" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

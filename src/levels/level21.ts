@@ -5,6 +5,7 @@ export const level21: LevelDef = {
   id: 21,
   name: "The Siege",
   description: "Four waves, cover crumbles",
+  music: { bpm: 117, key: "D" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [
     {

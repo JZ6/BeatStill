@@ -4,6 +4,7 @@ export const level07: LevelDef = {
   id: 7,
   name: "Spiral Galaxy",
   description: "Four spirals, fragile cover",
+  music: { bpm: 99, key: "G" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

@@ -4,6 +4,7 @@ export const level14: LevelDef = {
   id: 14,
   name: "Mirror Match",
   description: "Symmetrical arena, bounce divider",
+  music: { bpm: 108, key: "A" },
   shipRx: 0.5, shipRy: 0.8,
   waves: [
     {

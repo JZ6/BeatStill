@@ -5,6 +5,7 @@ export const level28: LevelDef = {
   id: 28,
   name: "Endgame",
   description: "Four waves in an evolving maze",
+  music: { bpm: 126, key: "F" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [
     {

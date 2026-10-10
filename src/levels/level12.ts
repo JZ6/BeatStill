@@ -5,6 +5,7 @@ export const level12: LevelDef = {
   id: 12,
   name: "Pinball",
   description: "Everything ricochets",
+  music: { bpm: 106, key: "A" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [
     {

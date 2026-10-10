@@ -4,6 +4,7 @@ export const level06: LevelDef = {
   id: 6,
   name: "Asteroid Belt",
   description: "Navigate the debris to reach the snipers",
+  music: { bpm: 98, key: "G" },
   shipRx: 0.15, shipRy: 0.5,
   waves: [
     {

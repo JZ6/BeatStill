@@ -4,6 +4,7 @@ export const level18: LevelDef = {
   id: 18,
   name: "Claustrophobia",
   description: "Tight quarters, no room to breathe",
+  music: { bpm: 113, key: "C" },
   shipRx: 0.5, shipRy: 0.5,
   waves: [
     {

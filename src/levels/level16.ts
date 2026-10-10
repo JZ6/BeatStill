@@ -4,6 +4,7 @@ export const level16: LevelDef = {
   id: 16,
   name: "The Labyrinth",
   description: "Every wall type, escalating threat",
+  music: { bpm: 111, key: "C" },
   shipRx: 0.5, shipRy: 0.85,
   waves: [
     {
