@@ -70,7 +70,8 @@ type Entry = Omit<EnemyDef, "type" | "isBoss" | "hidden"> & { isBoss?: boolean; 
 // step is 150 ms and a bar (16 steps) 2.4 s, which keeps bullet density close to the old ms timers.
 const ENTRIES: Record<EnemyType, Entry> = {
   basic: {
-    name: "Drone",
+    // Not "Drone": that is the audio drone that holds the chord in slow motion.
+    name: "Pulse",
     icon: "◆",
     color: 0x44ff44,
     shape: { kind: "circle" },

@@ -26,6 +26,12 @@ describe("enemy registry", () => {
     expect(Object.isFrozen(ENEMY_REGISTRY)).toBe(true);
   });
 
+  it("calls the basic enemy Pulse (\"Drone\" is the audio drone) and keeps its type id", () => {
+    expect(ENEMY_REGISTRY.basic.name).toBe("Pulse");
+    expect(ENEMY_REGISTRY.basic.type).toBe("basic");
+    expect(ENEMY_DEFS.some((d) => /drone/i.test(d.name))).toBe(false);
+  });
+
   it("keeps the pre-registry constructor stats exactly", () => {
     const stats = Object.fromEntries(ENEMY_DEFS.map((d) => [d.type, [d.hp, d.speed, d.color, d.radius]]));
     expect(stats).toEqual({
