@@ -5,8 +5,12 @@
 // `vite preview`, drives headless Chrome over the DevTools protocol, plays two
 // short endless runs (with a pause/resume check), a boss check (Sentinel and
 // Phantom phase changes on bar lines), a mutator check (phrase-boundary
-// activation, key change, double-time tempo), the first campaign level and a
-// level-designer song-settings round trip, and fails on any uncaught exception,
+// activation, key change, double-time tempo, kept across a palette switch), the
+// first campaign level (with the dev Skip Wave completing it on a bar line) and a
+// level-designer song-settings round trip, the first-run tutorial driven by real
+// input (move, aim and fire must complete; finishing or skipping starts endless
+// exactly once), a run with Options → Heartbeat off (no heart notes), and a theme
+// preview in the collection, and fails on any uncaught exception,
 // console error, or failed resource load, when the time scale / conductor clock /
 // pause freeze misbehave, when enemies don't fire on the step grid, when endless
 // enemy groups don't spawn on bar lines across more than one bar, when a level's
@@ -33,6 +37,8 @@ const VIEWPORT = { width: 1280, height: 720 };
 
 const problems = [];
 const warnings = [];
+/** The smoke segment running now; console warnings are tagged with it. */
+let segment = "boot";
 const children = [];
 let userDataDir = null;
 let shuttingDown = false;
@@ -206,7 +212,7 @@ function checkAudio(label, before, after, minNotes) {
   log(
     `${label} audio: started=${after.started} context=${after.contextState} palette=${after.palette} ` +
       `scheduled=+${notes} dropped=+${dropped} merged=+${after.merged - before.merged} ` +
-      `dropped/scheduled=${fmt(notes > 0 ? dropped / notes : NaN)} errors=${after.errors}`,
+      `dropped/scheduled=${fmt(notes > 0 ? dropped / notes : NaN)} errors=${after.errors} droneVoices=${after.droneVoices}`,
   );
   if (!after.started) problems.push(`${label}: audio engine not started`);
   if (!(notes > minNotes)) problems.push(`${label}: only ${notes} notes scheduled (want > ${minNotes})`);
@@ -338,9 +344,15 @@ async function returnToMenu(cdp) {
   await waitFor(() => evaluate(cdp, `${GAME}.scene.isActive("StartScene")`), 10000, "return to StartScene");
   await sleep(500);
   const after = await readAudio(cdp);
-  const tick = await evaluate(cdp, `${GAME}.scene.getScene("StartScene").menuMusic?.conductor.currentTick ?? null`);
-  log(`menu: conductorTick=${tick} scheduled=+${after.scheduled - before.scheduled}`);
+  const menu = await evaluate(
+    cdp,
+    `(() => { const c = ${GAME}.scene.getScene("StartScene").menuMusic?.conductor; return c ? { tick: c.currentTick, timeScale: c.timeScale } : null; })()`,
+  );
+  const tick = menu?.tick ?? null;
+  log(`menu: conductorTick=${tick} timeScale=${fmt(menu?.timeScale)} scheduled=+${after.scheduled - before.scheduled} droneVoices=${after.droneVoices}`);
   if (typeof tick !== "number" || tick < 0) problems.push(`menu: conductor did not run (tick=${tick})`);
+  // The idle menu heart must keep a few-second pulse: the menu conductor has a time-scale floor.
+  if (!(menu?.timeScale >= 0.35)) problems.push(`menu: conductor time scale ${menu?.timeScale} below the 0.35 floor`);
   if (!(after.scheduled > before.scheduled)) problems.push("menu: no heartbeat note scheduled after returning to the menu");
 }
 
@@ -553,6 +565,15 @@ async function mutatorCheck(cdp) {
   }
   if (after.key !== 2) problems.push(`${label}: key offset ${after.key} after one activation (want 2)`);
   if (Math.abs(after.bpm - after.baseBpm * 1.2) > 1e-6) problems.push(`${label}: tempo ${after.bpm} (want ${after.baseBpm} × 1.2)`);
+
+  // DevPanel palette switch (same path: MusicControl.setPalette) must keep the mutators' key and tempo.
+  const switched = await evaluate(
+    cdp,
+    `(() => { const s = ${scene}; s.music.setPalette(s.music.director.palette); return { bpm: s.conductor.bpm, baseBpm: s.music.baseBpm, key: s.music.keyOffset, keyPc: s.music.director.harmony.keyPc }; })()`,
+  );
+  log(`${label} palette switch: ${JSON.stringify(switched)}`);
+  if (switched.key !== 2 || switched.keyPc !== after.keyPc) problems.push(`${label}: palette switch lost the key change (${JSON.stringify(switched)})`);
+  if (Math.abs(switched.bpm - switched.baseBpm * 1.2) > 1e-6) problems.push(`${label}: palette switch lost the double-time tempo (${switched.bpm})`);
 }
 
 /**
@@ -666,6 +687,275 @@ async function pauseCheck(cdp, label) {
   }
 }
 
+/** Presses (or releases) a key the way a real keyboard would, so Phaser's Key objects see it. */
+async function key(cdp, type, keyName, code, keyCode) {
+  await cdp.send("Input.dispatchKeyEvent", { type, key: keyName, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode });
+}
+
+/** Screen coordinates of game point (x, y) (the canvas is scaled to fit the viewport). */
+async function toScreen(cdp, x, y) {
+  return evaluate(
+    cdp,
+    `(() => { const g = ${GAME}; const r = g.canvas.getBoundingClientRect(); return { x: r.left + ${x} * r.width / g.scale.width, y: r.top + ${y} * r.height / g.scale.height }; })()`,
+  );
+}
+
+const TUTORIAL = `${GAME}.scene.getScene("GameScene").tutorial`;
+const readTutorial = (cdp) =>
+  evaluate(
+    cdp,
+    `(() => { const t = ${TUTORIAL}; const s = ${GAME}.scene.getScene("GameScene"); return { active: !!t?.isActive, step: t?.stepId ?? null, index: t?.stepIndex ?? -1, count: t?.stepCount ?? 0, timeScale: s.timeScale, enemies: s.enemies.getLength(), wave: s.wave, nextWaveTick: s.waves.nextWaveTick }; })()`,
+  );
+
+/** Waits (real time, while `drive` keeps input going) until the tutorial leaves step `id`. */
+async function untilStepLeaves(cdp, id, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const t = await readTutorial(cdp);
+    if (!t.active || t.step !== id) return true;
+    await sleep(100);
+  }
+  return false;
+}
+
+/**
+ * Holds fire aimed at the nearest enemy (re-aimed every 50 ms) for up to `ms`, stopping early once
+ * `until` resolves truthy. Without enemies it aims down, away from where the tutorial spawns them.
+ */
+async function fireAtEnemies(cdp, ms, until) {
+  const nearest = `(() => { const s = ${GAME}.scene.getScene("GameScene"); let best = null, bestD = Infinity; for (const e of s.enemies.getChildren()) { if (!e.active) continue; const d = (e.x - s.ship.x) ** 2 + (e.y - s.ship.y) ** 2; if (d < bestD) { bestD = d; best = { x: e.x, y: e.y }; } } return best ?? { x: s.ship.x, y: s.ship.y + 200 }; })()`;
+  const aim = async () => {
+    const t = await evaluate(cdp, nearest);
+    return toScreen(cdp, t.x, t.y);
+  };
+  let p = await aim();
+  await mouse(cdp, "mouseMoved", p.x, p.y, false);
+  await mouse(cdp, "mousePressed", p.x, p.y, true);
+  const start = Date.now();
+  let satisfied = false;
+  for (let i = 0; Date.now() - start < ms; i++) {
+    p = await aim();
+    await mouse(cdp, "mouseMoved", p.x, p.y, true);
+    if (i % 4 === 0 && (await until())) {
+      satisfied = true;
+      break;
+    }
+    await sleep(50);
+  }
+  await mouse(cdp, "mouseReleased", p.x, p.y, false);
+  return satisfied;
+}
+
+/**
+ * First-run tutorial: clears the "done" flag in-page and starts endless mode, which runs the
+ * tutorial. Real input drives it: WASD to move, mouse to aim, held fire, idling (time slows), firing
+ * (time speeds up), then aimed fire at the instrument enemies and the chain cluster. Asserts the
+ * first three steps (move, aim, fire) complete on input and that finishing (or skipping) starts
+ * endless mode exactly once. God mode keeps the probe alive.
+ */
+async function tutorialCheck(cdp) {
+  const label = "tutorial";
+  const scene = `${GAME}.scene.getScene("GameScene")`;
+  try {
+    await evaluate(cdp, `localStorage.removeItem("beatstill_tutorial_done"); true`);
+    await startGameScene(cdp, `{ mode: "endless" }`, label);
+    await evaluate(
+      cdp,
+      `(() => { const s = ${scene}; s.godMode = true; window.__smokeWaves = 0; s.gameEvents.on("waveStarted", () => window.__smokeWaves++); return true; })()`,
+    );
+    const first = await readTutorial(cdp);
+    const reached = [];
+    const timeouts = [];
+    if (!first.active || first.step !== "move") {
+      problems.push(`${label}: the tutorial did not start on the move step (${JSON.stringify(first)})`);
+      return;
+    }
+    const center = await evaluate(cdp, `(() => { const s = ${scene}; return { x: s.ship.x, y: s.ship.y }; })()`);
+    const shipScreen = await toScreen(cdp, center.x, center.y);
+
+    // 1. Move: hold D, then let go (the step needs 3 s of real time on screen).
+    await mouse(cdp, "mouseMoved", shipScreen.x, shipScreen.y - 150, false);
+    await key(cdp, "keyDown", "d", "KeyD", 68);
+    await sleep(1200);
+    await key(cdp, "keyUp", "d", "KeyD", 68);
+    if (await untilStepLeaves(cdp, "move", 8000)) reached.push("move");
+    else timeouts.push("move");
+
+    // 2. Aim: circle the mouse around the ship without firing.
+    const ship = await evaluate(cdp, `(() => { const s = ${scene}; return { x: s.ship.x, y: s.ship.y }; })()`);
+    const shipAt = await toScreen(cdp, ship.x, ship.y);
+    if ((await readTutorial(cdp)).step === "aim") {
+      const aimStart = Date.now();
+      let aimed = false;
+      for (let i = 0; Date.now() - aimStart < 8000; i++) {
+        const a = i * 0.3;
+        await mouse(cdp, "mouseMoved", shipAt.x + Math.cos(a) * 150, shipAt.y + Math.sin(a) * 150, false);
+        if (i % 5 === 0 && (await readTutorial(cdp)).step !== "aim") {
+          aimed = true;
+          break;
+        }
+        await sleep(50);
+      }
+      if (aimed) reached.push("aim");
+      else timeouts.push("aim");
+    }
+
+    // 3. Fire: hold the button (≥ 4 shots).
+    if ((await readTutorial(cdp)).step === "fire") {
+      const fired = await holdFire(cdp, 8000, {
+        cx: shipAt.x,
+        cy: shipAt.y + 120,
+        rx: 120,
+        ry: 40,
+        until: async () => (await readTutorial(cdp)).step !== "fire",
+      });
+      if (fired) reached.push("fire");
+      else timeouts.push("fire");
+    }
+
+    // 4. Slow: idle until time nearly stops.
+    let t = await readTutorial(cdp);
+    let minTimeScale = 1;
+    if (t.step === "slow") {
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline && (t = await readTutorial(cdp)).step === "slow") {
+        minTimeScale = Math.min(minTimeScale, t.timeScale);
+        await sleep(100);
+      }
+      if (t.step !== "slow") reached.push("slow");
+      else timeouts.push("slow");
+    }
+
+    // 5. Speed up: fire again.
+    if ((await readTutorial(cdp)).step === "speed") {
+      const ok = await holdFire(cdp, 8000, { cx: shipAt.x, cy: shipAt.y + 120, rx: 120, ry: 40, until: async () => (await readTutorial(cdp)).step !== "speed" });
+      if (ok) reached.push("speed");
+      else timeouts.push("speed");
+    }
+
+    // 6–7. Instruments and chain: aimed fire at whatever the step brought in (on its bar line).
+    for (const id of ["instruments", "chain"]) {
+      if ((await readTutorial(cdp)).step !== id) continue;
+      const ok = await fireAtEnemies(cdp, 25000, async () => (await readTutorial(cdp)).step !== id);
+      if (ok) reached.push(id);
+      else timeouts.push(id);
+    }
+
+    let end = await readTutorial(cdp);
+    let skipped = false;
+    if (end.active) {
+      // Not finished by play (a timeout above): the skip button must still end it cleanly.
+      const box = await evaluate(cdp, `(() => { const b = ${TUTORIAL}.skipText.getBounds(); return { x: b.centerX, y: b.centerY }; })()`);
+      const at = await toScreen(cdp, box.x, box.y);
+      await mouse(cdp, "mouseMoved", at.x, at.y, false);
+      await mouse(cdp, "mousePressed", at.x, at.y, true);
+      await mouse(cdp, "mouseReleased", at.x, at.y, false);
+      skipped = true;
+      await sleep(200);
+      end = await readTutorial(cdp);
+    }
+    // Endless starts on the next bar line: keep time moving until wave 1 is on.
+    const started = await holdFire(cdp, 15000, {
+      cx: shipAt.x,
+      cy: shipAt.y + 120,
+      rx: 120,
+      ry: 40,
+      until: () => evaluate(cdp, `${scene}.wave >= 1`),
+    });
+    await sleep(500);
+    const after = await evaluate(
+      cdp,
+      `(() => { const s = ${scene}; return { wave: s.wave, waves: window.__smokeWaves, flag: localStorage.getItem("beatstill_tutorial_done"), active: !!s.tutorial?.isActive, enemies: s.enemies.getLength(), spawns: [...s.waves.spawnTicks] }; })()`,
+    );
+    await evaluate(cdp, `${scene}.godMode = false; true`);
+    log(
+      `${label}: reached=${JSON.stringify(reached)} timeouts=${JSON.stringify(timeouts)} minTimeScale=${fmt(minTimeScale, 3)} ` +
+        `skipped=${skipped} endActive=${end.active} after=${JSON.stringify(after)} screenshot=${await screenshot(cdp, `${label}-end`)}`,
+    );
+    for (const id of ["move", "aim", "fire"]) {
+      if (!reached.includes(id)) problems.push(`${label}: the ${id} step did not complete on input`);
+    }
+    if (reached.includes("slow") && !(minTimeScale < 0.1)) problems.push(`${label}: slow step passed without time below 0.1 (${minTimeScale})`);
+    if (end.active || after.active) problems.push(`${label}: the tutorial did not end (skip=${skipped})`);
+    if (after.flag !== "1") problems.push(`${label}: the done flag was not stored (${after.flag})`);
+    if (!started || after.wave !== 1) problems.push(`${label}: endless did not start after the tutorial (wave=${after.wave})`);
+    if (after.waves !== 1) problems.push(`${label}: endless started ${after.waves} time(s) (want exactly 1)`);
+    if (timeouts.length > 0) warnings.push(`${label}: steps not completed by the probe: ${timeouts.join(", ")}`);
+  } finally {
+    // Later segments (and a failed run) must not see the tutorial again.
+    await evaluate(cdp, `localStorage.setItem("beatstill_tutorial_done", "1"); true`);
+  }
+}
+
+/**
+ * Options → Heartbeat off: a short endless run must schedule no "heart" notes (the rest of the
+ * music still plays), and the run's director must have picked up the audio latency option.
+ */
+async function heartbeatOptionCheck(cdp) {
+  const label = "options";
+  const opts = `window.__BEATSTILL__.options`;
+  const saved = await evaluate(cdp, `({ heartbeat: ${opts}.heartbeat, audioLatencyMs: ${opts}.audioLatencyMs })`);
+  try {
+    await evaluate(cdp, `(() => { ${opts}.heartbeat = false; ${opts}.audioLatencyMs = 80; return true; })()`);
+    await startGameScene(cdp, `{ mode: "endless" }`, label);
+    const audioBefore = await readAudio(cdp);
+    await holdFire(cdp, 3000, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height / 2 });
+    await sleep(500);
+    const audioAfter = await readAudio(cdp);
+    const director = await evaluate(
+      cdp,
+      `(() => { const d = ${GAME}.scene.getScene("GameScene").music.director; return { heartbeat: d.heartbeatEnabled, latency: d.latencySeconds }; })()`,
+    );
+    const heart = (audioAfter.roles?.heart ?? 0) - (audioBefore.roles?.heart ?? 0);
+    const lead = (audioAfter.roles?.lead ?? 0) - (audioBefore.roles?.lead ?? 0);
+    const notes = audioAfter.scheduled - audioBefore.scheduled;
+    log(`${label}: heartbeat=off heartNotes=+${heart} leadNotes=+${lead} notes=+${notes} director=${JSON.stringify(director)}`);
+    if (heart !== 0) problems.push(`${label}: ${heart} heart note(s) scheduled with the heartbeat off`);
+    if (!(lead > 0) || !(notes > 0)) problems.push(`${label}: the music stopped with the heartbeat off (lead=+${lead}, notes=+${notes})`);
+    if (director.heartbeat !== false) problems.push(`${label}: the run's director still has the heartbeat on`);
+    if (Math.abs(director.latency - 0.08) > 1e-9) problems.push(`${label}: audio latency option not applied (${director.latency})`);
+  } finally {
+    // Back on before the menu, whose heartbeat returnToMenu checks.
+    await evaluate(cdp, `(() => { ${opts}.heartbeat = ${saved.heartbeat}; ${opts}.audioLatencyMs = ${saved.audioLatencyMs}; return true; })()`);
+  }
+}
+
+/**
+ * Collection → Customize → ▶ on the default theme: a two-bar phrase plays (arpeggio and bass
+ * notes), locked themes have no ▶, and closing the collection stops the phrase.
+ */
+async function themePreviewCheck(cdp) {
+  const label = "preview";
+  const start = `${GAME}.scene.getScene("StartScene")`;
+  await evaluate(cdp, `${start}.showCollectionOverlay(); true`);
+  await waitFor(() => evaluate(cdp, `!!document.querySelector(".col-overlay")`), 5000, "collection overlay");
+  await evaluate(cdp, `[...document.querySelectorAll(".col-tab")].find((b) => b.textContent === "CUSTOMIZE").click(); true`);
+  // Only unlocked themes get a ▶ (shards earned earlier in the smoke may have unlocked some).
+  const buttons = await evaluate(cdp, `[...document.querySelectorAll("button[data-theme-preview]")].map((b) => b.getAttribute("data-theme-preview"))`);
+  const lockedWithButton = await evaluate(cdp, `[...document.querySelectorAll(".col-item.locked")].filter((i) => i.querySelector("button[data-theme-preview]")).length`);
+  const before = await readAudio(cdp);
+  await evaluate(cdp, `document.querySelector('button[data-theme-preview="theremin"]').click(); true`);
+  await sleep(1500);
+  const mid = await readAudio(cdp);
+  const playing = await evaluate(cdp, `document.querySelector('button[data-theme-preview="theremin"]')?.textContent ?? null`);
+  await evaluate(cdp, `[...document.querySelectorAll(".col-close")][0].click(); true`);
+  await sleep(300);
+  const closed = await evaluate(cdp, `({ overlay: !!document.querySelector(".col-overlay"), buttons: document.querySelectorAll("button[data-theme-preview]").length })`);
+  const afterClose = await readAudio(cdp);
+  await sleep(1000);
+  const later = await readAudio(cdp);
+  const arp = (mid.roles?.arp ?? 0) - (before.roles?.arp ?? 0);
+  const bass = (mid.roles?.bass ?? 0) - (before.roles?.bass ?? 0);
+  const arpAfterClose = (later.roles?.arp ?? 0) - (afterClose.roles?.arp ?? 0);
+  log(`${label}: buttons=${JSON.stringify(buttons)} lockedWithButton=${lockedWithButton} arp=+${arp} bass=+${bass} playingLabel=${playing} closed=${JSON.stringify(closed)} arpAfterClose=+${arpAfterClose} errors=${later.errors}`);
+  if (!buttons.includes("theremin")) problems.push(`${label}: no preview button for the default theme`);
+  if (lockedWithButton > 0) problems.push(`${label}: ${lockedWithButton} locked theme(s) have a preview button`);
+  if (!(arp > 0) || !(bass > 0)) problems.push(`${label}: the preview scheduled no arpeggio/bass notes (arp=+${arp}, bass=+${bass})`);
+  if (playing !== "■") problems.push(`${label}: the button did not show the playing state (${playing})`);
+  if (closed.overlay) problems.push(`${label}: the collection did not close`);
+  if (arpAfterClose !== 0) problems.push(`${label}: the preview kept playing after the collection closed (arp=+${arpAfterClose})`);
+}
+
 /** Campaign level 1, started like LevelSelectScene does. */
 async function playCampaignLevel(cdp) {
   const label = "campaign";
@@ -706,6 +996,27 @@ async function playCampaignLevel(cdp) {
   else if (first % song.ticksPerBar !== 0) problems.push(`${label}: the first wave spawned off a bar line (tick=${first})`);
   if (typeof song.levelBpm !== "number") problems.push(`${label}: level 1 has no music.bpm`);
   else if (song.bpm !== song.levelBpm) problems.push(`${label}: conductor bpm ${song.bpm} ≠ the level's music.bpm ${song.levelBpm}`);
+
+  // DevPanel "Skip Wave" in a level goes through the level runner: level 1 has a single wave, so
+  // skipping it completes the level, on a bar line; walls stay.
+  const scene = `${GAME}.scene.getScene("GameScene")`;
+  const skip = await evaluate(
+    cdp,
+    `(() => { const s = ${scene}; s.godMode = true; window.__smokeLevelDone = null; s.gameEvents.on("levelCompleted", (p) => (window.__smokeLevelDone = { tick: p.tick, ticksPerBar: s.conductor.ticksPerBar })); const walls = s.walls.getLength(); const ok = s.waves.skipWave(); return { ok, walls, enemies: s.enemies.getLength() }; })()`,
+  );
+  const completed = await holdFire(cdp, 12000, {
+    cx: VIEWPORT.width / 2,
+    cy: VIEWPORT.height * 0.3,
+    rx: 120,
+    ry: 60,
+    until: () => evaluate(cdp, `!!window.__smokeLevelDone`),
+  });
+  const done = await evaluate(cdp, `(() => { const s = ${scene}; s.godMode = false; return { done: window.__smokeLevelDone, complete: !!s.level?.isComplete, walls: s.walls.getLength() }; })()`);
+  log(`${label} skip wave: skip=${JSON.stringify(skip)} completed=${completed} after=${JSON.stringify(done)}`);
+  if (!skip.ok || skip.enemies !== 0) problems.push(`${label}: Skip Wave did nothing in the level (${JSON.stringify(skip)})`);
+  if (!completed || !done.complete) problems.push(`${label}: skipping the last wave did not complete the level`);
+  else if (!Number.isInteger(done.done.tick) || done.done.tick % done.done.ticksPerBar !== 0) problems.push(`${label}: level completed off a bar line (${JSON.stringify(done.done)})`);
+  if (done.walls !== skip.walls) problems.push(`${label}: Skip Wave removed walls (${skip.walls} → ${done.walls})`);
 }
 
 async function main() {
@@ -750,7 +1061,7 @@ async function main() {
       } else if (method === "Runtime.consoleAPICalled") {
         const text = params.args.map((a) => a.value ?? a.description ?? "").join(" ");
         if (params.type === "error" || params.type === "assert") problems.push(`console.${params.type}: ${text}`);
-        else if (params.type === "warning") warnings.push(text);
+        else if (params.type === "warning") warnings.push(`[${segment}] ${text}`);
       } else if (method === "Log.entryAdded") {
         const e = params.entry;
         if (e.level === "error" && !(e.url ?? "").endsWith("/favicon.ico")) {
@@ -776,23 +1087,51 @@ async function main() {
     await sleep(1000);
     log(`menu screenshot: ${await screenshot(cdp, "menu")}`);
 
+    const stage = (name) => (segment = name);
+    stage("run1");
     await playEndlessRun(cdp, "run1", { checkPause: true });
 
     // Back to the menu and play again to exercise scene restart paths.
+    stage("menu→run2");
     await returnToMenu(cdp);
+    stage("run2");
     await playEndlessRun(cdp, "run2");
 
+    stage("menu→boss");
     await returnToMenu(cdp);
+    stage("boss");
     await bossCheck(cdp);
 
+    stage("menu→mutator");
     await returnToMenu(cdp);
+    stage("mutator");
     await mutatorCheck(cdp);
 
+    stage("menu→campaign");
     await returnToMenu(cdp);
+    stage("campaign");
     await playCampaignLevel(cdp);
 
+    stage("menu→editor");
     await returnToMenu(cdp);
+    stage("editor");
     await editorCheck(cdp);
+
+    stage("menu→tutorial");
+    await returnToMenu(cdp);
+    stage("tutorial");
+    await tutorialCheck(cdp);
+
+    stage("menu→options");
+    await returnToMenu(cdp);
+    stage("options");
+    await heartbeatOptionCheck(cdp);
+
+    stage("menu→preview");
+    await returnToMenu(cdp);
+    stage("preview");
+    await themePreviewCheck(cdp);
+    stage("end");
 
     const audio = await readAudio(cdp);
     log(
@@ -830,7 +1169,7 @@ try {
 
 if (warnings.length) {
   log(`${warnings.length} console warning(s):`);
-  for (const w of [...new Set(warnings)].slice(0, 20)) log(`  warn: ${w}`);
+  for (const w of [...new Set(warnings)].slice(0, 20)) log(`  warn: ${w} (×${warnings.filter((x) => x === w).length})`);
 }
 if (problems.length) {
   log(`FAILED with ${problems.length} problem(s):`);

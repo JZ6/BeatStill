@@ -5,7 +5,7 @@ import { LevelSelectScene } from "./scenes/LevelSelectScene";
 import { LevelDesignerScene } from "./scenes/LevelDesignerScene";
 import { createDevPanel } from "./systems/DevPanel";
 import { initCrashReporter } from "./systems/CrashReporter";
-import { droneGainFor, options, registerGame, saveOptions } from "./systems/GameOptions";
+import { droneGainFor, options, registerGame, saveOptions, type GameOptions } from "./systems/GameOptions";
 import { initDimensions, GAME_W, GAME_H } from "./systems/GameConfig";
 import { ALL_LEVELS, type LevelDef } from "./systems/Levels";
 import { getAudioEngine, type AudioEngineStats } from "./audio/AudioEngine";
@@ -49,6 +49,8 @@ registerGame(game);
 // Debug/test hook: used by scripts/smoke.mjs and for manual console inspection.
 interface DebugHook {
   game: Phaser.Game;
+  /** The live options object (the smoke test flips e.g. heartbeat for one run). */
+  options: GameOptions;
   levels: readonly LevelDef[];
   audio: () => AudioEngineStats;
   audioDrops: () => Record<string, number>;
@@ -56,6 +58,7 @@ interface DebugHook {
 }
 (window as unknown as { __BEATSTILL__?: DebugHook }).__BEATSTILL__ = {
   game,
+  options,
   levels: ALL_LEVELS,
   audio: () => engine.stats(),
   audioDrops: () => engine.dropBreakdown(),
