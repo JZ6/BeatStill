@@ -4,11 +4,17 @@ import type { Palette } from "../music/palettes";
 import { getAudioEngine } from "./AudioEngine";
 import { MusicDriver, type MusicControl } from "./MusicDriver";
 
-/** The menu's clock never fully stops, so the heart keeps (slowly) beating. */
-const MIN_TIME_SCALE = 0.03;
+/**
+ * The menu conductor never runs slower than this, so the idle heart beats every few seconds
+ * (≈ 3.4 s between lubs at 100 bpm) instead of every ~40 s; pointer movement still speeds it up.
+ */
+export const MENU_MIN_TIME_SCALE = 0.35;
+/** The engine's atmosphere (lowpass and drone) still follows the menu's time scale down to here, as in a run. */
+const MIN_ATMOSPHERE_SCALE = 0.03;
 
 /**
- * The start menu's music: its own Conductor (palette tempo) running at the menu's time scale, and a
+ * The start menu's music: its own Conductor (palette tempo) running at the menu's time scale (never
+ * below MENU_MIN_TIME_SCALE), and a
  * MusicDirector with no gameplay events, so only the heartbeat and the drone (retuned on bar lines)
  * sound. `onHeartbeat` fires on the same ticks as the heartbeat's "lub" (beats 1 and 3), so the EKG
  * picture matches the sound. The clock runs before audio is unlocked too (picture only).
@@ -22,16 +28,16 @@ export class MenuMusic implements MusicControl {
     palette: Palette,
     private readonly onHeartbeat: (tick: TickEvent) => void,
   ) {
-    this.conductor = new Conductor({ bpm: palette.bpm, timeScale: MIN_TIME_SCALE });
+    this.conductor = new Conductor({ bpm: palette.bpm, timeScale: MENU_MIN_TIME_SCALE });
     this.director = new MusicDirector(palette, this.conductor);
     this.driver = new MusicDriver(this.director);
     getAudioEngine().setPalette(palette);
   }
 
-  /** Per frame, with REAL seconds and the menu's pointer-driven time scale. */
+  /** Per frame, with REAL seconds and the menu's pointer-driven time scale (0..1). */
   update(realDt: number, timeScale: number): void {
-    const ts = Number.isFinite(timeScale) ? Math.min(1, Math.max(MIN_TIME_SCALE, timeScale)) : MIN_TIME_SCALE;
-    this.conductor.timeScale = ts;
+    const ts = Number.isFinite(timeScale) ? Math.min(1, Math.max(MIN_ATMOSPHERE_SCALE, timeScale)) : MIN_ATMOSPHERE_SCALE;
+    this.conductor.timeScale = Math.max(MENU_MIN_TIME_SCALE, ts);
     const { ticks } = this.conductor.advance(realDt);
     for (const t of ticks) {
       this.director.onTick(t);

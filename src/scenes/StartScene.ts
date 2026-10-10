@@ -483,8 +483,9 @@ export class StartScene extends Phaser.Scene {
   // ── Heartbeat System ─────────────────────────────────────────
 
   /**
-   * Advances the menu conductor at the menu's time scale (clamped to 0.03–1 by MenuMusic). Its
-   * heartbeat ticks (beats 1 and 3) call triggerHeartbeat(), the same ticks the sound plays on.
+   * Advances the menu conductor at the menu's time scale (MenuMusic keeps it at or above
+   * MENU_MIN_TIME_SCALE, so the idle heart still beats every few seconds). Its heartbeat ticks
+   * (beats 1 and 3) call triggerHeartbeat(), the same ticks the sound plays on.
    */
   private updateHeartbeat(delta: number) {
     this.menuMusic?.update(Math.min(delta / 1000, MAX_REAL_DT), this.timeScale);
