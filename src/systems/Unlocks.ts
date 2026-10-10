@@ -30,7 +30,7 @@ export const ALL_UNLOCKS: UnlockDef[] = [
 
   // Stat upgrades
   { id: "upgrade_pierce", name: "Penetration", icon: "-->", description: "Bullets pass through", category: "upgrade", requirement: { shards: 8, highWave: 3 } },
-  { id: "upgrade_fireCooldown", name: "Rapid Fire", icon: "!!!", description: "Shoot faster", category: "upgrade", requirement: { shards: 12 } },
+  { id: "upgrade_fireCooldown", name: "Rapid Fire", icon: "!!!", description: "Faster note values", category: "upgrade", requirement: { shards: 12 } },
   { id: "upgrade_damage", name: "Power", icon: "DMG", description: "More damage per bullet", category: "upgrade", requirement: { shards: 20, highScore: 10000 } },
 
   // Ship colors
@@ -42,7 +42,7 @@ export const ALL_UNLOCKS: UnlockDef[] = [
 
   // Chain-gated
   { id: "color_chain", name: "Chain Gold", icon: "●", description: "Golden aura", category: "cosmetic", requirement: { bestChain: 15, shards: 30 } },
-  { id: "upgrade_chainWindow", name: "Chain Sustain", icon: "◎→", description: "Extend chain timer", category: "upgrade", requirement: { bestChain: 5, shards: 10 } },
+  { id: "upgrade_chainWindow", name: "Chain Sustain", icon: "◎→", description: "Longer chain window", category: "upgrade", requirement: { bestChain: 5, shards: 10 } },
   { id: "upgrade_chainRadius", name: "Chain Reach", icon: "<◎>", description: "Chain across distance", category: "upgrade", requirement: { bestChain: 8, shards: 15 } },
 ];
 
