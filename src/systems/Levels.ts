@@ -63,6 +63,8 @@ export interface LevelBullet {
 }
 
 export interface LevelWave {
+  /** Minimum section length in bars: the next wave spawns no earlier than this many bars after this one (default 1). */
+  bars?: number;
   enemies: LevelEnemy[];
   asteroids?: LevelAsteroid[];
   walls?: LevelWall[];

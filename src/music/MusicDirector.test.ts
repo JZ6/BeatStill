@@ -569,6 +569,17 @@ describe("harmony", () => {
     expect(byRole(reqs, "kick")).toHaveLength(1);
   });
 
+  it("waveStarted and levelCompleted that carry their bar-line tick sound on that downbeat", () => {
+    const { d } = setup(getPalette("synth"), TPB + 2);
+    d.handleEvent("waveStarted", { wave: 2, mode: "level", tick: TPB, lateBy: 0.01 });
+    const bell = byRole(d.drain(), "bell")[0];
+    expect(bell.when).toBeCloseTo(0.04);
+    expect(pitchClass(bell.midi[0])).toBe(8); // bar 1 = VI (Ab)
+    d.handleEvent("levelCompleted", { levelId: 1, tick: TPB, lateBy: 0.02 });
+    const bells = byRole(d.drain(), "bell");
+    expect(bells[0].when).toBeCloseTo(0.03);
+  });
+
   it("bossPhaseChanged that carries its bar-line tick plays at once on that downbeat", () => {
     const { d } = setup(getPalette("synth"), TPB + 2);
     d.handleEvent("bossPhaseChanged", { bossType: "sentinel", phase: 3, tick: TPB, lateBy: 0.01 });

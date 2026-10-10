@@ -1,26 +1,60 @@
 import type { GameScene } from "../scenes/GameScene";
+import type { TickEvent } from "../core/Conductor";
 import { createEnemy } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import { Bullet } from "../objects/Bullet";
 import { Wall } from "../objects/Wall";
 import { UpgradePickup } from "../objects/Shard";
 import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, isCampaignLevel, type LevelDef } from "./Levels";
+import { LevelSchedule } from "./LevelSchedule";
 import { addShards } from "./Unlocks";
 import { addPickup } from "./Achievements";
 import { GAME_W, GAME_H, px } from "./GameConfig";
 
+/**
+ * Plays a level. Its waves are song sections: each spawns on a bar line, the next one once the field
+ * is clear (at least the wave's `bars`, default 1, after it), and the level completes on a bar line
+ * too. The timing rules live in LevelSchedule.
+ */
 export class LevelRunner {
-  waveIndex = 0;
   isComplete = false;
   damageTaken = 0;
+  /** The conductor tick each wave spawned on, in order (diagnostics and the smoke test). */
+  readonly waveTicks: number[] = [];
+  private schedule: LevelSchedule | null = null;
 
   constructor(private scene: GameScene, readonly levelDef: LevelDef) {}
 
-  spawnWave(index: number) {
+  /** Index of the wave on the field (-1 before the first one spawns). */
+  get waveIndex(): number {
+    return this.schedule?.waveIndex ?? -1;
+  }
+
+  /** Run start (once the conductor exists): the first wave spawns on the first bar line. */
+  start() {
+    const c = this.scene.conductor;
+    this.schedule = new LevelSchedule(this.levelDef.waves.map((w) => w.bars), c.ticksPerBar);
+    this.schedule.start(c.currentTick + 1);
+  }
+
+  /** Every conductor tick: spawns the scheduled wave, or completes the level, on its bar line. */
+  onTick(t: TickEvent) {
+    const step = this.schedule?.onTick(t.tick);
+    if (!step) return;
+    if (step.kind === "wave") this.spawnWave(step.index, t);
+    else this.triggerComplete(t);
+  }
+
+  /** Per live frame: once the field is clear, schedules the next wave (or the completion) on a bar line. */
+  update() {
+    if (!this.schedule || this.isComplete || this.scene.enemies.getLength() > 0) return;
+    this.schedule.onFieldClear(this.scene.conductor.currentTick + 1);
+  }
+
+  private spawnWave(index: number, t: TickEvent) {
     if (index >= this.levelDef.waves.length) return;
-    this.waveIndex = index;
-    this.scene.waves.resetTimer();
     const wave = this.levelDef.waves[index];
+    this.waveTicks.push(t.tick);
 
     for (const e of wave.enemies) {
       const enemy = createEnemy(this.scene, e.rx * GAME_W, e.ry * GAME_H, e.type);
@@ -49,19 +83,10 @@ export class LevelRunner {
       }
     }
 
-    this.scene.gameEvents.emit("waveStarted", { wave: index + 1, mode: "level" });
+    this.scene.gameEvents.emit("waveStarted", { wave: index + 1, mode: "level", tick: t.tick, lateBy: t.lateBy });
   }
 
-  advance() {
-    const nextIndex = this.waveIndex + 1;
-    if (nextIndex < this.levelDef.waves.length) {
-      this.spawnWave(nextIndex);
-    } else {
-      this.triggerComplete();
-    }
-  }
-
-  private triggerComplete() {
+  private triggerComplete(t: TickEvent) {
     if (this.isComplete) return;
     const s = this.scene;
     this.isComplete = true;
@@ -82,7 +107,7 @@ export class LevelRunner {
 
     s.progression.processUnlocks();
     s.progression.processAchievements(false, true);
-    s.gameEvents.emit("levelCompleted", { levelId: this.levelDef.id });
+    s.gameEvents.emit("levelCompleted", { levelId: this.levelDef.id, tick: t.tick, lateBy: t.lateBy });
 
     s.hud.gameOverText.setColor("#ffaa44");
     s.hud.gameOverText.setText("LEVEL COMPLETE");

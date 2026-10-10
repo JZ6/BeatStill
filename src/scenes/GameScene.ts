@@ -136,6 +136,9 @@ export class GameScene extends Phaser.Scene {
 
     this.backdrop = new Backdrop(this);
     this.onTick((t) => this.backdrop.onTick(t));
+    // Song structure first: a wave (or key change) on a bar line is in place before the music and
+    // the enemies hear that tick. `this.waves` is read at dispatch time (created below).
+    this.onTick((t) => this.waves.onTick(t));
     // Before anything can emit (waves spawn at the end of create()).
     this.music = new MusicSystem(this, palette);
 
@@ -205,7 +208,8 @@ export class GameScene extends Phaser.Scene {
 
     if (this.level) {
       this.hud.setWaveLabel(this.level.levelDef.name.toUpperCase());
-      this.level.spawnWave(0);
+      // The first wave spawns on the first bar line (the conductor's first tick).
+      this.level.start();
     } else if (!isTutorialDone()) {
       this.tutorial = new TutorialManager(this);
     } else {

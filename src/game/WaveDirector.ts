@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { GameScene } from "../scenes/GameScene";
+import type { TickEvent } from "../core/Conductor";
 import { createEnemy, type Enemy, type EnemyType } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import type { Bullet } from "../objects/Bullet";
@@ -9,35 +10,34 @@ import { isMutatorWave } from "../systems/WaveMutators";
 import { updateHighWave } from "../systems/Unlocks";
 import { GAME_W, GAME_H } from "../systems/GameConfig";
 
-/** Game-time ms after the field is cleared before the next wave starts. */
+/** Game-time ms after the field is cleared before the next endless wave starts. */
 const WAVE_DELAY_MS = 1500;
 
 /** Wave pacing for both modes, endless waves (mutators, bosses), and dev spawning helpers. */
 export class WaveDirector {
-  /** Game-time ms since the current wave started. */
-  waveTimer = 0;
   bossActive = false;
+  /** Game-time ms since the current endless wave started. */
+  private waveTimer = 0;
   private readonly endless: EndlessMode;
 
   constructor(private readonly scene: GameScene) {
     this.endless = new EndlessMode(scene);
   }
 
-  resetTimer() {
-    this.waveTimer = 0;
+  /** Every conductor tick, before the music hears it: level waves spawn on their bar lines. */
+  onTick(t: TickEvent) {
+    this.scene.level?.onTick(t);
   }
 
-  /** Per live frame: once the field is clear and the delay has passed, starts the next wave. */
+  /** Per live frame: schedules the next level wave once the field is clear, or starts the next endless wave. */
   update(delta: number, ts: number) {
     const s = this.scene;
-    this.waveTimer += delta * ts;
-    if (s.enemies.getLength() === 0 && this.waveTimer > WAVE_DELAY_MS && !s.level?.isComplete) {
-      if (s.level) {
-        s.level.advance();
-      } else {
-        this.spawnEndlessWave();
-      }
+    if (s.level) {
+      s.level.update();
+      return;
     }
+    this.waveTimer += delta * ts;
+    if (s.enemies.getLength() === 0 && this.waveTimer > WAVE_DELAY_MS) this.spawnEndlessWave();
   }
 
   spawnEndlessWave() {

@@ -66,8 +66,10 @@ export interface GameEventMap {
   /** Sent when the phase actually changes; bosses switch on a bar line and send that tick and its lateBy. */
   bossPhaseChanged: { bossType: EnemyType; phase: number; tick?: number; lateBy?: number };
   bossDefeated: { bossType: EnemyType; x: number; y: number };
-  waveStarted: { wave: number; mode: "endless" | "level" };
-  levelCompleted: { levelId: number };
+  /** Waves are song sections: they start on a bar line and send that tick and its lateBy. */
+  waveStarted: { wave: number; mode: "endless" | "level"; tick?: number; lateBy?: number };
+  /** Sent on the bar line the level completes on, with that tick and its lateBy. */
+  levelCompleted: { levelId: number; tick?: number; lateBy?: number };
 }
 
 export type GameEvents = EventBus<GameEventMap>;

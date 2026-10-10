@@ -7,7 +7,8 @@
  * Timing
  * - Tick-driven sounds (heartbeat, bar-line stingers, warning pulses): when = max(0, latency − lateBy).
  * - Events that happened on a conductor tick carry its `tick` and `lateBy` (enemy volleys fire on
- *   16th steps, player shots on their weapon's grid, boss phases change on bar lines): they play at
+ *   16th steps, player shots on their weapon's grid, boss phases, waves and level completions land
+ *   on bar lines): they play at
  *   exactly that moment, when = max(0, latency − lateBy), with that tick's chord, and are never
  *   re-quantized.
  * - Other event sounds snap to the next 16th if it is at most `maxQuantizeWait` real seconds away;
@@ -619,12 +620,13 @@ export class MusicDirector {
         this.push("bass", [this.pcIn(tonic.rootPc, "bass")], at, 2, 0.7);
         this.push("kick", [this.pcIn(tonic.rootPc, "kick")], at, 0.5, 0.7);
       },
-      waveStarted: () => {
-        const slot = this.eventSlot();
+      // Both land on a bar line and carry its tick: they sound on that downbeat.
+      waveStarted: (p) => {
+        const slot = this.tickSlot(p) ?? this.eventSlot();
         this.push("bell", [this.rootIn(slot.bar, "bell")], slot.when, 1, 0.2);
       },
-      levelCompleted: () => {
-        const slot = this.eventSlot();
+      levelCompleted: (p) => {
+        const slot = this.tickSlot(p) ?? this.eventSlot();
         const step = this.stepSeconds();
         const tonic = this.tonicChord();
         this.voiceChord(tonic, "bell", 4).forEach((n, i) => this.push("bell", [n], slot.when + i * step, 1, 0.55));
