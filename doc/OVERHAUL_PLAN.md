@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phases 0–3 complete. Phase 4 (enemies as instruments) in progress.
+- **Status:** Phases 0–4 complete. Phase 5 (player as instrument) in progress.
 
 ## 1. Vision
 
@@ -450,11 +450,18 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Follow-up (Phase 4): many notes are dropped (basic/tracker chords) while enemy fire still runs on ms timers.
 
 ### Phase 4 — Enemies as instruments
-- [ ] Single enemy registry (stats, visuals, instrument, default pattern); constructors read from it
-- [ ] Rhythm patterns (16-step / Euclidean) + per-instance phase offsets; enemies fire on steps
-- [ ] Audible enemy fire, aggregated per type per step
-- [ ] Spiral rotation per step; snake weave beat-locked
-- [ ] Bosses: phases switch on bar lines as section changes; teleports land on downbeats; no lost volleys
+- [x] Enemy registry (`src/objects/enemies/registry.ts`). Constructors, the bestiary, editor visuals and menu silhouettes all read from it.
+- [x] Rhythm patterns + per-instance offsets (multiples of `offsetStep`); 4-step spawn grace; deferred (not lost) shots (`rhythm.ts`)
+- [x] Enemy notes are scheduled at their exact step time (`enemyFired` carries `lateBy`, `tick`, `index`, `pitchHint`).
+  - Smoke test: the dropped/scheduled ratio went from 1.14 to 0.15, and 100% of volleys landed on the grid.
+- [x] Spiral rotation advances per step; the snake weave is locked to the beat (1 cycle/beat) and sung as melody.
+- [x] Bosses:
+  - Phases change on bar lines (`bossPhases.ts`).
+  - Sentinel summons every 2–3 bars.
+  - Phantom teleports start on beats (8/6/4 beats).
+  - `bossPhaseChanged` is emitted.
+- [x] Bullet Storm mutator = `doubleDensity()` pattern.
+- [ ] Follow-up: the bosses' phase-3 spiral angles still rotate continuously. Bullet density shifted: sniper −33%, tracker −17%, tank +17%. Retune in Phase 8.
 
 ### Phase 5 — Player as instrument
 - [ ] Weapon note values; fire on grid with a late-grace window; aim computed at spawn time
