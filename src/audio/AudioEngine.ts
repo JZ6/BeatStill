@@ -10,7 +10,9 @@
  *   drone voices ─► drone gain (follows timeScale) ─► gentle lowpass ─┘
  *
  * Every setter may be called before start(): the state is kept and applied once the graph exists.
- * Dropped notes and errors are counted in stats(), and the first of each kind is console.debug'ed.
+ * Requests for one role that land on the same moment merge into a single trigger; notes beyond an
+ * instrument's polyphony are dropped. Drops, merges and errors are counted in stats(), and the first
+ * drop or error of each kind is console.debug'ed (never console.error).
  */
 import * as Tone from "tone";
 import { ROLES, isPitched, registerMidi } from "../music/palettes";
@@ -240,6 +242,11 @@ export class AudioEngine {
     };
   }
 
+  /** Dropped notes per reason (e.g. "voices:pad"), for diagnostics. */
+  dropBreakdown(): Record<string, number> {
+    return Object.fromEntries(this.dropsByKind);
+  }
+
   // -------------------------------------------------------------------------------------------
 
   private async boot(): Promise<void> {
@@ -249,8 +256,10 @@ export class AudioEngine {
     const graph = this.buildGraph();
     await graph.reverb.ready;
     this.graph = graph;
-    graph.volume.volume.value = this.volumeDb();
-    graph.pauseGain.gain.value = this.paused ? 0 : 1;
+    // Param.value would apply only after Tone's lookAhead; set the state from now on.
+    const now = this.now();
+    graph.volume.volume.setValueAtTime(this.volumeDb(), now);
+    graph.pauseGain.gain.setValueAtTime(this.paused ? 0 : 1, now);
     this.applyTimeScale(graph, true);
     if (this.wantedPalette) this.buildKit(this.wantedPalette);
   }
@@ -384,11 +393,6 @@ export class AudioEngine {
 
   private now(): number {
     return Tone.getContext().currentTime;
-  }
-
-  /** Dropped notes per reason (e.g. "voices:pad"), for diagnostics. */
-  dropBreakdown(): Record<string, number> {
-    return Object.fromEntries(this.dropsByKind);
   }
 
   private drop(kind: string, count: number): void {
