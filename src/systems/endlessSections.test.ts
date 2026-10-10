@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   BOSS_WARNING_BARS,
+  MAX_LIVE_ENEMIES,
   MAX_WAVE_ENEMIES,
+  OPENING_SHARE,
   SECTION_BARS,
   SectionPlan,
   asteroidBars,
@@ -16,20 +18,23 @@ import {
 } from "./endlessSections";
 
 describe("budgets and caps", () => {
-  it("keeps the old wave budget: 32 + 10·wave, scaled by mutators, capped at 150", () => {
-    expect(waveBudget(1)).toBe(42);
-    expect(waveBudget(6)).toBe(92);
-    expect(waveBudget(6, 1.5)).toBe(138);
-    expect(waveBudget(12)).toBe(MAX_WAVE_ENEMIES);
+  it("budgets 40 + 12·wave (more than the old 32 + 10·wave), scaled by mutators, capped at 150", () => {
+    expect(waveBudget(1)).toBe(52);
+    expect(waveBudget(6)).toBe(112);
+    expect(waveBudget(4, 1.5)).toBe(132);
+    expect(waveBudget(6, 1.5)).toBe(MAX_WAVE_ENEMIES);
+    expect(waveBudget(9)).toBe(148);
+    expect(waveBudget(10)).toBe(MAX_WAVE_ENEMIES);
     expect(waveBudget(40, 1.5)).toBe(MAX_WAVE_ENEMIES);
-    expect(waveBudget(3, Number.NaN)).toBe(62);
+    expect(waveBudget(3, Number.NaN)).toBe(76);
+    for (let w = 1; w <= 20; w++) expect(waveBudget(w)).toBeGreaterThanOrEqual(Math.min(150, 32 + 10 * w));
   });
 
   it("caps live enemies at 30 + 2·wave, at most 80", () => {
     expect(liveEnemyCap(1)).toBe(32);
     expect(liveEnemyCap(10)).toBe(50);
     expect(liveEnemyCap(25)).toBe(80);
-    expect(liveEnemyCap(99)).toBe(80);
+    expect(liveEnemyCap(99)).toBe(MAX_LIVE_ENEMIES);
   });
 
   it("boss waves: Sentinel on 5, 15 …, Phantom on 10, 20 …", () => {
@@ -41,10 +46,11 @@ describe("budgets and caps", () => {
 });
 
 describe("front-loaded section quota", () => {
-  it("shares rise to 1 by the last bar, heaviest first", () => {
+  it("opens with a big entrance, then shares rise to 1 by the last bar, heaviest first", () => {
     const shares = Array.from({ length: SECTION_BARS }, (_, i) => sectionShare(i));
-    expect(shares[0]).toBeCloseTo(8 / 36);
-    expect(shares[1]).toBeCloseTo(15 / 36);
+    expect(shares[0]).toBeCloseTo(OPENING_SHARE);
+    expect(shares[1]).toBeCloseTo(0.4 + 0.6 * (7 / 28));
+    expect(shares[2]).toBeCloseTo(0.4 + 0.6 * (13 / 28));
     expect(shares[SECTION_BARS - 1]).toBe(1);
     expect(sectionShare(-1)).toBe(0);
     expect(sectionShare(20)).toBe(1);
@@ -52,16 +58,21 @@ describe("front-loaded section quota", () => {
     for (let i = 1; i < groups.length; i++) expect(groups[i]).toBeLessThan(groups[i - 1]);
   });
 
-  it("splits wave 1's 42 enemies into groups on all 8 downbeats", () => {
-    const quotas = Array.from({ length: SECTION_BARS }, (_, i) => sectionQuota(42, i));
-    expect(quotas).toEqual([10, 18, 25, 31, 35, 39, 41, 42]);
+  it("splits wave 1's 52 enemies into groups on all 8 downbeats", () => {
+    const quotas = Array.from({ length: SECTION_BARS }, (_, i) => sectionQuota(52, i));
+    expect(quotas).toEqual([21, 29, 36, 41, 46, 49, 51, 52]);
+  });
+
+  it("handles one-bar sections", () => {
+    expect(sectionShare(0, 1)).toBe(1);
+    expect(sectionQuota(10, 0, 1)).toBe(10);
   });
 });
 
 describe("groupSize", () => {
   it("spawns what the quota owes when there is room", () => {
-    expect(groupSize({ total: 42, spawned: 0, barIndex: 0, live: 0, cap: 32 })).toBe(10);
-    expect(groupSize({ total: 42, spawned: 10, barIndex: 1, live: 4, cap: 32 })).toBe(8);
+    expect(groupSize({ total: 52, spawned: 0, barIndex: 0, live: 0, cap: 32 })).toBe(21);
+    expect(groupSize({ total: 52, spawned: 21, barIndex: 1, live: 4, cap: 32 })).toBe(8);
   });
 
   it("defers to the next bar at the cap and carries the remainder", () => {
@@ -120,10 +131,18 @@ describe("SectionPlan", () => {
   it("spawns the whole budget on downbeats across 8 bars when the player keeps up", () => {
     const plan = new SectionPlan(1, 4);
     const { groups, asteroids } = simulate(plan, SECTION_BARS, (live) => live);
-    expect(groups).toEqual([10, 8, 7, 6, 4, 4, 2, 1]);
-    expect(groups.reduce((a, b) => a + b, 0)).toBe(42);
+    expect(groups).toEqual([21, 8, 7, 5, 5, 3, 2, 1]);
+    expect(groups.reduce((a, b) => a + b, 0)).toBe(52);
     expect(asteroids).toBe(asteroidCount(1));
     expect(plan.isSpent()).toBe(true);
+  });
+
+  it("keeps early waves busy: ≥ 16 enemies on the first downbeat, the live cap filled by bar 3 if nobody dies", () => {
+    for (let wave = 1; wave <= 4; wave++) {
+      expect(new SectionPlan(wave, 0).onBar(0, 0).enemies, `wave ${wave}`).toBeGreaterThanOrEqual(16);
+      const { live } = simulate(new SectionPlan(wave, 0), 3, () => 0);
+      expect(live, `wave ${wave}`).toBe(liveEnemyCap(wave));
+    }
   });
 
   it("does nothing before its start bar", () => {

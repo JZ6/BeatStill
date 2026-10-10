@@ -10,6 +10,12 @@ export const BOSS_WARNING_BARS = 2;
 export const MAX_WAVE_ENEMIES = 150;
 /** Most enemies alive at once, whatever the wave. */
 export const MAX_LIVE_ENEMIES = 80;
+/**
+ * Share of a regular wave's budget that enters on its first downbeat: the section's big entrance
+ * (wave 1 opens with 21 enemies; with weights alone it opened with 10, against the old game's 42 at
+ * once). The rest stays front-loaded across the remaining bars.
+ */
+export const OPENING_SHARE = 0.4;
 
 /** Every fifth wave from wave 5 is a boss wave. */
 export function isBossWave(wave: number): boolean {
@@ -21,10 +27,13 @@ export function bossForWave(wave: number): EnemyType {
   return wave >= 10 && wave % 10 === 0 ? "phantom" : "sentinel";
 }
 
-/** Enemies a wave spawns in total: 32 + 10·wave, scaled by the mutators' count multiplier, at most 150. */
+/**
+ * Enemies a wave spawns in total: 40 + 12·wave (README: "spawn more enemies"; was 32 + 10·wave),
+ * scaled by the mutators' count multiplier, at most 150 (reached at wave 10).
+ */
 export function waveBudget(wave: number, countMult = 1): number {
   const mult = Number.isFinite(countMult) && countMult > 0 ? countMult : 1;
-  return Math.min(MAX_WAVE_ENEMIES, Math.max(0, Math.floor((32 + wave * 10) * mult)));
+  return Math.min(MAX_WAVE_ENEMIES, Math.max(0, Math.floor((40 + wave * 12) * mult)));
 }
 
 /** Most enemies alive at once during a wave: 30 + 2·wave, at most 80. */
@@ -33,15 +42,17 @@ export function liveEnemyCap(wave: number): number {
 }
 
 /**
- * Share of the budget due by the end of section bar `barIndex` (0-based). Front-loaded: bar i weighs
- * `bars − i`, so with 8 bars the shares are 8/36, 15/36, 21/36 … 36/36.
+ * Share of the budget due by the end of section bar `barIndex` (0-based). The first downbeat brings
+ * OPENING_SHARE; the rest is front-loaded over bars 1 … bars−1, bar j weighing `bars − j`. With 8
+ * bars: 0.4, then 0.4 + 0.6 × 7/28, 0.4 + 0.6 × 13/28 … 1.
  */
 export function sectionShare(barIndex: number, bars = SECTION_BARS): number {
   const n = Math.max(1, Math.floor(bars));
   if (!(barIndex >= 0)) return 0;
   if (barIndex >= n - 1) return 1;
-  const k = Math.floor(barIndex) + 1;
-  return (k * (2 * n - k + 1)) / (n * (n + 1));
+  const m = n - 1;
+  const k = Math.floor(barIndex);
+  return OPENING_SHARE + ((1 - OPENING_SHARE) * (k * (2 * m - k + 1))) / (m * (m + 1));
 }
 
 /** Enemies that should have spawned by the end of section bar `barIndex`. */
