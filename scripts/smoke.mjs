@@ -7,8 +7,10 @@
 // Phantom phase changes on bar lines) and the first campaign level, and fails on
 // any uncaught exception, console error, or failed resource load, when the time
 // scale / conductor clock / pause freeze misbehave, when enemies don't fire on
-// the step grid, or when the audio engine doesn't start, schedules too few
-// notes, or reports errors. Prints the audio dropped/scheduled ratio.
+// the step grid, when held-fire player shots leave their weapon's grid or the
+// lead role (the player's shots) schedules no notes, or when the audio engine
+// doesn't start, schedules too few notes, or reports errors. Prints the audio
+// dropped/scheduled ratio.
 // No extra dependencies: uses Node's built-in WebSocket.
 //
 // Env overrides: CHROME_PATH, SMOKE_PREVIEW_PORT, SMOKE_DEBUG_PORT.
@@ -181,9 +183,12 @@ function readGameState(cdp) {
   );
 }
 
-/** Audio engine counters (window.__BEATSTILL__.audio()) plus dropped notes per reason. */
+/** Audio engine counters (window.__BEATSTILL__.audio()) plus dropped notes per reason and scheduled notes per role. */
 function readAudio(cdp) {
-  return evaluate(cdp, `({ ...window.__BEATSTILL__.audio(), drops: window.__BEATSTILL__.audioDrops() })`);
+  return evaluate(
+    cdp,
+    `({ ...window.__BEATSTILL__.audio(), drops: window.__BEATSTILL__.audioDrops(), roles: window.__BEATSTILL__.audioRoles() })`,
+  );
 }
 
 /** Every run must schedule enough notes and never hit an engine error. */
@@ -237,6 +242,58 @@ function checkEnemyFire(label, fire) {
   else if (fire.onGrid !== fire.volleys) problems.push(`${label}: ${fire.volleys - fire.onGrid} of ${fire.volleys} volleys were off the step grid`);
 }
 
+/**
+ * Counts the current run's player shots (call after each start, like watchEnemyFire). A shot is on
+ * the grid if it carries a tick and lateBy and the tick is a multiple of the ship's fire interval
+ * at that moment. Only the first shot of a press may leave the grid (late grace, 16th fallback or
+ * immediate); every later shot while fire is held must be on it.
+ */
+async function watchPlayerFire(cdp) {
+  await evaluate(
+    cdp,
+    `(() => {
+      const s = ${GAME}.scene.getScene("GameScene");
+      const w = (window.__smokePlayer = { shots: 0, held: 0, heldOnGrid: 0, firstGrid: 0, firstStep: 0, firstImmediate: 0, onBeat: 0, intervals: {} });
+      s.gameEvents.on("playerFired", (p) => {
+        const interval = s.ship.fireInterval;
+        const timed = typeof p.lateBy === "number" && Number.isInteger(p.tick);
+        const onGrid = timed && p.tick % interval === 0;
+        w.shots++;
+        w.intervals[interval] = (w.intervals[interval] ?? 0) + 1;
+        if (onGrid && p.tick % 24 === 0) w.onBeat++;
+        if (p.first) {
+          if (onGrid) w.firstGrid++;
+          else if (timed) w.firstStep++;
+          else w.firstImmediate++;
+        } else {
+          w.held++;
+          if (onGrid) w.heldOnGrid++;
+        }
+      });
+      return true;
+    })()`,
+  );
+}
+
+const readPlayerFire = (cdp) => evaluate(cdp, `window.__smokePlayer ?? null`);
+
+/** The player must have fired, every held-fire shot on its weapon's grid, and the lead must have sounded. */
+function checkPlayerFire(label, fire, audioBefore, audioAfter) {
+  const lead = (audioAfter.roles?.lead ?? 0) - (audioBefore.roles?.lead ?? 0);
+  log(
+    `${label} player fire: shots=${fire?.shots} held=${fire?.held} heldOnGrid=${fire?.heldOnGrid} ` +
+      `first(grid/step/immediate)=${fire?.firstGrid}/${fire?.firstStep}/${fire?.firstImmediate} onBeat=${fire?.onBeat} ` +
+      `intervals=${JSON.stringify(fire?.intervals ?? {})} leadNotes=+${lead}`,
+  );
+  if (!fire || !(fire.shots > 0)) {
+    problems.push(`${label}: the player never fired`);
+    return;
+  }
+  if (!(fire.held > 0)) problems.push(`${label}: no held-fire shots (only first shots)`);
+  if (fire.heldOnGrid !== fire.held) problems.push(`${label}: ${fire.held - fire.heldOnGrid} of ${fire.held} held-fire shots were off the weapon's grid`);
+  if (!(lead > 0)) problems.push(`${label}: the lead role scheduled no notes`);
+}
+
 /** Holds the left button for `ms` while circling the mouse around (cx, cy). */
 async function holdFire(cdp, ms, { cx, cy, rx = 200, ry = 150, onSample } = {}) {
   await mouse(cdp, "mouseMoved", cx, cy, false);
@@ -277,6 +334,7 @@ async function returnToMenu(cdp) {
 async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   await startGameScene(cdp, `{ mode: "endless" }`, label);
   await watchEnemyFire(cdp);
+  await watchPlayerFire(cdp);
   const audioBefore = await readAudio(cdp);
 
   // Hold fire while circling the mouse: should start audio and speed time (and the clock) up.
@@ -327,8 +385,10 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   }
 
   if (checkPause) await pauseCheck(cdp, label);
-  checkAudio(label, audioBefore, await readAudio(cdp), MIN_RUN_NOTES);
+  const audioAfter = await readAudio(cdp);
+  checkAudio(label, audioBefore, audioAfter, MIN_RUN_NOTES);
   checkEnemyFire(label, await readEnemyFire(cdp));
+  checkPlayerFire(label, await readPlayerFire(cdp), audioBefore, audioAfter);
 }
 
 /**
@@ -340,6 +400,7 @@ async function bossCheck(cdp) {
   const label = "boss";
   await startGameScene(cdp, `{ mode: "endless" }`, label);
   await watchEnemyFire(cdp);
+  await watchPlayerFire(cdp);
   const audioBefore = await readAudio(cdp);
   const scene = `${GAME}.scene.getScene("GameScene")`;
   for (const [type, wave] of [["sentinel", 5], ["phantom", 10]]) {
@@ -379,8 +440,10 @@ async function bossCheck(cdp) {
   // one: released voices stay busy until their tails end, and the heart has only two.
   await sleep(2000);
   await evaluate(cdp, `${scene}.godMode = false; true`);
-  checkAudio(label, audioBefore, await readAudio(cdp), MIN_RUN_NOTES);
+  const audioAfter = await readAudio(cdp);
+  checkAudio(label, audioBefore, audioAfter, MIN_RUN_NOTES);
   checkEnemyFire(label, await readEnemyFire(cdp));
+  checkPlayerFire(label, await readPlayerFire(cdp), audioBefore, audioAfter);
 }
 
 /** Pause via the ESC path freezes the conductor, scene clock and tweens; resume restarts them. */
@@ -428,6 +491,7 @@ async function playCampaignLevel(cdp) {
     `{ mode: "level", levelDef: window.__BEATSTILL__.levels.find((l) => l.id === 1) }`,
     label,
   );
+  await watchPlayerFire(cdp);
   const before = await readGameState(cdp);
   const audioBefore = await readAudio(cdp);
   // Aim up the hallway at the tanks.
@@ -435,7 +499,9 @@ async function playCampaignLevel(cdp) {
   const after = await readGameState(cdp);
   const shot = await screenshot(cdp, `${label}-level1`);
   // A 2 s probe of a two-tank level: fewer notes than an endless run, but some must sound.
-  checkAudio(label, audioBefore, await readAudio(cdp), 5);
+  const audioAfter = await readAudio(cdp);
+  checkAudio(label, audioBefore, audioAfter, 5);
+  checkPlayerFire(label, await readPlayerFire(cdp), audioBefore, audioAfter);
 
   log(
     `${label}: levelId=${after.levelId} score=${after.score} enemies=${after.enemies} ` +
@@ -531,7 +597,7 @@ async function main() {
     log(
       `audio totals: scheduled=${audio.scheduled} dropped=${audio.dropped} merged=${audio.merged} ` +
         `dropped/scheduled=${fmt(audio.scheduled > 0 ? audio.dropped / audio.scheduled : NaN)} ` +
-        `errors=${audio.errors} drops=${JSON.stringify(audio.drops)}`,
+        `errors=${audio.errors} drops=${JSON.stringify(audio.drops)} roles=${JSON.stringify(audio.roles)}`,
     );
     if (audio.errors > 0) problems.push(`audio engine reported ${audio.errors} error(s) in total`);
     // Phase 3 (enemies on ms timers) dropped more notes than it scheduled; on the grid it must stay well below.

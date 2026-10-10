@@ -112,6 +112,7 @@ export class AudioEngine {
   private errors = 0;
   private merged = 0;
   private readonly dropsByKind = new Map<string, number>();
+  private readonly scheduledByRole = new Map<string, number>();
   private readonly reported = new Set<string>();
 
   /** True once the graph is built and the AudioContext has been resumed. */
@@ -176,6 +177,9 @@ export class AudioEngine {
       const time = Math.max(now, claim.time);
       const result = voice.instrument.play(claim.notes.map(midiToHz), duration, time, velocity, now);
       this.scheduled += result.scheduled;
+      if (result.scheduled > 0) {
+        this.scheduledByRole.set(req.role, (this.scheduledByRole.get(req.role) ?? 0) + result.scheduled);
+      }
       if (result.dropped > 0) this.drop(`voices:${req.role}`, result.dropped);
     } catch (err) {
       this.fail(`play:${req.role}`, err);
@@ -245,6 +249,11 @@ export class AudioEngine {
   /** Dropped notes per reason (e.g. "voices:pad"), for diagnostics. */
   dropBreakdown(): Record<string, number> {
     return Object.fromEntries(this.dropsByKind);
+  }
+
+  /** Notes handed to Tone per role since the page loaded (e.g. "lead": the player's shots), for diagnostics. */
+  scheduledBreakdown(): Record<string, number> {
+    return Object.fromEntries(this.scheduledByRole);
   }
 
   // -------------------------------------------------------------------------------------------

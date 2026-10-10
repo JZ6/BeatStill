@@ -51,12 +51,14 @@ interface DebugHook {
   levels: readonly LevelDef[];
   audio: () => AudioEngineStats;
   audioDrops: () => Record<string, number>;
+  audioRoles: () => Record<string, number>;
 }
 (window as unknown as { __BEATSTILL__?: DebugHook }).__BEATSTILL__ = {
   game,
   levels: ALL_LEVELS,
   audio: () => engine.stats(),
   audioDrops: () => engine.dropBreakdown(),
+  audioRoles: () => engine.scheduledBreakdown(),
 };
 
 const canvas = game.canvas;
