@@ -281,6 +281,7 @@ export class TutorialManager {
         enemy.hp = step.spawnHp;
         enemy.maxHp = step.spawnHp;
       }
+      if (step?.spawnSpeed !== undefined) enemy.speed = step.spawnSpeed;
       s.enemies.add(enemy);
       s.particles.burst(x, y, enemy.def.color, 12, 60, 2);
       const label = s.add

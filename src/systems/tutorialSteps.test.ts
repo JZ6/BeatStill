@@ -42,6 +42,7 @@ describe("buildTutorialSteps", () => {
     expect(step("chain").goal).toEqual({ kind: "chain", count: 2 });
     expect(step("chain").spawn?.length).toBeGreaterThanOrEqual(2);
     expect(step("chain").spawnHp).toBe(1);
+    expect(step("chain").spawnSpeed).toBe(0);
   });
 
   it("scales the move distance", () => {
