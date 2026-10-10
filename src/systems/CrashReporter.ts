@@ -46,7 +46,15 @@ function snapshotGameState(): Record<string, unknown> | null {
           fireCooldown: Math.round(scene.ship.fireCooldown),
         }
       : null,
-    timeScale: scene.timeManager?.scale ?? null,
+    timeScale: scene.dilation ? scene.timeScale : null,
+    conductor: scene.conductor
+      ? {
+          bpm: scene.conductor.bpm,
+          beat: Math.round(scene.conductor.beat * 1000) / 1000,
+          bar: scene.conductor.bar,
+          paused: scene.conductor.paused,
+        }
+      : null,
     audioTheme: scene.audioManager?.currentTheme?.name ?? null,
     audioStarted: scene.audioStarted,
     counts: {

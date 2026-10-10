@@ -42,11 +42,11 @@ function buildSteps(): TutorialStep[] {
     {
       message: mobile ? "Release sticks — time freezes" : "Stop moving — time freezes",
       hint: "stand still and watch the world slow down",
-      condition: (scene) => scene.timeManager.scale < 0.08,
+      condition: (scene) => scene.timeScale < 0.08,
     },
     {
       message: "Move or shoot to speed time up",
-      condition: (scene) => scene.timeManager.scale > 0.5,
+      condition: (scene) => scene.timeScale > 0.5,
     },
     {
       message: "Kill enemies — every hit plays a note",

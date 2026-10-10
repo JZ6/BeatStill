@@ -160,7 +160,7 @@ function readGameState(cdp) {
         wave: s.wave,
         score: s.score,
         enemies: s.enemies?.getLength() ?? 0,
-        timeScale: s.timeManager?.scale ?? null,
+        timeScale: typeof s.timeScale === "number" ? s.timeScale : null,
         audioStarted: !!s.audioStarted,
         audioReady: !!s.audioManager?.isStarted,
         gameOver: !!s.gameOver,

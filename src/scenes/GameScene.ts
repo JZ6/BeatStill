@@ -3,7 +3,9 @@ import { Ship } from "../objects/Ship";
 import { Enemy, createEnemy } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import { Bullet } from "../objects/Bullet";
-import { TimeManager } from "../systems/TimeManager";
+import { Conductor, type TickEvent } from "../core/Conductor";
+import { TimeDilation } from "../core/TimeDilation";
+import { TickDispatcher } from "../game/TickDispatcher";
 import { AudioManager } from "../systems/AudioManager";
 import { ParticleSystem } from "../systems/Particles";
 import { theremin, allThemes } from "../sounds";
@@ -31,9 +33,17 @@ import { createRelicSelectOverlay } from "../ui/RelicSelectOverlay";
 import { MutatorSystem } from "../systems/WaveMutators";
 import { DeathAnimation } from "../systems/DeathAnimation";
 
+/** Longer frames (tab switch, GC hitch) are clamped so entities and the clock never jump. */
+const MAX_FRAME_MS = 100;
+/** Below this time scale the world counts as frozen (time_lord achievement). */
+const FREEZE_THRESHOLD = 0.15;
+
 export class GameScene extends Phaser.Scene {
   ship!: Ship;
-  timeManager!: TimeManager;
+  /** The single musical game clock. Recreated each run. */
+  conductor!: Conductor;
+  /** Player activity → time scale. Recreated each run. */
+  dilation!: TimeDilation;
   audioManager!: AudioManager;
   particles!: ParticleSystem;
 
@@ -94,9 +104,23 @@ export class GameScene extends Phaser.Scene {
   private deathOverlay: Phaser.GameObjects.Graphics | null = null;
   private gameOverReady = false;
   private frozen = false;
+  private readonly tickDispatcher = new TickDispatcher();
 
   constructor() {
     super("GameScene");
+  }
+
+  /** Current world time scale (0.03–1), driven by player activity. */
+  get timeScale(): number {
+    return this.dilation?.scale ?? 0;
+  }
+
+  /**
+   * Subscribes to every Conductor tick (24 per beat) for the rest of this run. Returns an
+   * unsubscribe function; all subscriptions are dropped when the scene shuts down.
+   */
+  onTick(handler: (t: TickEvent) => void): () => void {
+    return this.tickDispatcher.subscribe(handler);
   }
 
   create(data?: { mode?: string; levelDef?: LevelDef }) {
@@ -138,6 +162,7 @@ export class GameScene extends Phaser.Scene {
     // Scene Clock.paused is not reset by Phaser on shutdown/start (tweens and physics are).
     this.frozen = false;
     this.time.paused = false;
+    this.tickDispatcher.clear();
 
     this.bgGraphics = this.add.graphics();
     this.bgGraphics.setDepth(-1);
@@ -165,10 +190,13 @@ export class GameScene extends Phaser.Scene {
     this.ship.stats = this.stats;
     this.ship.hp = this.stats.maxHp;
     this.ship.maxHp = this.stats.maxHp;
-    this.timeManager = new TimeManager();
 
     const selectedTheme = allThemes.find((t) => t.name.toLowerCase() === options.themeId) ?? theremin;
     recordThemeUsed(selectedTheme.name.toLowerCase());
+    // Fresh clock and dilation every run (Phaser reuses this scene instance on restart).
+    this.conductor = new Conductor({ bpm: selectedTheme.bpm });
+    this.dilation = new TimeDilation();
+    this.conductor.timeScale = this.dilation.scale;
     if (!this.audioManager) {
       this.audioManager = new AudioManager();
     } else {
@@ -244,6 +272,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.events.once("shutdown", () => {
+      this.tickDispatcher.clear();
       this.toastQueue.length = 0;
       this.toastActive = false;
       this.pauseMenu.cleanup();
@@ -267,8 +296,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  update(_time: number, delta: number) {
+  update(_time: number, rawDelta: number) {
     if (!this.scene.isActive()) return;
+    // Entities get this clamped real delta plus the time scale (they scale it themselves);
+    // the conductor gets the same real delta, so world and music share one clock.
+    const delta = Math.min(rawDelta, MAX_FRAME_MS);
+    const realDt = delta / 1000;
     if (this.gameOver) {
       if (this.deathAnim) {
         if (this.deathAnim.update(delta)) this.deathAnim = null;
@@ -282,10 +315,13 @@ export class GameScene extends Phaser.Scene {
 
     this.touchControls?.update();
 
-    const inputMagnitude = this.ship.getInputMagnitude();
-    this.timeManager.update(inputMagnitude, delta);
-    const ts = this.timeManager.scale;
-    if (ts < 0.15) this.freezeTime += delta / 1000;
+    const input = this.ship.readInput(realDt);
+    const ts = this.dilation.update(input, realDt);
+    this.conductor.timeScale = ts;
+    const { ticks } = this.conductor.advance(realDt);
+    this.tickDispatcher.dispatch(ticks);
+    // Real seconds spent with time nearly frozen.
+    if (ts < FREEZE_THRESHOLD) this.freezeTime += realDt;
 
     this.ship.update(delta, ts, this);
 
@@ -544,7 +580,7 @@ export class GameScene extends Phaser.Scene {
     document.body.appendChild(overlay);
   }
 
-  /** Freezes or resumes scene tweens, timers and arcade physics. */
+  /** Freezes or resumes the conductor, scene tweens, timers and arcade physics. */
   setFrozen(frozen: boolean) {
     if (this.frozen === frozen) return;
     this.frozen = frozen;
@@ -556,6 +592,15 @@ export class GameScene extends Phaser.Scene {
       if (frozen) world.pause();
       else world.resume();
     }
+    this.syncConductor();
+    // Aim moved while frozen (e.g. to a menu button) must not register as spinning.
+    if (!frozen) this.ship?.resetAimTracking();
+  }
+
+  /** The musical clock runs only while the run is live: not frozen and not over. */
+  private syncConductor() {
+    if (this.frozen || this.gameOver) this.conductor.pause();
+    else this.conductor.resume();
   }
 
   /** The scene stays frozen while either the pause menu or the relic picker is open. */
@@ -696,6 +741,7 @@ export class GameScene extends Phaser.Scene {
 
   triggerGameOver() {
     this.gameOver = true;
+    this.syncConductor();
     this.gameOverReady = false;
     this.touchControls?.disable();
     this.particles.burst(this.ship.x, this.ship.y, 0xff4422, 40, 150, 4);

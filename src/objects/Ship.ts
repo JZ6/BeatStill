@@ -6,12 +6,23 @@ import { getWeapon } from "../systems/Weapons";
 import { GAME_W, GAME_H, px } from "../systems/GameConfig";
 import { options } from "../systems/GameOptions";
 import type { TouchControls } from "../systems/TouchControls";
+import { AngularSpeedTracker, type DilationInput } from "../core/TimeDilation";
+import { keyboardVector } from "../core/InputMath";
 
 const BASE = defaultStats();
 
 const INVINCIBLE_DURATION = 1500;
+const INVINCIBLE_FLASH_MS = 80;
 const HEALTHBAR_WIDTH = 40;
 const HEALTHBAR_HEIGHT = 4;
+
+/** Input sampled once per frame by readInput() and consumed by update(). */
+interface FrameInput {
+  vx: number;
+  vy: number;
+  aimAngle: number;
+  firing: boolean;
+}
 
 export class Ship extends Phaser.GameObjects.Container {
   keys: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key } | null = null;
@@ -20,14 +31,17 @@ export class Ship extends Phaser.GameObjects.Container {
   healthBar: Phaser.GameObjects.Graphics;
   hp = 5;
   maxHp = 5;
+  /** Remaining i-frames in ms of the player's own time (see update()). */
   invincibleTimer = 0;
   stats!: PlayerStats;
   touchControls?: TouchControls;
   shipColor: number;
   damageMultiplier = 1;
-  private inputMag = 0;
-  private lastAimAngle = 0;
   private pointerFireSuppressed = false;
+  private readonly aimTracker = new AngularSpeedTracker();
+  private frameInput: FrameInput = { vx: 0, vy: 0, aimAngle: -Math.PI / 2, firing: false };
+  /** Real ms since i-frames started; drives the blink so it doesn't slow down in slow motion. */
+  private invincibleFlashElapsed = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -113,15 +127,12 @@ export class Ship extends Phaser.GameObjects.Container {
     this.drawHealthBar();
     if (this.hp <= 0) return true;
     this.invincibleTimer = INVINCIBLE_DURATION;
+    this.invincibleFlashElapsed = 0;
     return false;
   }
 
   isInvincible(): boolean {
     return this.invincibleTimer > 0;
-  }
-
-  getInputMagnitude(): number {
-    return this.inputMag;
   }
 
   /**
@@ -132,56 +143,57 @@ export class Ship extends Phaser.GameObjects.Container {
     this.pointerFireSuppressed = true;
   }
 
-  update(delta: number, timeScale: number, gameScene: GameScene) {
-    let vx = 0;
-    let vy = 0;
-    let aimAngle = this.rotation - Math.PI / 2;
-    let firing = false;
+  /**
+   * Forget the last aim angle, so the next readInput() re-seeds the spin tracker instead of
+   * counting aim changes made while the game was frozen (e.g. moving to the RESUME button).
+   */
+  resetAimTracking() {
+    this.aimTracker.reset();
+  }
 
+  /**
+   * Samples keyboard, pointer and touch input. Call once per frame, before update().
+   * Caches movement, aim and fire state for update() and returns what time dilation needs.
+   * The aim speed is measured from this frame's aim angle, in real seconds.
+   */
+  readInput(realDt: number): DilationInput {
     const pointer = this.scene.input.activePointer;
     if (this.pointerFireSuppressed && !pointer.isDown) this.pointerFireSuppressed = false;
-    const pointerDown = pointer.isDown && !this.pointerFireSuppressed;
+
+    let vx = 0;
+    let vy = 0;
+    let move = 0;
+    let aimAngle = this.rotation - Math.PI / 2;
+    let firing = false;
 
     const tc = this.touchControls;
     if (tc && (tc.aimActive || tc.moveActive)) {
       vx = tc.moveVector.x;
       vy = tc.moveVector.y;
+      move = Math.min(Math.sqrt(vx * vx + vy * vy), 1);
       if (tc.aimActive) {
         aimAngle = tc.aimAngle;
         firing = true;
       }
-      const moveMag = Math.sqrt(vx * vx + vy * vy);
-      let touchAimDelta = Math.abs(aimAngle - this.lastAimAngle);
-      if (touchAimDelta > Math.PI) touchAimDelta = Math.PI * 2 - touchAimDelta;
-      const touchSpinMag = Math.min(touchAimDelta * 3, 0.4);
-      this.inputMag = Math.min(moveMag + (firing ? 0.6 : 0) + touchSpinMag, 1);
     } else {
-      if (this.keys) {
-        if (this.keys.a.isDown) vx -= 1;
-        if (this.keys.d.isDown) vx += 1;
-        if (this.keys.w.isDown) vy -= 1;
-        if (this.keys.s.isDown) vy += 1;
-      }
-      const mag = Math.sqrt(vx * vx + vy * vy);
-      if (mag > 0) { vx /= mag; vy /= mag; }
-
-      const mouseDx = Math.abs(pointer.velocity.x) + Math.abs(pointer.velocity.y);
-      const mouseMag = Math.min(mouseDx / 500, 1);
-      const shootMag = pointerDown ? 0.6 : 0;
-      let aimDelta = Math.abs(aimAngle - this.lastAimAngle);
-      if (aimDelta > Math.PI) aimDelta = Math.PI * 2 - aimDelta;
-      const spinMag = Math.min(aimDelta * 3, 0.4);
-      this.inputMag = Math.min(mag + shootMag + spinMag + mouseMag * 0.3, 1);
-
-      aimAngle = Phaser.Math.Angle.Between(
-        this.x, this.y,
-        pointer.worldX, pointer.worldY,
-      );
-      firing = pointerDown;
+      const k = this.keys;
+      const kb = keyboardVector(!!k?.a.isDown, !!k?.d.isDown, !!k?.w.isDown, !!k?.s.isDown);
+      vx = kb.x;
+      vy = kb.y;
+      move = kb.magnitude;
+      aimAngle = Phaser.Math.Angle.Between(this.x, this.y, pointer.worldX, pointer.worldY);
+      firing = pointer.isDown && !this.pointerFireSuppressed;
     }
 
-    this.lastAimAngle = aimAngle;
+    const aimSpeed = this.aimTracker.update(aimAngle, realDt);
+    this.frameInput = { vx, vy, aimAngle, firing };
+    return { move, aimSpeed, firing };
+  }
 
+  update(delta: number, timeScale: number, gameScene: GameScene) {
+    const { vx, vy, aimAngle, firing } = this.frameInput;
+
+    // The player runs at half speed when time is frozen, so it can still act.
     const playerTimeScale = timeScale * 0.5 + 0.5;
     const moveSpeed = this.stats.moveSpeed * playerTimeScale * (delta / 1000);
     this.x += vx * moveSpeed;
@@ -194,8 +206,11 @@ export class Ship extends Phaser.GameObjects.Container {
     this.healthBar.setRotation(-this.rotation);
 
     if (this.invincibleTimer > 0) {
-      this.invincibleTimer -= delta;
-      const flash = Math.floor(this.invincibleTimer / 80) % 2 === 0;
+      // I-frames run on the player's own clock, so standing still in frozen time doesn't
+      // waste them. The blink stays real-time.
+      this.invincibleTimer -= delta * playerTimeScale;
+      this.invincibleFlashElapsed += delta;
+      const flash = Math.floor(this.invincibleFlashElapsed / INVINCIBLE_FLASH_MS) % 2 === 0;
       this.graphics.setAlpha(flash ? 0.3 : 1);
     } else {
       this.graphics.setAlpha(1);

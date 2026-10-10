@@ -65,6 +65,11 @@ function buildGameTab(
   waveRow.append(waveLabel, setWaveInput, setWaveBtn, skipWaveBtn);
   gc.appendChild(waveRow);
 
+  const clockLabel = document.createElement("div");
+  clockLabel.className = "dp-ctrl-label";
+  clockLabel.textContent = "Clock: --";
+  gc.appendChild(clockLabel);
+
   const spawnRow = document.createElement("div");
   spawnRow.className = "dp-ctrl-row";
 
@@ -147,6 +152,10 @@ function buildGameTab(
     if (!scene) return;
     waveLabel.textContent = `Wave: ${scene.wave}`;
     syncGodModeBtn(scene.godMode);
+    const c = scene.conductor;
+    clockLabel.textContent = c
+      ? `Clock: ×${scene.timeScale.toFixed(2)} · ${c.bpm} BPM · bar ${c.bar + 1} beat ${(c.beatInBar + 1).toFixed(2)}${c.paused ? " · paused" : ""}`
+      : "Clock: --";
   }
 
   return { tab, content: gc, refresh };

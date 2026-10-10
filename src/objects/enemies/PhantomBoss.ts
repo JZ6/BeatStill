@@ -101,7 +101,8 @@ export class PhantomBoss extends Enemy {
   protected updateMovement(delta: number, timeScale: number, gameScene: GameScene) {
     const dt = delta / 1000;
 
-    if (gameScene.timeManager.scale < 0.15) {
+    // Charges in REAL time while the world is nearly frozen: it punishes camping in slow-mo.
+    if (gameScene.timeScale < 0.15) {
       this.chargeCounter = Math.min(this.chargeCounter + delta, 1800);
     }
 
