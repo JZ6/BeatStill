@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phases 0–7 complete. Phase 8 (balance) in progress.
+- **Status:** Phases 0–8 complete (2026-10-10). Remaining: human playtesting items listed under Phase 8.
 
 ## 1. Vision
 
@@ -489,8 +489,23 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [x] DevPanel: a palette switch keeps the mutator modifiers; Skip Wave works in level mode.
 
 ### Phase 8 — Balance
-- [ ] Playtest passes: tempo per theme, pattern density, enemy counts, weapon subdivisions, time-dilation weights
-- [ ] README TODO items: player shot speed, enemy counts, diep.io-style penetration and bullet destruction
+- [x] Measured pass: `src/balance/metrics.ts` + `npm run balance` report against the pre-overhaul baseline.
+  - Weapon DPS at 105 bpm is within −9%…+15% of the old values. Standard is now 1/8T, shotgun is dotted 1/8, and the minigun has twin barrels at full damage.
+  - Enemy bullets/s are within ±15%.
+  - Time dilation: move + fire reaches 0.99 in 0.47 s; idle drops below 0.1 in 0.45 s.
+- [x] README TODOs:
+  - Player bullets are 12% slower.
+  - Endless budget is 40 + 12·wave, with 40% on each section's first downbeat (wave 1 opens with 21).
+  - diep.io-style bullet HP clashes (player bullet HP = damage + pierce, enemy bullets have 1). Collision is swept and uses a uniform grid.
+- [x] Shop-boosted stats are capped at old cap + shop max. Boss phase-3 spirals are step-locked. Smoke margins are robust.
+- [ ] **Needs human playtesting:**
+  - Late-game Rapid Fire DPS (+26…+159% vs old; laser −44%).
+  - The bullet-clearing feel (laser/railgun clear 21–58 enemy bullets/s).
+  - Polymetric drift of the 1/8T standard, the dotted-1/8 shotgun and tank/tracker cycles.
+  - A 21-enemy wave 1 for new players.
+  - Dropped notes on dense waves (≈0.19 of scheduled, mostly the lead/stab voice caps).
+  - Touch controls and haptics on real devices.
+  - Overall mix and palette timbres by ear.
 
 ## 9. Open questions
 
