@@ -1,5 +1,5 @@
 import { ALL_WEAPONS } from "./Weapons";
-import { applyShopBonuses } from "./Shop";
+import { ALL_SHOP_ITEMS, applyShopBonuses } from "./Shop";
 import { CHAIN_SUSTAIN_BEATS } from "./chainRules";
 import { BASE_BULLET_COUNT, BASE_BULLET_SPEED, BASE_BULLET_SPREAD } from "./weaponMath";
 
@@ -42,10 +42,58 @@ export function baseStats(): PlayerStats {
   };
 }
 
-/** Starting stats of a run: baseStats() plus the shop's permanent bonuses. */
+/** Starting stats of a run: baseStats() plus the shop's permanent bonuses (within STAT_CAPS). */
 export function defaultStats(): PlayerStats {
   const stats = baseStats();
   applyShopBonuses(stats);
+  return capStats(stats);
+}
+
+/** Stats with a ceiling. */
+export type CappedStat = "bulletCount" | "bulletSpread" | "pierce" | "maxHp" | "bulletSpeed" | "damage" | "moveSpeed" | "chainRadius";
+
+/** The pre-overhaul game's absolute caps (its shop bonuses used up upgrade levels to reach them). */
+export const OLD_STAT_CAPS: Readonly<Record<CappedStat, number>> = Object.freeze({
+  bulletCount: 5,
+  bulletSpread: 0.55,
+  pierce: 5,
+  maxHp: 10,
+  bulletSpeed: 1000,
+  damage: 5,
+  moveSpeed: 460,
+  chainRadius: 90,
+});
+
+const CAPPED_STATS = Object.keys(OLD_STAT_CAPS) as CappedStat[];
+
+/** What every shop item at its max level adds to each capped stat. */
+function shopMaxBonus(): Record<CappedStat, number> {
+  const before = baseStats();
+  const after = baseStats();
+  for (const item of ALL_SHOP_ITEMS) for (let i = 0; i < item.maxLevel; i++) item.apply(after);
+  return Object.fromEntries(CAPPED_STATS.map((k) => [k, after[k] - before[k]])) as Record<CappedStat, number>;
+}
+
+/**
+ * Highest value of each stat: the old cap plus the shop's maximum bonus. Shop bonuses no longer
+ * count as upgrade levels, so the in-run upgrades alone stop at the old caps and a fully bought shop
+ * adds its bonus on top: the full shop plus every upgrade lands exactly here (so no pickup is ever
+ * wasted and a purchase still counts at the end of a run). The cap pins that ceiling against any
+ * other stacking (relics, new upgrades or shop levels).
+ */
+export const STAT_CAPS: Readonly<Record<CappedStat, number>> = Object.freeze(
+  (() => {
+    const bonus = shopMaxBonus();
+    return Object.fromEntries(CAPPED_STATS.map((k) => [k, OLD_STAT_CAPS[k] + bonus[k]])) as Record<CappedStat, number>;
+  })(),
+);
+
+/** Clamps every capped stat to STAT_CAPS (in place) and returns `stats`. */
+export function capStats(stats: PlayerStats): PlayerStats {
+  for (const k of CAPPED_STATS) {
+    // A tiny tolerance so float sums (e.g. 0.15 + 4 × 0.1) are never clipped below the cap.
+    if (stats[k] > STAT_CAPS[k] + 1e-9) stats[k] = STAT_CAPS[k];
+  }
   return stats;
 }
 
@@ -80,6 +128,7 @@ function statUpgrade(def: Omit<UpgradeDef, "level" | "apply" | "isWeapon">, rais
       if (level >= def.maxLevel) return;
       s.upgradeLevels[def.id] = level + 1;
       raise(s);
+      capStats(s);
     },
   };
 }

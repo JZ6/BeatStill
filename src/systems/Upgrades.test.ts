@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { checkEvolution } from "./Evolutions";
-import { ALL_UPGRADES, fireRateLevel, rollDrop, upgradeLevel, type PlayerStats } from "./Upgrades";
+import { ALL_SHOP_ITEMS } from "./Shop";
+import { ALL_UPGRADES, OLD_STAT_CAPS, STAT_CAPS, capStats, fireRateLevel, rollDrop, upgradeLevel, type PlayerStats } from "./Upgrades";
 
 function baseStats(): PlayerStats {
   return {
@@ -76,6 +77,29 @@ describe("upgrade levels", () => {
     const s = maxedStats();
     expect(s).toMatchObject({ bulletCount: 5, pierce: 5, maxHp: 10, bulletSpeed: 1000, damage: 5, moveSpeed: 460, chainRadius: 90, fireRate: 3 });
     expect(s.bulletSpread).toBeCloseTo(0.55);
+  });
+});
+
+describe("stat caps", () => {
+  it("are the old caps plus the shop's maximum bonus", () => {
+    expect(STAT_CAPS).toMatchObject({ bulletCount: 5, pierce: 5, maxHp: 13, bulletSpeed: 1000, damage: 8, moveSpeed: 550, chainRadius: 90 });
+    expect(STAT_CAPS.bulletSpread).toBeCloseTo(0.55);
+    expect(OLD_STAT_CAPS).toMatchObject({ maxHp: 10, damage: 5, moveSpeed: 460 });
+  });
+
+  it("a full shop plus every upgrade lands exactly on them: no pickup or purchase is wasted", () => {
+    const s = baseStats();
+    for (const item of ALL_SHOP_ITEMS) for (let i = 0; i < item.maxLevel; i++) item.apply(s);
+    for (const u of ALL_UPGRADES.filter((x) => !x.isWeapon)) {
+      for (let i = 0; i < u.maxLevel; i++) u.apply(s);
+    }
+    for (const [k, cap] of Object.entries(STAT_CAPS)) expect(s[k as keyof typeof STAT_CAPS], k).toBeCloseTo(cap);
+  });
+
+  it("clamps anything stacked beyond them, leaving other stats alone", () => {
+    const s = capStats({ ...maxedStats(), damage: 12, maxHp: 20, moveSpeed: 999, chainWindow: 9 });
+    expect(s).toMatchObject({ damage: 8, maxHp: 13, moveSpeed: 550, chainWindow: 9 });
+    expect(capStats(baseStats())).toEqual(baseStats());
   });
 });
 
