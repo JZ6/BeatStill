@@ -66,8 +66,9 @@ export interface EnemyDef {
 
 type Entry = Omit<EnemyDef, "type" | "isBoss" | "hidden"> & { isBoss?: boolean; hidden?: boolean };
 
-// Stats match the pre-registry constructors exactly. Rhythm lengths are in 16th steps; at 100 bpm a
-// step is 150 ms and a bar (16 steps) 2.4 s, which keeps bullet density close to the old ms timers.
+// Stats match the pre-registry constructors exactly. Rhythm lengths are in 16th steps; at 105 bpm (the
+// balance reference, `npm run balance`) a step is 1/7 s and a bar 2.29 s. Every pattern keeps bullets
+// per second within ±15% of the old ms timer there (src/balance/targets.test.ts).
 const ENTRIES: Record<EnemyType, Entry> = {
   basic: {
     // Not "Drone": that is the audio drone that holds the chord in slow motion.
@@ -93,8 +94,9 @@ const ENTRIES: Record<EnemyType, Entry> = {
     hp: 1,
     speed: 60,
     role: "stab",
-    // Once per bar on any 8th, so half of them stab off the beat (was 2000 ms).
-    rhythm: { pattern: "x... .... .... ....", offsetStep: 2 },
+    // A 3½-beat loop on the 8th grid: successive stabs alternate on and off the beat (syncopation)
+    // and drift through the bar. 2000 ms at 105 bpm, as before (once a bar was −12%, −17% at 100).
+    rhythm: { pattern: "x... .... .... ..", offsetStep: 2 },
     behavior: "Follows your position, fires aimed volleys",
     danger: 2,
   },
@@ -107,8 +109,9 @@ const ENTRIES: Record<EnemyType, Entry> = {
     hp: 1,
     speed: 20,
     role: "snare",
-    // Beat 2, or beat 4 with an 8-step offset: the backbeat (was 1600 ms).
-    rhythm: { pattern: ".... x... .... ....", offsetStep: 8 },
+    // The backbeat over two bars: 2 and 4, then 2 and a breath (offsets in half bars keep every
+    // shot on 2 or 4). 1.5 shots a bar ≈ the old 1600 ms (+5% at 105 bpm; once a bar was −30%).
+    rhythm: { pattern: ".... x... .... x... .... x... .... ....", offsetStep: 8 },
     behavior: "Barely moves, fires fast precise shots on the backbeat",
     danger: 2,
   },
@@ -135,8 +138,12 @@ const ENTRIES: Record<EnemyType, Entry> = {
     hp: 6,
     speed: 15,
     role: "bass",
-    // Beat 1 or 3 (was 2800 ms).
-    rhythm: { pattern: "x... .... .... ....", offsetStep: 8 },
+    // Downbeats of a four-bar phrase, resting on the fourth bar (on beat 3 with a half-bar offset).
+    // ≈ the old 2800 ms (−8% at 105 bpm; every bar was +23%).
+    rhythm: {
+      pattern: "x... .... .... .... x... .... .... .... x... .... .... .... .... .... .... ....",
+      offsetStep: 8,
+    },
     behavior: "Slow and tough, fires radial + aimed combo patterns",
     danger: 4,
   },
@@ -191,12 +198,13 @@ const ENTRIES: Record<EnemyType, Entry> = {
     hp: 30,
     speed: 8,
     role: "boss",
-    // Was 2000 / 1500 / 800 ms: a dotted-half pulse across the bar (1.8 s), a two-bar
-    // 3-3-2 (avg 1.6 s), then the one-bar 3-3-2 tresillo (avg 0.8 s).
+    // Was 2000 / 1500 / 800 ms: a 3+4-beat cycle (a dotted half, then a whole note; avg 2.0 s at
+    // 105 bpm, where a plain dotted-half pulse was +17%), a two-bar 3-3-2 (avg 1.52 s), then the
+    // one-bar 3-3-2 tresillo (avg 0.76 s).
     rhythm: {
-      pattern: "x... .... ....",
+      pattern: "x... .... .... x... .... .... ....",
       offsetStep: 0,
-      phases: ["x... .... ....", "x... .... .... x... .... .... x... ....", "x... ..x. .... x..."],
+      phases: ["x... .... .... x... .... .... ....", "x... .... .... x... .... .... x... ....", "x... ..x. .... x..."],
     },
     behavior: "3-phase boss that summons minions; each phase is a new section on the bar line",
     danger: 5,
@@ -211,11 +219,12 @@ const ENTRIES: Record<EnemyType, Entry> = {
     hp: 40,
     speed: 40,
     role: "boss",
-    // Was 2500 / 2000 / 1500 ms: once a bar (2.4 s), a dotted-half pulse (1.8 s), a two-bar 3-3-2 (avg 1.6 s).
+    // Was 2500 / 2000 / 1500 ms: once a bar (2.29 s at 105 bpm), the 3+4-beat cycle (avg 2.0 s; a
+    // dotted-half pulse was +17%), a two-bar 3-3-2 (avg 1.52 s).
     rhythm: {
       pattern: "x... .... .... ....",
       offsetStep: 0,
-      phases: ["x... .... .... ....", "x... .... ....", "x... .... .... x... .... .... x... ...."],
+      phases: ["x... .... .... ....", "x... .... .... x... .... .... ....", "x... .... .... x... .... .... x... ...."],
     },
     behavior: "Teleporting boss that spawns decoys, charges power when time is frozen",
     danger: 5,

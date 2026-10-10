@@ -5,7 +5,15 @@
  */
 import { describe, expect, it } from "vitest";
 import { ALL_WEAPONS, getWeapon } from "../systems/Weapons";
-import { LEGACY_WEAPONS, REFERENCE_BPM, heldLoadout, relativeChange, weaponMetrics, type Loadout } from "./metrics";
+import {
+  LEGACY_WEAPONS,
+  REFERENCE_BPM,
+  allEnemyMetrics,
+  heldLoadout,
+  relativeChange,
+  weaponMetrics,
+  type Loadout,
+} from "./metrics";
 
 describe("weapon targets", () => {
   it(`keeps every weapon's DPS as first held within ±20% of the old cooldown at ${REFERENCE_BPM} bpm`, () => {
@@ -42,6 +50,21 @@ describe("weapon targets", () => {
         const ratio = weaponMetrics(minigun, REFERENCE_BPM, l).dps / weaponMetrics(standard, REFERENCE_BPM, l).dps;
         expect(ratio, `power ${power}, multi shot ${multiShot}`).toBeGreaterThanOrEqual(1.2);
       }
+    }
+  });
+});
+
+describe("enemy targets", () => {
+  it(`keeps every enemy's (and boss phase's) bullets per second within ±15% of the old timer at ${REFERENCE_BPM} bpm`, () => {
+    for (const m of allEnemyMetrics(REFERENCE_BPM)) {
+      const label = `${m.type} p${m.phase}: ${m.bulletsPerSec.toFixed(2)} vs ${m.legacyBulletsPerSec.toFixed(2)}`;
+      expect(Math.abs(relativeChange(m.bulletsPerSec, m.legacyBulletsPerSec)), label).toBeLessThanOrEqual(0.15);
+    }
+  });
+
+  it("keeps Bullet Storm at the old double density, at a later wave too", () => {
+    for (const m of allEnemyMetrics(REFERENCE_BPM, 12)) {
+      expect(Math.abs(relativeChange(m.stormBulletsPerSec, m.legacyStormBulletsPerSec)), `${m.type} p${m.phase}`).toBeLessThanOrEqual(0.15);
     }
   });
 });

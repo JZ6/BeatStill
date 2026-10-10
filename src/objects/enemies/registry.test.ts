@@ -76,10 +76,10 @@ describe("enemy registry", () => {
       return { length: hits.length, hits: hitSteps(hits), offsetStep: ENEMY_REGISTRY[t].rhythm.offsetStep };
     };
     expect(rhythm("basic")).toEqual({ length: 16, hits: [0], offsetStep: 4 });
-    expect(rhythm("tracker")).toEqual({ length: 16, hits: [0], offsetStep: 2 });
-    expect(rhythm("sniper")).toEqual({ length: 16, hits: [4], offsetStep: 8 });
+    expect(rhythm("tracker")).toEqual({ length: 14, hits: [0], offsetStep: 2 });
+    expect(rhythm("sniper")).toEqual({ length: 32, hits: [4, 12, 20], offsetStep: 8 });
     expect(rhythm("spiral")).toEqual({ length: 2, hits: [0], offsetStep: 1 });
-    expect(rhythm("tank")).toEqual({ length: 16, hits: [0], offsetStep: 8 });
+    expect(rhythm("tank")).toEqual({ length: 64, hits: [0, 16, 32], offsetStep: 8 });
     expect(rhythm("swarm")).toEqual({ length: 20, hits: [0], offsetStep: 2 });
     expect(rhythm("snake")).toEqual({ length: 16, hits: [0], offsetStep: 2 });
     expect(rhythm("circler")).toEqual({ length: 16, hits: [0], offsetStep: 4 });
@@ -99,6 +99,25 @@ describe("enemy registry", () => {
     [2000, 1500, 800].forEach((ms, i) => expect(Math.abs(meanMs("sentinel", i + 1) - ms) / ms).toBeLessThan(0.15));
     [2500, 2000, 1500].forEach((ms, i) => expect(Math.abs(meanMs("phantom", i + 1) - ms) / ms).toBeLessThan(0.15));
     expect(hitSteps(rhythmHits("sentinel", 3))).toEqual([0, 6, 12]);
+    // Sentinel phase 1 and Phantom phase 2: a 3+4-beat cycle.
+    expect(hitSteps(rhythmHits("sentinel", 1))).toEqual([0, 12]);
+    expect(rhythmPattern("phantom", 2)).toBe(rhythmPattern("sentinel", 1));
+  });
+
+  it("keeps snipers on the backbeat and tanks on downbeats at every offset", () => {
+    const steps = (t: "sniper" | "tank") => {
+      const hits = rhythmHits(t);
+      const step = ENEMY_REGISTRY[t].rhythm.offsetStep;
+      const out = new Set<number>();
+      for (let offset = 0; offset < hits.length; offset += step) {
+        hits.forEach((h, i) => {
+          if (h) out.add((((i - offset) % hits.length) + hits.length) % 16);
+        });
+      }
+      return [...out].sort((a, b) => a - b);
+    };
+    expect(steps("sniper")).toEqual([4, 12]);
+    expect(steps("tank")).toEqual([0, 8]);
   });
 
   it("clamps phases and reuses parsed patterns", () => {
@@ -106,7 +125,7 @@ describe("enemy registry", () => {
     expect(rhythmPattern("sentinel", 9)).toBe(rhythmPattern("sentinel", 3));
     expect(rhythmPattern("basic", 3)).toBe(ENEMY_REGISTRY.basic.rhythm.pattern);
     expect(phaseCount("basic")).toBe(1);
-    expect(rhythmHits("basic")).toBe(rhythmHits("tank"));
+    expect(rhythmHits("basic")).toBe(rhythmHits("circler"));
     expect(Object.isFrozen(rhythmHits("swarm"))).toBe(true);
   });
 
@@ -123,7 +142,8 @@ describe("enemy registry", () => {
 
   it("previews one bar of each rhythm, looping short patterns", () => {
     const steps = (hits: boolean[]) => hitSteps(hits);
-    expect(steps(rhythmPreview("sniper"))).toEqual([4]);
+    expect(steps(rhythmPreview("sniper"))).toEqual([4, 12]);
+    expect(steps(rhythmPreview("tank", 1, 64))).toEqual([0, 16, 32]);
     expect(steps(rhythmPreview("spiral"))).toEqual([0, 2, 4, 6, 8, 10, 12, 14]);
     expect(steps(rhythmPreview("sentinel", 1))).toEqual([0, 12]);
     expect(steps(rhythmPreview("sentinel", 3))).toEqual([0, 6, 12]);
