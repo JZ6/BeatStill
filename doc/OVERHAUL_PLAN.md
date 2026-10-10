@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phases 0–1 complete. Phase 2 (clock + time dilation) in progress.
+- **Status:** Phases 0–2 complete. Phase 3 (music engine) in progress.
 
 ## 1. Vision
 
@@ -419,12 +419,16 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Follow-up: the snake weave frequency (2.4 Hz, ±22 px) may feel too twitchy. It gets beat-locked in Phase 4.
 
 ### Phase 2 — Clock + time dilation
-- [ ] `Conductor` (pure core + audio-clock adapter), step/bar events, multi-step crossing
-- [ ] `TimeDilation` rewrite (fix spin bug, WASD saturation, wrap; exponential smoothing; real-time angular velocity)
-- [ ] All entities consume `gameDt` from the conductor; remove per-entity `× timeScale` double-scaling risk
-- [ ] Replace gameplay `scene.time.delayedCall` with game-clock timers where they should dilate
-- [ ] Pause / relic overlay / tab-hidden → `conductor.pause()`
-- [ ] Begin splitting `GameScene` into: InputSystem, RunState, SpawnDirector, CombatSystem, HUD, ProgressionHooks, ToastQueue
+- [x] `Conductor` (`src/core/Conductor.ts`): 24 ticks/beat, tick events with `lateBy`, multi-tick crossing, pause.
+  - Decision: real dt comes from Phaser's frame delta (clamped to 100 ms).
+  - Audio is anchored to `AudioContext.currentTime` every frame (time = now + L − lateBy), so there is no drift and no separate clock source to switch between.
+- [x] `TimeDilation` (`src/core/TimeDilation.ts`): additive activity (move 0.7, fire 0.6, spin ≤ 0.35 at 8 rad/s); exponential smoothing (rise 10/s, fall 6/s); `AngularSpeedTracker`. `Ship.readInput()` fixes the spin bug and the WASD saturation.
+- [x] Entities keep `update(delta, timeScale)` with the clamped real delta and the conductor's timeScale, so nothing is pre-scaled twice. `TimeManager` was removed.
+- [x] Audited gameplay `delayedCall`/tweens: the remaining ones are UI and should stay real time. Ms-based enemy, chain and wave timers move to musical time in Phases 4–6.
+- [x] Pause, the relic overlay, tab-hidden and game over all pause the conductor (`togglePause()`).
+- [x] `GameScene` split from 819 to 364 lines. New `src/game/` modules: Hud, ToastQueue, PickupSystem, RunProgression, WaveDirector, RelicFlow, GameOverFlow, Backdrop (beat pulse), TickDispatcher. Also new: `src/core/InputMath.ts`.
+- [x] I-frames run at the player's own time rate (`ts*0.5+0.5`), which answers open question 3. Touch controls got dead zones and `px()` scaling. Portrait `UI_SCALE` is fixed.
+- [ ] Follow-up: a DevPanel theme switch doesn't update the conductor's BPM (resolved in Phase 3 when themes become palettes).
 
 ### Phase 3 — Music engine
 - [ ] `Harmony` (key, mode, progression, `chordAt`, `pickNote`) with tests
