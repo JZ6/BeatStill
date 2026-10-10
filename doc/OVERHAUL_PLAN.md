@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phases 0–2 complete. Phase 3 (music engine) in progress.
+- **Status:** Phases 0–3 complete. Phase 4 (enemies as instruments) in progress.
 
 ## 1. Vision
 
@@ -431,12 +431,23 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Follow-up: a DevPanel theme switch doesn't update the conductor's BPM (resolved in Phase 3 when themes become palettes).
 
 ### Phase 3 — Music engine
-- [ ] `Harmony` (key, mode, progression, `chordAt`, `pickNote`) with tests
-- [ ] Data-driven theme palettes; port all 6 themes (keep ids), resolving scale/chord clashes
-- [ ] `VoicePool` + master compressor/limiter; fixed-latency scheduler
-- [ ] `Drone` (real time, follows chord, crossfades with `timeScale`)
-- [ ] `MusicEngine` subscribes to GameEvents; impact sounds per §5; remove the old Transport sequences and `AudioManager` event methods
-- [ ] DevPanel audio tab rebuilt on the new engine
+- [x] `src/music/` modules: `theory.ts`, `Harmony.ts` (roman-numeral progressions, avoid-notes, `pickChordTone`), `patterns.ts` (Euclid, parse, densify)
+- [x] `palettes.ts`: 6 palettes keep their ids, and every progression stays inside its key.
+  - theremin: E aeolian, i VI VII iv
+  - guitar: A aeolian, i III iv v
+  - bell: D aeolian, i iv v III
+  - synth: C aeolian, i VI VII v
+  - ethereal: B dorian, i III VII IV
+  - piano: F ionian, I vi IV V7
+- [x] `src/audio/AudioEngine.ts`:
+  - Its own voice accounting and pools, with merge and drop stats.
+  - Master chain: compressor → limiter → volume.
+  - Reverb/delay sends and a lowpass filter driven by timeScale.
+  - Scheduling at `currentTime + when`, with latency built into the requests.
+- [x] Drone (real time, follows the chord, louder in slow-mo) and a heartbeat (lub-dub on beats 1 and 3)
+- [x] `MusicDirector` turns GameEvents and ticks into notes via `src/game/MusicSystem.ts`. All gameplay audio is routed through GameEvents. `AudioManager` and `src/sounds/` were removed. Audio unlocks on the first pointer or key press.
+- [x] DevPanel audio tab rebuilt (palette switch, role previews, stats). The menu has its own conductor, heartbeat and drone, and the EKG follows the heartbeat.
+- [ ] Follow-up (Phase 4): many notes are dropped (basic/tracker chords) while enemy fire still runs on ms timers.
 
 ### Phase 4 — Enemies as instruments
 - [ ] Single enemy registry (stats, visuals, instrument, default pattern); constructors read from it
@@ -462,6 +473,8 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Options: audio latency offset + calibration, drone volume, beat visualiser, reduce flashing, haptics
 - [ ] StartScene heartbeat/EKG driven by the conductor; theme preview phrase in Customize
 - [ ] Crash snapshot includes conductor and harmony state
+- [ ] Menu heartbeat is too slow when idle (up to ~40 s at timeScale 0.03). Give the menu conductor a higher floor.
+- [ ] Add a `theme_piano` unlock. Piano currently can't be selected, so the Virtuoso achievement (all 6 themes) is impossible.
 
 ### Phase 8 — Balance
 - [ ] Playtest passes: tempo per theme, pattern density, enemy counts, weapon subdivisions, time-dilation weights
