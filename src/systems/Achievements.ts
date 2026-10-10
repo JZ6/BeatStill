@@ -1,5 +1,9 @@
-import { getState, isWeaponMastered, addShards } from "./Unlocks";
+import { isWeaponMastered, addShards } from "./Unlocks";
 import { allThemes } from "../sounds";
+import { loadJSON, saveJSON } from "./storage";
+import { normalizeAchievementState, type AchievementState } from "./saveSchemas";
+
+export type { AchievementState };
 
 export interface AchievementDef {
   id: string;
@@ -25,38 +29,19 @@ export interface AchievementContext {
   levelJustCompleted: boolean;
 }
 
-export interface AchievementState {
-  unlockedIds: string[];
-  totalKills: number;
-  bossesDefeated: number;
-  weaponsUsed: string[];
-  themesUsed: string[];
-}
-
 const STORAGE_KEY = "beatstill_achievements";
 
-const DEFAULT_STATE: AchievementState = {
-  unlockedIds: [],
-  totalKills: 0,
-  bossesDefeated: 0,
-  weaponsUsed: [],
-  themesUsed: [],
-};
-
 let state: AchievementState;
+// Kills and pickups happen many times per second, so they only mark the state dirty;
+// flushAchievements() (or any other save) persists them.
+let dirty = false;
 
 function loadState(): AchievementState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_STATE, ...JSON.parse(raw) };
-  } catch {}
-  return { ...DEFAULT_STATE, unlockedIds: [], weaponsUsed: [], themesUsed: [] };
+  return loadJSON(STORAGE_KEY, normalizeAchievementState);
 }
 
 function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {}
+  if (saveJSON(STORAGE_KEY, state)) dirty = false;
 }
 
 state = loadState();
@@ -149,7 +134,7 @@ export const ALL_ACHIEVEMENTS: AchievementDef[] = [
     id: "collector", name: "Collector", icon: "200",
     description: "Collect 200 total pickups",
     category: "discovery", reward: 15,
-    check: () => getState().shards >= 200,
+    check: () => state.totalPickups >= 200,
   },
   {
     id: "weapon_master", name: "Weapon Master", icon: "WPN",
@@ -173,15 +158,28 @@ export function isAchievementUnlocked(id: string): boolean {
   return state.unlockedIds.includes(id);
 }
 
-let dirty = false;
-
 export function addKill() {
   state.totalKills++;
   dirty = true;
 }
 
+export function addPickup() {
+  state.totalPickups++;
+  dirty = true;
+}
+
 export function flushAchievements() {
-  if (dirty) { saveState(); dirty = false; }
+  if (dirty) saveState();
+}
+
+// Don't lose batched counters when the tab is hidden or closed.
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushAchievements();
+  });
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => flushAchievements());
 }
 
 export function addBossDefeat() {

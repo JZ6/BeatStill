@@ -1,11 +1,12 @@
 import type { GameScene } from "../scenes/GameScene";
-import { createEnemy, type Enemy } from "../objects/enemies";
+import { createEnemy } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import { Bullet } from "../objects/Bullet";
 import { Wall } from "../objects/Wall";
 import { UpgradePickup } from "../objects/Shard";
-import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, type LevelDef } from "./Levels";
+import { markLevelComplete, ALL_LEVELS, isLevelUnlocked, isCampaignLevel, type LevelDef } from "./Levels";
 import { addShards, getState } from "./Unlocks";
+import { addPickup } from "./Achievements";
 import { GAME_W, GAME_H, px } from "./GameConfig";
 
 export class LevelRunner {
@@ -59,14 +60,18 @@ export class LevelRunner {
   }
 
   private triggerComplete() {
+    if (this.isComplete) return;
     const s = this.scene;
     this.isComplete = true;
-    markLevelComplete(this.levelDef.id);
+    // Custom levels (from the designer) aren't part of the campaign.
+    const isCampaign = isCampaignLevel(this.levelDef.id);
+    if (isCampaign) markLevelComplete(this.levelDef.id);
 
     for (const p of [...s.shards.getChildren()] as UpgradePickup[]) {
       if (p.alive) {
         s.applyUpgrade(p.upgrade);
         addShards(1);
+        addPickup();
         s.particles.burst(p.x, p.y, p.pickupColor, 8, 50, 2);
         p.kill();
       }
@@ -79,7 +84,7 @@ export class LevelRunner {
     s.gameOverText.setColor("#ffaa44");
     s.gameOverText.setText("LEVEL COMPLETE");
 
-    const nextLevel = ALL_LEVELS.find((l) => l.id === this.levelDef.id + 1);
+    const nextLevel = isCampaign ? ALL_LEVELS.find((l) => l.id === this.levelDef.id + 1) : undefined;
     const hasNext = nextLevel && isLevelUnlocked(nextLevel.id);
     const btnY = GAME_H / 2 + px(60);
 
@@ -99,7 +104,7 @@ export class LevelRunner {
     }
 
     const levelsBtn = s.add
-      .text(GAME_W / 2, btnY + px(40), "CAMPAIGN", {
+      .text(GAME_W / 2, btnY + px(40), isCampaign ? "CAMPAIGN" : "EDITOR", {
         fontFamily: "monospace", fontSize: `${px(18)}px`, color: "#887766",
       })
       .setOrigin(0.5)
@@ -108,7 +113,8 @@ export class LevelRunner {
       .on("pointerover", () => levelsBtn.setColor("#e8d5b0"))
       .on("pointerout", () => levelsBtn.setColor("#887766"))
       .on("pointerdown", () => {
-        s.scene.start("LevelSelectScene");
+        if (isCampaign) s.scene.start("LevelSelectScene");
+        else s.scene.start("LevelDesignerScene", { levelDef: this.levelDef });
       });
   }
 }

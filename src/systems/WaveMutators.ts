@@ -40,6 +40,15 @@ export const ALL_MUTATORS: WaveMutatorDef[] = [
   },
 ];
 
+// Pairs of mutators that contradict each other and must never be active together.
+const EXCLUSIVE_MUTATORS: [string, string][] = [
+  ["fragile", "armored"],
+];
+
+function areExclusive(a: string, b: string): boolean {
+  return EXCLUSIVE_MUTATORS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+}
+
 export class MutatorSystem {
   private activeMutators: WaveMutatorDef[] = [];
 
@@ -60,7 +69,7 @@ export class MutatorSystem {
 
   rollMutator(): WaveMutatorDef | null {
     const available = ALL_MUTATORS.filter(
-      (m) => !this.activeMutators.some((a) => a.id === m.id),
+      (m) => !this.activeMutators.some((a) => a.id === m.id || areExclusive(a.id, m.id)),
     );
     if (available.length === 0) return null;
     return available[Math.floor(Math.random() * available.length)];

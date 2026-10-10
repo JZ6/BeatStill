@@ -1,5 +1,7 @@
 import type { EnemyType } from "../objects/enemies";
 import type { WallType } from "../objects/Wall";
+import { loadJSON, saveJSON } from "./storage";
+import { normalizeLevelProgress, type LevelProgress } from "./saveSchemas";
 
 import { level01 } from "../levels/level01";
 import { level02 } from "../levels/level02";
@@ -85,29 +87,24 @@ export const ALL_LEVELS: LevelDef[] = [
   level26, level27, level28, level29, level30,
 ];
 
-interface LevelProgress {
-  completedIds: number[];
-}
-
 const STORAGE_KEY = "beatstill_levels";
 
 let progress: LevelProgress;
 
 function loadProgress(): LevelProgress {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return { completedIds: [] };
+  return loadJSON(STORAGE_KEY, normalizeLevelProgress);
 }
 
 function saveProgress() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-  } catch {}
+  saveJSON(STORAGE_KEY, progress);
 }
 
 progress = loadProgress();
+
+/** True for built-in campaign levels; custom levels (ids ≥ 1000) are not in ALL_LEVELS. */
+export function isCampaignLevel(id: number): boolean {
+  return ALL_LEVELS.some((l) => l.id === id);
+}
 
 export function isLevelCompleted(id: number): boolean {
   return progress.completedIds.includes(id);
@@ -119,6 +116,8 @@ export function isLevelUnlocked(id: number): boolean {
 }
 
 export function markLevelComplete(id: number) {
+  // Only campaign levels count toward campaign progress.
+  if (!isCampaignLevel(id)) return;
   if (!progress.completedIds.includes(id)) {
     progress.completedIds.push(id);
     saveProgress();

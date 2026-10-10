@@ -1,8 +1,12 @@
 import Phaser from "phaser";
-import { createEnemy, type EnemyType, type Enemy } from "../objects/enemies";
+import { createEnemy, type EnemyType } from "../objects/enemies";
 import { Asteroid } from "../objects/Asteroid";
 import { GAME_W, GAME_H, px } from "./GameConfig";
 import type { GameScene } from "../scenes/GameScene";
+
+// Every enemy in a wave is spawned in a single frame, so keep the count bounded.
+// Temporary cap until wave spawning is redesigned.
+const MAX_WAVE_ENEMIES = 150;
 
 export class EndlessMode {
   private scene: GameScene;
@@ -20,7 +24,7 @@ export class EndlessMode {
     }
 
     const params = s.mutators.getActiveParams();
-    const enemyCount = Math.floor((32 + s.wave * 10) * params.enemyCountMult);
+    const enemyCount = Math.min(MAX_WAVE_ENEMIES, Math.floor((32 + s.wave * 10) * params.enemyCountMult));
     const pool = this.buildEnemyPool(s.wave);
 
     let eliteCount = 0;
@@ -71,6 +75,8 @@ export class EndlessMode {
       repeat: 2,
       onComplete: () => {
         warningText.destroy();
+        // The run may have ended (or the scene shut down) during the warning.
+        if (s.gameOver || !s.scene.isActive()) return;
         const bossType = (s.wave % 10 === 0 && s.wave >= 10) ? "phantom" as const : "sentinel" as const;
         s.enemies.add(createEnemy(s, GAME_W / 2, -40, bossType));
       },

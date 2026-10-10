@@ -1,3 +1,8 @@
+import { loadJSON, saveJSON } from "./storage";
+import { normalizeUnlockState, type UnlockState, type WeaponMasteryEntry } from "./saveSchemas";
+
+export type { UnlockState, WeaponMasteryEntry };
+
 interface UnlockRequirement {
   shards?: number;
   highScore?: number;
@@ -14,34 +19,7 @@ export interface UnlockDef {
   requirement: UnlockRequirement;
 }
 
-export interface WeaponMasteryEntry {
-  pickups: number;
-  kills: number;
-}
-
-export interface UnlockState {
-  shards: number;
-  highScore: number;
-  highWave: number;
-  bestChain: number;
-  unlockedIds: string[];
-  weaponMastery: Record<string, WeaponMasteryEntry>;
-  evolvedWeapons: string[];
-  shopPurchases: Record<string, number>;
-}
-
 const STORAGE_KEY = "beatstill_unlocks";
-
-const DEFAULT_STATE: UnlockState = {
-  shards: 0,
-  highScore: 0,
-  highWave: 0,
-  bestChain: 0,
-  unlockedIds: [],
-  weaponMastery: {},
-  evolvedWeapons: [],
-  shopPurchases: {},
-};
 
 export const ALL_UNLOCKS: UnlockDef[] = [
   // Themes
@@ -81,17 +59,11 @@ export const SHIP_COLORS: Record<string, number> = {
 let state: UnlockState;
 
 export function loadState(): UnlockState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULT_STATE, ...JSON.parse(raw) };
-  } catch {}
-  return { ...DEFAULT_STATE, unlockedIds: [] };
+  return loadJSON(STORAGE_KEY, normalizeUnlockState);
 }
 
-function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {}
+function saveState(): boolean {
+  return saveJSON(STORAGE_KEY, state);
 }
 
 state = loadState();
@@ -201,6 +173,32 @@ export function hasEvolved(weaponId: string): boolean {
 export function spendShards(cost: number): boolean {
   if (state.shards < cost) return false;
   state.shards -= cost;
+  saveState();
+  return true;
+}
+
+function toShopLevel(level: number): number | null {
+  return Number.isFinite(level) && level >= 0 ? Math.floor(level) : null;
+}
+
+/** Set a shop item's purchased level and persist it. */
+export function setShopLevel(itemId: string, level: number) {
+  const next = toShopLevel(level);
+  if (next == null) return;
+  state.shopPurchases[itemId] = next;
+  saveState();
+}
+
+/**
+ * Spend `cost` shards and record `itemId` at `level` in a single save, so the
+ * shard deduction and the purchase can't be persisted separately.
+ * Returns false (and changes nothing) if the player can't afford it.
+ */
+export function purchaseShopLevel(itemId: string, cost: number, level: number): boolean {
+  const next = toShopLevel(level);
+  if (next == null || !Number.isFinite(cost) || cost < 0 || state.shards < cost) return false;
+  state.shards -= cost;
+  state.shopPurchases[itemId] = next;
   saveState();
   return true;
 }

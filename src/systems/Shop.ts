@@ -1,5 +1,5 @@
 import type { PlayerStats } from "./Upgrades";
-import { getState, spendShards } from "./Unlocks";
+import { getState, purchaseShopLevel } from "./Unlocks";
 
 export interface ShopItemDef {
   id: string;
@@ -65,11 +65,7 @@ export function purchaseItem(itemId: string): boolean {
   const level = getShopLevel(itemId);
   if (level >= item.maxLevel) return false;
   const cost = getItemCost(item, level);
-  if (!spendShards(cost)) return false;
-  const state = getState();
-  state.shopPurchases[itemId] = level + 1;
-  localStorage.setItem("beatstill_unlocks", JSON.stringify(state));
-  return true;
+  return purchaseShopLevel(itemId, cost, level + 1);
 }
 
 export function applyShopBonuses(stats: PlayerStats) {
