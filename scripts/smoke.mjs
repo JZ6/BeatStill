@@ -5,7 +5,8 @@
 // `vite preview`, drives headless Chrome over the DevTools protocol, plays two
 // short endless runs (with a pause/resume check) and the first campaign level,
 // and fails on any uncaught exception, console error, or failed resource load,
-// or when the time scale / conductor clock / pause freeze misbehave.
+// when the time scale / conductor clock / pause freeze misbehave, or when the
+// audio engine doesn't start, schedules too few notes, or reports errors.
 // No extra dependencies: uses Node's built-in WebSocket.
 //
 // Env overrides: CHROME_PATH, SMOKE_PREVIEW_PORT, SMOKE_DEBUG_PORT.
@@ -178,6 +179,26 @@ function readGameState(cdp) {
   );
 }
 
+/** Audio engine counters (window.__BEATSTILL__.audio()) plus dropped notes per reason. */
+function readAudio(cdp) {
+  return evaluate(cdp, `({ ...window.__BEATSTILL__.audio(), drops: window.__BEATSTILL__.audioDrops() })`);
+}
+
+/** Every run must schedule enough notes and never hit an engine error. */
+const MIN_RUN_NOTES = 20;
+
+function checkAudio(label, before, after, minNotes) {
+  const notes = after.scheduled - before.scheduled;
+  log(
+    `${label} audio: started=${after.started} context=${after.contextState} palette=${after.palette} ` +
+      `scheduled=+${notes} dropped=+${after.dropped - before.dropped} merged=+${after.merged - before.merged} ` +
+      `errors=${after.errors}`,
+  );
+  if (!after.started) problems.push(`${label}: audio engine not started`);
+  if (!(notes > minNotes)) problems.push(`${label}: only ${notes} notes scheduled (want > ${minNotes})`);
+  if (after.errors > 0) problems.push(`${label}: audio engine reported ${after.errors} error(s)`);
+}
+
 const fmt = (n, digits = 2) => (typeof n === "number" ? n.toFixed(digits) : String(n));
 
 /** Holds the left button for `ms` while circling the mouse around (cx, cy). */
@@ -204,14 +225,22 @@ async function startGameScene(cdp, dataExpr, label) {
   );
 }
 
+/** Back to the menu; audio is already unlocked, so its conductor's heartbeat must sound at once. */
 async function returnToMenu(cdp) {
+  const before = await readAudio(cdp);
   await evaluate(cdp, `${GAME}.scene.getScene("GameScene").scene.start("StartScene"); true`);
   await waitFor(() => evaluate(cdp, `${GAME}.scene.isActive("StartScene")`), 10000, "return to StartScene");
   await sleep(500);
+  const after = await readAudio(cdp);
+  const tick = await evaluate(cdp, `${GAME}.scene.getScene("StartScene").menuMusic?.conductor.currentTick ?? null`);
+  log(`menu: conductorTick=${tick} scheduled=+${after.scheduled - before.scheduled}`);
+  if (typeof tick !== "number" || tick < 0) problems.push(`menu: conductor did not run (tick=${tick})`);
+  if (!(after.scheduled > before.scheduled)) problems.push("menu: no heartbeat note scheduled after returning to the menu");
 }
 
 async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   await startGameScene(cdp, `{ mode: "endless" }`, label);
+  const audioBefore = await readAudio(cdp);
 
   // Hold fire while circling the mouse: should start audio and speed time (and the clock) up.
   const cx = VIEWPORT.width / 2;
@@ -261,6 +290,7 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   }
 
   if (checkPause) await pauseCheck(cdp, label);
+  checkAudio(label, audioBefore, await readAudio(cdp), MIN_RUN_NOTES);
 }
 
 /** Pause via the ESC path freezes the conductor, scene clock and tweens; resume restarts them. */
@@ -309,10 +339,13 @@ async function playCampaignLevel(cdp) {
     label,
   );
   const before = await readGameState(cdp);
+  const audioBefore = await readAudio(cdp);
   // Aim up the hallway at the tanks.
   await holdFire(cdp, 2000, { cx: VIEWPORT.width / 2, cy: VIEWPORT.height * 0.3, rx: 120, ry: 60 });
   const after = await readGameState(cdp);
   const shot = await screenshot(cdp, `${label}-level1`);
+  // A 2 s probe of a two-tank level: fewer notes than an endless run, but some must sound.
+  checkAudio(label, audioBefore, await readAudio(cdp), 5);
 
   log(
     `${label}: levelId=${after.levelId} score=${after.score} enemies=${after.enemies} ` +
@@ -400,6 +433,13 @@ async function main() {
 
     await returnToMenu(cdp);
     await playCampaignLevel(cdp);
+
+    const audio = await readAudio(cdp);
+    log(
+      `audio totals: scheduled=${audio.scheduled} dropped=${audio.dropped} merged=${audio.merged} ` +
+        `errors=${audio.errors} drops=${JSON.stringify(audio.drops)}`,
+    );
+    if (audio.errors > 0) problems.push(`audio engine reported ${audio.errors} error(s) in total`);
 
     const crashShown = await evaluate(
       cdp,
