@@ -6,6 +6,7 @@ import { Bullet } from "../objects/Bullet";
 import { Conductor, type TickEvent } from "../core/Conductor";
 import { TimeDilation } from "../core/TimeDilation";
 import { TickDispatcher } from "../game/TickDispatcher";
+import { Backdrop } from "../game/Backdrop";
 import { AudioManager } from "../systems/AudioManager";
 import { ParticleSystem } from "../systems/Particles";
 import { theremin, allThemes } from "../sounds";
@@ -79,7 +80,7 @@ export class GameScene extends Phaser.Scene {
   shardText!: Phaser.GameObjects.Text;
   weaponText!: Phaser.GameObjects.Text;
   fpsText!: Phaser.GameObjects.Text;
-  bgGraphics!: Phaser.GameObjects.Graphics;
+  private backdrop!: Backdrop;
 
   private escKey: Phaser.Input.Keyboard.Key | null = null;
   private restartKey: Phaser.Input.Keyboard.Key | null = null;
@@ -164,9 +165,8 @@ export class GameScene extends Phaser.Scene {
     this.time.paused = false;
     this.tickDispatcher.clear();
 
-    this.bgGraphics = this.add.graphics();
-    this.bgGraphics.setDepth(-1);
-    this.drawBackground();
+    this.backdrop = new Backdrop(this);
+    this.onTick((t) => this.backdrop.onTick(t));
 
     this.chain = new ChainSystem(this);
     this.chain.init();
@@ -302,6 +302,7 @@ export class GameScene extends Phaser.Scene {
     // the conductor gets the same real delta, so world and music share one clock.
     const delta = Math.min(rawDelta, MAX_FRAME_MS);
     const realDt = delta / 1000;
+    this.backdrop.update(realDt);
     if (this.gameOver) {
       if (this.deathAnim) {
         if (this.deathAnim.update(delta)) this.deathAnim = null;
@@ -460,15 +461,6 @@ export class GameScene extends Phaser.Scene {
         fontFamily: "monospace", fontSize: `${px(12)}px`, color: "#887766",
       })
       .setDepth(100);
-  }
-
-  drawBackground() {
-    this.bgGraphics.clear();
-    this.bgGraphics.fillGradientStyle(0x0a0806, 0x0a0806, 0x12100c, 0x12100c, 1);
-    this.bgGraphics.fillRect(0, 0, GAME_W, GAME_H);
-    this.bgGraphics.lineStyle(1, 0x1a1612, 0.3);
-    for (let x = 0; x <= GAME_W; x += 64) this.bgGraphics.lineBetween(x, 0, x, GAME_H);
-    for (let y = 0; y <= GAME_H; y += 64) this.bgGraphics.lineBetween(0, y, GAME_W, y);
   }
 
   // --- Wave Spawning ---
