@@ -83,9 +83,11 @@ export class GameScene extends Phaser.Scene {
   gameOver = false;
   godMode = false;
 
+  /** The first-run tutorial while it runs (endless mode only); null otherwise. Recreated each run. */
+  tutorial: TutorialManager | null = null;
+
   private collisions!: CollisionSystem;
   private backdrop!: Backdrop;
-  private tutorial: TutorialManager | null = null;
   private frozen = false;
   private readonly tickDispatcher = new TickDispatcher();
 
