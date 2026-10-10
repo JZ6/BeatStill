@@ -2,7 +2,7 @@
 
 - **Created:** 2026-10-09
 - **Branch:** `overhaul/music-core`
-- **Status:** Phases 0–5 complete. Phase 6 (song structure) in progress.
+- **Status:** Phases 0–6 complete. Phase 7 (periphery) in progress.
 
 ## 1. Vision
 
@@ -471,10 +471,12 @@ Each phase ends playable and committed. Nothing is pushed without an explicit in
 - [ ] Follow-up (Phase 8): standard ⅛ at 100 bpm (300 ms) is slower than the old 220 ms. Shop bonuses can now exceed the old stat caps. The smoke resume check is occasionally marginal because of the fire-suppression-on-resume rule.
 
 ### Phase 6 — Song structure
-- [ ] Waves spawn on bar lines; LevelRunner pending-spawn guard; wave timer in bars
-- [ ] Endless: continuous bar-aligned spawning (README TODO); cap the simultaneous enemy count
-- [ ] Mutators as section modifiers on phrase boundaries
-- [ ] Optional `LevelDef.music` + per-wave fields; normaliser; editor UI to edit and audition them
+- [x] Level waves spawn on the next bar line once cleared, at least `bars` bars (default 1) after the last spawn. Pending-spawn guard. Completion also lands on a bar.
+- [x] Endless waves are 8-bar sections. Budget = 32 + 10·wave (cap 150), front-loaded in downbeat groups. Live cap = 30 + 2·wave (max 80), with overflow deferred. Boss: 2-bar warning, then a downbeat entrance.
+- [x] Mutators activate on 4-bar phrase boundaries, and each one modulates +2 semitones (wrapping within ±5). Double Time = tempo ×1.2 + enemy speed ×1.25.
+- [x] `LevelDef.music` {theme, bpm, key, mode, progression} + per-wave `bars`, validated. A theme override applies only if unlocked. Campaign tempo arc runs 92 → 128 bpm, with keys E/G/A/C/D/F by group of five.
+- [x] Editor SONG modal (validation feedback), per-wave bars, and a 4-bar PREVIEW.
+- [ ] Follow-up: in the DevPanel, a palette switch resets the mutator tempo/key, and "Skip Wave" does nothing in level mode. Smoke margins are thin (run2 notes, pause-resume).
 
 ### Phase 7 — Periphery
 - [ ] Tutorial rewritten for the musical mechanics (latched counters; real-time step minimum)
