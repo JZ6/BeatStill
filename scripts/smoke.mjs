@@ -4,13 +4,17 @@
 // Expects a fresh build in dist/ (`npm run smoke` builds first). Serves it with
 // `vite preview`, drives headless Chrome over the DevTools protocol, plays two
 // short endless runs (with a pause/resume check), a boss check (Sentinel and
-// Phantom phase changes on bar lines) and the first campaign level, and fails on
-// any uncaught exception, console error, or failed resource load, when the time
-// scale / conductor clock / pause freeze misbehave, when enemies don't fire on
-// the step grid, when held-fire player shots leave their weapon's grid or the
-// lead role (the player's shots) schedules no notes, or when the audio engine
-// doesn't start, schedules too few notes, or reports errors. Prints the audio
-// dropped/scheduled ratio.
+// Phantom phase changes on bar lines), a mutator check (phrase-boundary
+// activation, key change, double-time tempo), the first campaign level and a
+// level-designer song-settings round trip, and fails on any uncaught exception,
+// console error, or failed resource load, when the time scale / conductor clock /
+// pause freeze misbehave, when enemies don't fire on the step grid, when endless
+// enemy groups don't spawn on bar lines across more than one bar, when a level's
+// first wave misses its bar line or its music.bpm isn't the conductor's tempo,
+// when held-fire player shots leave their weapon's grid or the lead role (the
+// player's shots) schedules no notes, or when the audio engine doesn't start,
+// schedules too few notes, or reports errors. Prints the audio dropped/scheduled
+// ratio.
 // No extra dependencies: uses Node's built-in WebSocket.
 //
 // Env overrides: CHROME_PATH, SMOKE_PREVIEW_PORT, SMOKE_DEBUG_PORT.
@@ -398,6 +402,42 @@ async function playEndlessRun(cdp, label, { checkPause = false } = {}) {
   checkAudio(label, audioBefore, audioAfter, MIN_RUN_NOTES);
   checkEnemyFire(label, await readEnemyFire(cdp));
   checkPlayerFire(label, await readPlayerFire(cdp), audioBefore, audioAfter);
+  await checkEndlessSpawns(cdp, label);
+}
+
+/** The endless section's enemy-group spawn ticks (WaveDirector.spawnTicks) and the bar length. */
+const readSpawns = (cdp) =>
+  evaluate(cdp, `(() => { const s = ${GAME}.scene.getScene("GameScene"); return { ticks: [...s.waves.spawnTicks], ticksPerBar: s.conductor.ticksPerBar, wave: s.wave }; })()`);
+
+const distinctBars = (spawns) => new Set(spawns.ticks.map((t) => Math.floor(t / spawns.ticksPerBar))).size;
+
+/**
+ * Endless waves spawn continuously: enemy groups land on bar lines (downbeats), on more than one bar
+ * of the run. If the run so far covered only one bar line, keep shooting (god mode) until a second
+ * group arrives, then idle so the run's last notes die away before the menu.
+ */
+async function checkEndlessSpawns(cdp, label) {
+  const tag = `${label} spawns`;
+  let spawns = await readSpawns(cdp);
+  let extended = false;
+  if (distinctBars(spawns) < 2) {
+    extended = true;
+    const scene = `${GAME}.scene.getScene("GameScene")`;
+    await evaluate(cdp, `${scene}.godMode = true; true`);
+    await holdFire(cdp, 15000, {
+      cx: VIEWPORT.width / 2,
+      cy: VIEWPORT.height / 2,
+      until: async () => distinctBars(await readSpawns(cdp)) >= 2,
+    });
+    await evaluate(cdp, `${scene}.godMode = false; true`);
+    spawns = await readSpawns(cdp);
+    await sleep(2000);
+  }
+  const offBar = spawns.ticks.filter((t) => t % spawns.ticksPerBar !== 0);
+  log(`${tag}: ticks=${JSON.stringify(spawns.ticks)} ticksPerBar=${spawns.ticksPerBar} bars=${distinctBars(spawns)} extended=${extended} wave=${spawns.wave}`);
+  if (spawns.ticks.length === 0) problems.push(`${tag}: no endless enemy group spawned`);
+  if (offBar.length > 0) problems.push(`${tag}: ${offBar.length} enemy group(s) spawned off a bar line (${JSON.stringify(offBar)})`);
+  if (distinctBars(spawns) < 2) problems.push(`${tag}: enemy groups spawned on only ${distinctBars(spawns)} bar(s) (want spawning across more than one bar)`);
 }
 
 /**
@@ -462,6 +502,131 @@ async function bossCheck(cdp) {
   checkAudio(label, audioBefore, audioAfter, MIN_RUN_NOTES);
   checkEnemyFire(label, await readEnemyFire(cdp));
   checkPlayerFire(label, await readPlayerFire(cdp), audioBefore, audioAfter);
+}
+
+/**
+ * Endless mutators are section modifiers: wave 6 rolls one (forced to double_time here), it switches
+ * on at the next 4-bar phrase boundary, modulates the harmony up a whole step, and double_time
+ * raises the conductor tempo ×1.2. God mode keeps the probe alive.
+ */
+async function mutatorCheck(cdp) {
+  const label = "mutator";
+  await startGameScene(cdp, `{ mode: "endless" }`, label);
+  const scene = `${GAME}.scene.getScene("GameScene")`;
+  await evaluate(
+    cdp,
+    `(() => {
+      const s = ${scene};
+      s.godMode = true;
+      const m = s.mutators;
+      const roll = m.rollMutator.bind(m);
+      // Math.random() = 0 picks the first available mutator: double_time.
+      m.rollMutator = () => { const r = Math.random; Math.random = () => 0; try { return roll(); } finally { Math.random = r; } };
+      s.wave = 5; s.waves.clearField(); s.waves.spawnEndlessWave();
+      return true;
+    })()`,
+  );
+  const shoot = { cx: VIEWPORT.width / 2, cy: VIEWPORT.height * 0.92, rx: 250, ry: 20 };
+  const started = await holdFire(cdp, 15000, { ...shoot, until: () => evaluate(cdp, `${scene}.wave === 6`) });
+  const queued = await evaluate(
+    cdp,
+    `(() => { const s = ${scene}; return { queued: s.mutators.getQueued().map((q) => ({ id: q.mutator.id, tick: q.tick })), active: s.mutators.getActive().map((m) => m.id), bpm: s.conductor.bpm, key: s.music.keyOffset, phrase: 4 * s.conductor.ticksPerBar, waveTick: s.conductor.currentTick }; })()`,
+  );
+  const activated = await holdFire(cdp, 25000, { ...shoot, until: () => evaluate(cdp, `${scene}.mutators.getActive().length > 0`) });
+  const after = await evaluate(
+    cdp,
+    `(() => { const s = ${scene}; return { active: s.mutators.getActive().map((m) => m.id), bpm: s.conductor.bpm, baseBpm: s.music.baseBpm, key: s.music.keyOffset, keyPc: s.music.director.harmony.keyPc, homePc: s.music.director.palette.key }; })()`,
+  );
+  await evaluate(cdp, `${scene}.godMode = false; true`);
+  log(`${label}: started=${started} queued=${JSON.stringify(queued)} activated=${activated} after=${JSON.stringify(after)}`);
+  if (!started) {
+    problems.push(`${label}: wave 6 did not start`);
+    return;
+  }
+  const q = queued.queued[0];
+  if (!q || q.id !== "double_time") problems.push(`${label}: double_time was not queued (${JSON.stringify(queued.queued)})`);
+  else if (q.tick % queued.phrase !== 0) problems.push(`${label}: queued off a phrase boundary (tick=${q.tick})`);
+  if (queued.active.length > 0 && !(q && q.tick <= queued.waveTick)) problems.push(`${label}: mutator active before its phrase boundary`);
+  if (!activated) {
+    problems.push(`${label}: the mutator never switched on`);
+    return;
+  }
+  if (after.key !== 2) problems.push(`${label}: key offset ${after.key} after one activation (want 2)`);
+  if (Math.abs(after.bpm - after.baseBpm * 1.2) > 1e-6) problems.push(`${label}: tempo ${after.bpm} (want ${after.baseBpm} × 1.2)`);
+}
+
+/**
+ * Level designer song settings: open campaign level 1, edit its music in the SONG modal (with an
+ * invalid progression rejected), audition it with PREVIEW (pad and heartbeat notes, no engine
+ * errors), apply, set wave 1's bars, then play-test: the run must use the edited tempo and bars.
+ */
+async function editorCheck(cdp) {
+  const label = "editor";
+  await evaluate(
+    cdp,
+    `${GAME}.scene.getScene("StartScene").scene.start("LevelDesignerScene", { levelDef: window.__BEATSTILL__.levels.find((l) => l.id === 1) }); true`,
+  );
+  await waitFor(() => evaluate(cdp, `${GAME}.scene.isActive("LevelDesignerScene") && !!document.querySelector(".ld-top")`), 10000, "LevelDesignerScene");
+  const ed = `${GAME}.scene.getScene("LevelDesignerScene")`;
+  const loaded = await evaluate(cdp, `JSON.stringify(${ed}.music ?? null)`);
+  const button = (text, scope = "document") =>
+    `[...${scope}.querySelectorAll("button")].find((b) => b.textContent === ${JSON.stringify(text)})`;
+  await evaluate(cdp, `${button("SONG")}.click(); true`);
+  const fields = `(() => { const box = document.querySelector(".ld-modal-box"); const inputs = box.querySelectorAll("input"); const selects = box.querySelectorAll("select"); return { box, bpm: inputs[0], prog: inputs[1], theme: selects[0], key: selects[1], mode: selects[2] }; })()`;
+  const setField = (field, value, evt = "input") =>
+    `(() => { const f = ${fields}; f.${field}.value = ${JSON.stringify(value)}; f.${field}.dispatchEvent(new Event(${JSON.stringify(evt)}, { bubbles: true })); return true; })()`;
+  await evaluate(cdp, setField("prog", "I IIII"));
+  const rejected = await evaluate(cdp, `(() => { const f = ${fields}; return { applyDisabled: ${button("APPLY", "f.box")}.disabled, msg: f.box.querySelector(".ld-form-msg.error")?.textContent ?? null }; })()`);
+  await evaluate(cdp, setField("prog", "i iv VII III"));
+  await evaluate(cdp, setField("bpm", "130"));
+  await evaluate(cdp, setField("mode", "dorian", "change"));
+  const accepted = await evaluate(cdp, `(() => { const f = ${fields}; return { applyDisabled: ${button("APPLY", "f.box")}.disabled, ok: f.box.querySelector(".ld-form-msg.ok")?.textContent ?? null }; })()`);
+  const shot = await screenshot(cdp, `${label}-song`);
+
+  const audioBefore = await readAudio(cdp);
+  await evaluate(cdp, `(() => { const f = ${fields}; ${button("PREVIEW", "f.box")}.click(); return true; })()`);
+  await sleep(2500);
+  const audioMid = await readAudio(cdp);
+  const previewing = await evaluate(cdp, `!!${ed}.stopPreview`);
+  await evaluate(cdp, `(() => { const f = ${fields}; ${button("APPLY", "f.box")}.click(); return true; })()`);
+  const afterApply = await evaluate(
+    cdp,
+    `({ modal: !!document.querySelector(".ld-modal"), previewing: !!${ed}.stopPreview, music: ${ed}.music ?? null })`,
+  );
+
+  await evaluate(
+    cdp,
+    `(() => { const i = ${ed}.ui.barsInput; i.value = "4"; i.dispatchEvent(new Event("input")); i.dispatchEvent(new Event("change")); return true; })()`,
+  );
+  const bars = await evaluate(cdp, `({ bars: ${ed}.toLevelDef().waves[0].bars ?? null, tab: document.querySelector(".ld-wave-tab.active")?.textContent ?? null })`);
+  const exported = await evaluate(cdp, `JSON.parse(JSON.stringify(${ed}.toLevelDef()))`);
+
+  await evaluate(cdp, `${ed}.playTest(); true`);
+  await waitFor(() => evaluate(cdp, `${GAME}.scene.isActive("GameScene") && !!${GAME}.scene.getScene("GameScene").ship`), 10000, "play-test");
+  await sleep(300);
+  const run = await evaluate(
+    cdp,
+    `(() => { const s = ${GAME}.scene.getScene("GameScene"); return { bpm: s.conductor.bpm, mode: s.music.director.harmony.mode, bars: s.level?.levelDef.waves[0].bars ?? null, waveTicks: s.level?.waveTicks ?? null }; })()`,
+  );
+
+  const pad = (audioMid.roles?.pad ?? 0) - (audioBefore.roles?.pad ?? 0);
+  const heart = (audioMid.roles?.heart ?? 0) - (audioBefore.roles?.heart ?? 0);
+  log(
+    `${label}: loaded=${loaded} rejected=${JSON.stringify(rejected)} accepted=${JSON.stringify(accepted)} ` +
+      `preview(pad=+${pad} heart=+${heart} errors=${audioMid.errors} active=${previewing}) afterApply=${JSON.stringify(afterApply)} ` +
+      `bars=${JSON.stringify(bars)} exportedMusic=${JSON.stringify(exported.music)} run=${JSON.stringify(run)} screenshot=${shot}`,
+  );
+  if (loaded !== JSON.stringify({ bpm: 92, key: "E" })) problems.push(`${label}: level 1's music did not load (${loaded})`);
+  if (!rejected.applyDisabled || !rejected.msg) problems.push(`${label}: an invalid progression was not rejected`);
+  if (accepted.applyDisabled || !accepted.ok) problems.push(`${label}: valid song settings were not accepted`);
+  if (!(pad > 0) || !(heart > 0)) problems.push(`${label}: preview scheduled no pad/heartbeat notes (pad=+${pad}, heart=+${heart})`);
+  if (!previewing) problems.push(`${label}: preview was not running`);
+  if (afterApply.modal || afterApply.previewing) problems.push(`${label}: modal or preview still open after APPLY`);
+  const want = { bpm: 130, key: "E", mode: "dorian", progression: "i iv VII III" };
+  if (JSON.stringify(afterApply.music) !== JSON.stringify(want)) problems.push(`${label}: applied music ${JSON.stringify(afterApply.music)}`);
+  if (JSON.stringify(exported.music) !== JSON.stringify(want)) problems.push(`${label}: exported music ${JSON.stringify(exported.music)}`);
+  if (bars.bars !== 4 || bars.tab !== "W1:4") problems.push(`${label}: wave bars not set (${JSON.stringify(bars)})`);
+  if (run.bpm !== 130 || run.mode !== "dorian" || run.bars !== 4) problems.push(`${label}: play-test ignored the song settings (${JSON.stringify(run)})`);
 }
 
 /** Pause via the ESC path freezes the conductor, scene clock and tweens; resume restarts them. */
@@ -529,6 +694,18 @@ async function playCampaignLevel(cdp) {
   if (!after.active) problems.push(`${label}: GameScene is not active`);
   if (after.levelId !== 1) problems.push(`${label}: level runner missing or wrong level (levelId=${after.levelId})`);
   if (!(after.beat > before.beat)) problems.push(`${label}: conductor did not advance (${before.beat} → ${after.beat})`);
+
+  // Song structure: the first wave spawned on a bar line, and the level's tempo replaced the theme's.
+  const song = await evaluate(
+    cdp,
+    `(() => { const s = ${GAME}.scene.getScene("GameScene"); return { waveTicks: s.level ? [...s.level.waveTicks] : null, ticksPerBar: s.conductor.ticksPerBar, bpm: s.conductor.bpm, levelBpm: s.level?.levelDef.music?.bpm ?? null }; })()`,
+  );
+  log(`${label} song: waveTicks=${JSON.stringify(song.waveTicks)} ticksPerBar=${song.ticksPerBar} bpm=${song.bpm} levelBpm=${song.levelBpm}`);
+  const first = song.waveTicks?.[0];
+  if (!Number.isInteger(first)) problems.push(`${label}: the first wave never spawned (waveTicks=${JSON.stringify(song.waveTicks)})`);
+  else if (first % song.ticksPerBar !== 0) problems.push(`${label}: the first wave spawned off a bar line (tick=${first})`);
+  if (typeof song.levelBpm !== "number") problems.push(`${label}: level 1 has no music.bpm`);
+  else if (song.bpm !== song.levelBpm) problems.push(`${label}: conductor bpm ${song.bpm} ≠ the level's music.bpm ${song.levelBpm}`);
 }
 
 async function main() {
@@ -609,7 +786,13 @@ async function main() {
     await bossCheck(cdp);
 
     await returnToMenu(cdp);
+    await mutatorCheck(cdp);
+
+    await returnToMenu(cdp);
     await playCampaignLevel(cdp);
+
+    await returnToMenu(cdp);
+    await editorCheck(cdp);
 
     const audio = await readAudio(cdp);
     log(
