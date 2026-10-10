@@ -29,7 +29,7 @@ import { PickupSystem } from "../game/PickupSystem";
 import { RelicFlow } from "../game/RelicFlow";
 import { RunProgression } from "../game/RunProgression";
 import { FREEZE_THRESHOLD } from "../game/RunStats";
-import { TickDispatcher } from "../game/TickDispatcher";
+import { TickDispatcher, type StepHandler } from "../game/TickDispatcher";
 import { ToastQueue } from "../game/ToastQueue";
 import { WaveDirector } from "../game/WaveDirector";
 
@@ -103,6 +103,11 @@ export class GameScene extends Phaser.Scene {
     return this.tickDispatcher.subscribe(handler);
   }
 
+  /** Like onTick, but only for 16th-note steps; `step` = tick / TICKS_PER_STEP. */
+  onStep(handler: StepHandler): () => void {
+    return this.tickDispatcher.subscribeSteps(handler);
+  }
+
   create(data?: { mode?: string; levelDef?: LevelDef }) {
     // Any mode other than "level" (including "endless" or no data) runs endless mode.
     const isLevel = data?.mode === "level" && !!data.levelDef;
@@ -144,6 +149,8 @@ export class GameScene extends Phaser.Scene {
     this.asteroids = this.add.group();
     this.shards = this.add.group();
     this.walls = this.add.group();
+    // Enemies fire on the grid: every step reaches every live enemy, in order.
+    this.onStep((step, t) => this.stepEnemies(step, t));
 
     this.progression = new RunProgression(this);
     this.pickups = new PickupSystem(this);
@@ -253,6 +260,13 @@ export class GameScene extends Phaser.Scene {
     this.music.update(ts);
 
     this.hud.update(rawDelta, this.stats.weaponId);
+  }
+
+  /** A snapshot: enemies spawned during the step (summons, decoys) start on the next one. */
+  private stepEnemies(step: number, t: TickEvent) {
+    for (const enemy of [...this.enemies.getChildren()] as Enemy[]) {
+      if (enemy.active) enemy.onStep(step, t, this);
+    }
   }
 
   private updateBullets(delta: number, ts: number, enemyArr: Enemy[]) {

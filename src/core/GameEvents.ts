@@ -11,7 +11,21 @@ export type AsteroidSize = "large" | "medium" | "small";
  */
 export interface GameEventMap {
   playerFired: { weaponId: string; x: number; y: number; angle: number; bulletCount: number };
-  enemyFired: { enemyType: EnemyType; x: number; y: number; bulletCount: number; elite: boolean };
+  enemyFired: {
+    enemyType: EnemyType;
+    x: number;
+    y: number;
+    bulletCount: number;
+    elite: boolean;
+    /** Absolute conductor tick of the step the volley fired on (sent together with lateBy). */
+    tick?: number;
+    /** Real seconds between that tick and the end of the frame that emitted the event (TickEvent.lateBy). */
+    lateBy?: number;
+    /** Per-instance volley counter (0, 1, 2, …), e.g. to walk an arpeggio. */
+    index?: number;
+    /** 0..1 pitch suggestion from the enemy's motion (the snake's weave). */
+    pitchHint?: number;
+  };
   enemyHit: { enemyType: EnemyType; x: number; y: number; damage: number; hpLeft: number; maxHp: number };
   enemyKilled: {
     enemyType: EnemyType;

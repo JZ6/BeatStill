@@ -6,7 +6,7 @@ export class SpiralEnemy extends Enemy {
   private spiralAngle = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "spiral", 300);
+    super(scene, x, y, "spiral");
     this.draw(this.color);
   }
 

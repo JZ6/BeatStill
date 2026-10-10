@@ -5,7 +5,7 @@ import type { GameScene } from "../../scenes/GameScene";
 
 export class SwarmEnemy extends Enemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "swarm", 3200);
+    super(scene, x, y, "swarm");
     this.draw(this.color);
   }
 

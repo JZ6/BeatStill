@@ -1,0 +1,110 @@
+import { describe, expect, it } from "vitest";
+import { parsePattern } from "../../music/patterns";
+import { EnemyRhythm, SPAWN_GRACE_STEPS, densityDoublings, pickOffset } from "./rhythm";
+
+const hits = (text: string) => parsePattern(text).hits;
+
+/** Steps in [from, to) on which the rhythm fires; `blocked(step)` makes canFire false. */
+function fireSteps(r: EnemyRhythm, from: number, to: number, blocked: (step: number) => boolean = () => false): number[] {
+  const out: number[] = [];
+  for (let s = from; s < to; s++) if (r.onStep(s, !blocked(s))) out.push(s);
+  return out;
+}
+
+describe("pickOffset", () => {
+  it("returns multiples of offsetStep within the pattern", () => {
+    const seen = new Set<number>();
+    for (let k = 0; k < 8; k++) seen.add(pickOffset(16, 4, () => k));
+    expect([...seen].sort((a, b) => a - b)).toEqual([0, 4, 8, 12]);
+    expect([0, 1].map((k) => pickOffset(16, 8, () => k))).toEqual([0, 8]);
+    expect([0, 1].map((k) => pickOffset(2, 1, () => k))).toEqual([0, 1]);
+  });
+
+  it("asks for exactly the number of distinct offsets", () => {
+    const asked: number[] = [];
+    const ask = (n: number) => {
+      asked.push(n);
+      return 0;
+    };
+    pickOffset(16, 4, ask);
+    pickOffset(20, 2, ask);
+    pickOffset(12, 8, ask); // 0, 8, 4
+    expect(asked).toEqual([4, 10, 3]);
+  });
+
+  it("is 0 for offsetStep 0, empty patterns and clamps bad random values", () => {
+    expect(pickOffset(16, 0, () => 3)).toBe(0);
+    expect(pickOffset(0, 4, () => 3)).toBe(0);
+    expect(pickOffset(16, 4, () => 99)).toBe(12);
+    expect(pickOffset(16, 4, () => -5)).toBe(0);
+  });
+});
+
+describe("densityDoublings", () => {
+  it("maps density factors to doublings", () => {
+    expect([1, 2, 4, 0.5, 0, Number.NaN].map(densityDoublings)).toEqual([0, 1, 2, 0, 0, 0]);
+  });
+});
+
+describe("EnemyRhythm", () => {
+  it("fires on pattern hits shifted by the offset", () => {
+    const r = new EnemyRhythm(hits("x... .... .... ...."), 4);
+    // Offset 4: pattern index 0 falls on steps 12, 28, 44 …
+    expect(fireSteps(r, 0, 48)).toEqual([12, 28, 44]);
+    expect(r.phaseOffset).toBe(4);
+  });
+
+  it("puts snipers on the backbeat", () => {
+    const pattern = hits(".... x... .... ....");
+    expect(fireSteps(new EnemyRhythm(pattern, 0), 0, 32)).toEqual([4, 20]);
+    expect(fireSteps(new EnemyRhythm(pattern, 8), 0, 32)).toEqual([12, 28]);
+  });
+
+  it("skips hits during the spawn grace, counted from the first step seen", () => {
+    const r = new EnemyRhythm(hits("x."), 0);
+    expect(SPAWN_GRACE_STEPS).toBe(4);
+    expect(fireSteps(r, 101, 110)).toEqual([106, 108]);
+  });
+
+  it("holds a shot due while blocked and fires it on the next free step", () => {
+    const r = new EnemyRhythm(hits("x... .... .... ...."), 0);
+    const blocked = (s: number) => s >= 16 && s < 19;
+    expect(fireSteps(r, 0, 40, blocked)).toEqual([19, 32]);
+  });
+
+  it("holds at most one shot, and a held shot merges with a hit", () => {
+    const r = new EnemyRhythm(hits("x."), 0);
+    expect(fireSteps(r, 0, 20, (s) => s >= 4 && s < 12)).toEqual([12, 14, 16, 18]);
+    expect(r.holding).toBe(false);
+  });
+
+  it("never fires with an empty pattern", () => {
+    expect(fireSteps(new EnemyRhythm([], 3), 0, 64)).toEqual([]);
+  });
+
+  it("doubles density at the same length and can restore it", () => {
+    const r = new EnemyRhythm(hits("x... .... .... ...."), 0);
+    r.setDensity(1);
+    expect(r.pattern).toHaveLength(16);
+    expect(fireSteps(r, 0, 32)).toEqual([8, 16, 24]);
+    r.setDensity(0);
+    expect(fireSteps(r, 32, 64)).toEqual([32, 48]);
+  });
+
+  it("anchors a new pattern at a step and keeps the density", () => {
+    const r = new EnemyRhythm(hits("x... .... .... ...."), 0);
+    r.setDensity(1);
+    r.setPattern(hits("x... .... ...."), 32); // a 12-step pattern starting on bar 2
+    expect(r.phaseOffset).toBe(4);
+    expect(r.hitsOn(32)).toBe(true);
+    expect(fireSteps(r, 4, 56)).toEqual([8, 14, 20, 26, 32, 38, 44, 50]);
+  });
+
+  it("keeps the offset (mod length) when a pattern changes without an anchor", () => {
+    const r = new EnemyRhythm(hits("x... .... .... ...."), 12);
+    r.setPattern(hits("x... ...."));
+    expect(r.phaseOffset).toBe(4);
+    r.setPattern([]);
+    expect(r.phaseOffset).toBe(0);
+  });
+});

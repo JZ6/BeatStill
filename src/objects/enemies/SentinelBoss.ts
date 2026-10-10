@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { rhythmHits } from "./registry";
 import { SwarmEnemy } from "./SwarmEnemy";
 import { TrackerEnemy } from "./TrackerEnemy";
 import { radial, aimed, spiral } from "../BulletPattern";
@@ -17,7 +18,7 @@ export class SentinelBoss extends Enemy {
   private phaseTimer = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "sentinel", 2000);
+    super(scene, x, y, "sentinel");
     this.draw(this.color);
   }
 
@@ -161,8 +162,7 @@ export class SentinelBoss extends Enemy {
     this.phase = phase;
     this.phaseTransition = true;
     this.phaseTimer = 1000;
-    this.fireRate = phase === 2 ? 1500 : 800;
-    this.fireCooldown = Math.min(this.fireCooldown, this.fireRate);
+    this.rhythm.setPattern(rhythmHits(this.enemyType, phase));
     this.minionTimer = MINION_FIRST_DELAY;
     this.draw(0xffffff);
     this.emitGameEvent("bossPhaseChanged", { bossType: this.enemyType, phase });

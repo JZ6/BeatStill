@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import { PhantomDecoy } from "./PhantomDecoy";
+import { rhythmHits } from "./registry";
 import { aimed, radial, spiral } from "../BulletPattern";
 import type { BulletConfig } from "../BulletPattern";
 import type { GameScene } from "../../scenes/GameScene";
@@ -26,7 +27,7 @@ export class PhantomBoss extends Enemy {
   private readonly decoys = new Set<PhantomDecoy>();
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "phantom", 2500);
+    super(scene, x, y, "phantom");
     this.draw(this.color);
   }
 
@@ -226,9 +227,7 @@ export class PhantomBoss extends Enemy {
 
   private enterPhase(phase: number) {
     this.phase = phase;
-    this.fireRate = phase === 3 ? 1500 : 2000;
-    // Don't carry a longer phase-1/2 countdown into a faster phase.
-    this.fireCooldown = Math.min(this.fireCooldown, this.fireRate);
+    this.rhythm.setPattern(rhythmHits(this.enemyType, phase));
     this.teleportTimer = Math.min(this.teleportTimer, TELEPORT_INTERVALS[phase] ?? 2000);
     this.emitGameEvent("bossPhaseChanged", { bossType: this.enemyType, phase });
   }

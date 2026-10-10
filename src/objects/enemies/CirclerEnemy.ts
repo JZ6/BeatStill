@@ -12,7 +12,7 @@ export class CirclerEnemy extends Enemy {
   private driftAngle: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "circler", 2200);
+    super(scene, x, y, "circler");
     this.driftAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     this.draw(this.color);
   }

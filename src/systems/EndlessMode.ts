@@ -34,7 +34,7 @@ export class EndlessMode {
       const enemy = createEnemy(s, x, y, type);
 
       if (params.enemySpeedMult !== 1) enemy.speed *= params.enemySpeedMult;
-      if (params.enemyFireRateMult !== 1) enemy.fireRate *= params.enemyFireRateMult;
+      if (params.enemyFireRateMult > 0 && params.enemyFireRateMult < 1) enemy.setRhythmDensity(1 / params.enemyFireRateMult);
       if (params.enemyHpMult === 0) { enemy.hp = 1; enemy.maxHp = 1; }
       else if (params.enemyHpMult !== 1) {
         enemy.hp = Math.ceil(enemy.hp * params.enemyHpMult);

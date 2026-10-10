@@ -8,7 +8,7 @@ export class PhantomDecoy extends Enemy {
   private owner: PhantomBoss | null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, owner: PhantomBoss | null = null) {
-    super(scene, x, y, "phantom_decoy", 99999);
+    super(scene, x, y, "phantom_decoy");
     this.owner = owner;
     this.draw(this.color);
   }

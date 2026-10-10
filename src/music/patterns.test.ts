@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { densify, euclid, halve, parsePattern, patternAt, patternToString, rotate } from "./patterns";
+import { densify, doubleDensity, euclid, halve, parsePattern, patternAt, patternToString, rotate } from "./patterns";
 
 const str = (hits: readonly boolean[]) => patternToString(hits);
 const hitsOf = (text: string) => parsePattern(text).hits;
@@ -183,6 +183,36 @@ describe("densify", () => {
   it("handles empty patterns and patterns without hits", () => {
     expect(densify([])).toEqual([]);
     expect(densify(hitsOf("...."))).toEqual(new Array(8).fill(false));
+  });
+});
+
+describe("doubleDensity", () => {
+  it("doubles the hits at the same length and resolution", () => {
+    expect(str(doubleDensity(hitsOf("x...")))).toBe("x.x.");
+    expect(str(doubleDensity(hitsOf("x.")))).toBe("xx");
+    expect(str(doubleDensity(hitsOf("x...............")))).toBe("x.......x.......");
+    expect(str(doubleDensity(hitsOf("....x...........")))).toBe("....x.......x...");
+    expect(str(doubleDensity(hitsOf("x.....x.....x...")))).toBe("x..x..x..x..x.x.");
+    expect(str(doubleDensity(hitsOf("x..................."))).indexOf("x", 1)).toBe(10);
+  });
+
+  it("keeps every original hit and saturates adjacent hits", () => {
+    for (const k of [1, 2, 3, 5]) {
+      const src = euclid(k, 16, 1);
+      const d = doubleDensity(src);
+      expect(d).toHaveLength(16);
+      expect(d.filter(Boolean)).toHaveLength(2 * k);
+      src.forEach((h, i) => {
+        if (h) expect(d[i]).toBe(true);
+      });
+    }
+    expect(str(doubleDensity(hitsOf("xx..")))).toBe("xxx.");
+    expect(str(doubleDensity(hitsOf("xxxx")))).toBe("xxxx");
+  });
+
+  it("handles empty patterns and patterns without hits", () => {
+    expect(doubleDensity([])).toEqual([]);
+    expect(doubleDensity(hitsOf("...."))).toEqual(new Array(4).fill(false));
   });
 });
 

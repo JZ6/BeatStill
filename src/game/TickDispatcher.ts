@@ -1,6 +1,8 @@
-import type { TickEvent } from "../core/Conductor";
+import { TICKS_PER_STEP, type TickEvent } from "../core/Conductor";
 
 export type TickHandler = (tick: TickEvent) => void;
+/** `step` is the absolute 16th-note index: tick / TICKS_PER_STEP. */
+export type StepHandler = (step: number, tick: TickEvent) => void;
 
 interface Subscription {
   handler: TickHandler;
@@ -20,6 +22,13 @@ export class TickDispatcher {
     return () => {
       this.subs.delete(sub);
     };
+  }
+
+  /** Subscribes to 16th-note steps only (ticks with isStep). Returns an unsubscribe function. */
+  subscribeSteps(handler: StepHandler): () => void {
+    return this.subscribe((t) => {
+      if (t.isStep) handler(t.tick / TICKS_PER_STEP, t);
+    });
   }
 
   /**

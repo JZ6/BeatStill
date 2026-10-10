@@ -4,7 +4,7 @@ import type { BulletConfig } from "../BulletPattern";
 
 export class TankEnemy extends Enemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "tank", 2800);
+    super(scene, x, y, "tank");
     this.draw(this.color);
   }
 

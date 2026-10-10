@@ -110,6 +110,16 @@ export function densify(hits: readonly boolean[]): boolean[] {
 }
 
 /**
+ * Double density at the same resolution and length: densify(), then fold each pair of half-steps
+ * back into one step (a step hits if either half does), e.g. x... → x.x., x. → xx,
+ * x.....x.....x... → x..x..x..x..x.x. Hits one step apart already saturate.
+ */
+export function doubleDensity(hits: readonly boolean[]): boolean[] {
+  const d = densify(hits);
+  return hits.map((_, i) => d[2 * i] || d[2 * i + 1]);
+}
+
+/**
  * Half density, the inverse of densify where possible: keeps every other hit and maps step i
  * to floor(i/2), giving a pattern of length ceil(n/2). If either alternation of hits is an exact
  * densify() preimage it is returned (first-hit alternation preferred); otherwise the alternation

@@ -68,6 +68,24 @@ describe("TickDispatcher", () => {
     expect(late).toEqual([4, 5]);
   });
 
+  it("subscribeSteps delivers only 16th-note steps, numbered tick / 6", () => {
+    const d = new TickDispatcher();
+    const steps: [number, number][] = [];
+    const off = d.subscribeSteps((step, t) => steps.push([step, t.tick]));
+    const ticks = ticksFor(1);
+    d.dispatch(ticks);
+    expect(steps).toEqual([
+      [0, 0],
+      [1, 6],
+      [2, 12],
+      [3, 18],
+      [4, 24],
+    ]);
+    off();
+    d.dispatch(ticks);
+    expect(steps).toHaveLength(5);
+  });
+
   it("clear() removes all subscribers", () => {
     const d = new TickDispatcher();
     let calls = 0;

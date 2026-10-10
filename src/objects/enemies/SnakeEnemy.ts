@@ -22,7 +22,7 @@ export class SnakeEnemy extends Enemy {
   private offsetY = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, "snake", 2400);
+    super(scene, x, y, "snake");
     this.draw(this.color);
   }
 
