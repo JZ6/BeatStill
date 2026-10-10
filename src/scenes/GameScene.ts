@@ -17,7 +17,7 @@ import { UpgradePickup } from "../objects/Shard";
 import { addShards, checkNewUnlocks, updateHighScore, updateHighWave, updateBestChain, addWeaponPickup, addWeaponKill, getState } from "../systems/Unlocks";
 import { type LevelDef } from "../systems/Levels";
 import { Wall } from "../objects/Wall";
-import { checkAchievements, addBossDefeat, recordWeaponUsed, recordThemeUsed, flushAchievements, type AchievementContext } from "../systems/Achievements";
+import { checkAchievements, addBossDefeat, addPickup, recordWeaponUsed, recordThemeUsed, flushAchievements, type AchievementContext } from "../systems/Achievements";
 import type { EnemyType } from "../objects/enemies";
 import { EndlessMode } from "../systems/EndlessMode";
 import { ChainSystem, MAGNET_SPEEDS } from "../systems/ChainSystem";
@@ -83,28 +83,40 @@ export class GameScene extends Phaser.Scene {
   private toastActive = false;
   private relicOverlay: HTMLDivElement | null = null;
   relicSelectActive = false;
+  private pendingRelicOffers = 0;
   private relicHudText!: Phaser.GameObjects.Text;
   private runDamageTaken = 0;
   bossFightDamageTaken = 0;
   private freezeTime = 0;
   private fpsTimer = 0;
+  private fpsFrames = 0;
   private deathAnim: DeathAnimation | null = null;
   private deathOverlay: Phaser.GameObjects.Graphics | null = null;
   private gameOverReady = false;
+  private frozen = false;
 
   constructor() {
     super("GameScene");
   }
 
   create(data?: { mode?: string; levelDef?: LevelDef }) {
+    // Any mode other than "level" (including "endless" or no data) runs endless mode.
     const isLevel = data?.mode === "level" && !!data.levelDef;
     this.level = isLevel ? new LevelRunner(this, data!.levelDef!) : null;
+
+    // Phaser reuses this instance on restart, so reset every per-run field.
+    // audioManager/audioStarted intentionally persist across restarts.
     this.score = 0;
     this.wave = 0;
+    this.waveTimer = 0;
+    this.waveDelay = 1500;
     this.gameOver = false;
+    this.godMode = false;
+    this.bossActive = false;
     this.toastQueue = [];
     this.toastActive = false;
     this.fpsTimer = 0;
+    this.fpsFrames = 0;
     this.tutorial = null;
     this.runKills = 0;
     this.runDamageTaken = 0;
@@ -113,9 +125,19 @@ export class GameScene extends Phaser.Scene {
     this.relics = new RelicSystem();
     this.mutators = new MutatorSystem();
     this.relicSelectActive = false;
+    this.pendingRelicOffers = 0;
+    this.relicOverlay?.remove();
+    this.relicOverlay = null;
     this.deathAnim = null;
     this.deathOverlay = null;
     this.gameOverReady = false;
+    this.escKey = null;
+    this.restartKey = null;
+    this.pauseBtn = null;
+    this.menuBtn = null;
+    // Scene Clock.paused is not reset by Phaser on shutdown/start (tweens and physics are).
+    this.frozen = false;
+    this.time.paused = false;
 
     this.bgGraphics = this.add.graphics();
     this.bgGraphics.setDepth(-1);
@@ -151,6 +173,7 @@ export class GameScene extends Phaser.Scene {
       this.audioManager = new AudioManager();
     } else {
       this.audioManager.loadTheme(selectedTheme);
+      this.audioManager.setVolume(options.masterVolume / 100);
     }
 
     if (isMobile()) {
@@ -161,29 +184,49 @@ export class GameScene extends Phaser.Scene {
 
     this.createHUD();
 
-    this.pauseMenu = new PauseMenu(this, () => this.goToMenu());
+    this.pauseMenu = new PauseMenu(this, () => this.goToMenu(), {
+      onOpen: () => this.syncFrozen(),
+      onClose: () => {
+        this.syncFrozen();
+        this.ship.suppressFireUntilRelease();
+      },
+    });
     this.pauseMenu.create();
 
     const kb = this.input.keyboard;
     if (kb) {
       this.restartKey = kb.addKey("R");
-      this.escKey = kb.addKey("ESC");
-      this.escKey.on("down", () => {
-        if (!this.gameOver) this.pauseMenu.toggle();
-      });
+      const escKey = kb.addKey("ESC");
+      this.escKey = escKey;
+      const onEsc = () => {
+        if (!this.gameOver && !this.relicSelectActive) this.pauseMenu.toggle();
+      };
+      escKey.on("down", onEsc);
+      // KeyboardPlugin destroys its Keys on shutdown in Phaser 3.90; remove explicitly anyway
+      // so a restart can never stack a second ESC listener.
+      this.events.once("shutdown", () => escKey.off("down", onEsc));
     }
 
     if (isMobile()) {
       this.pauseBtn = this.add
         .text(GAME_W - px(16), px(16), "❚❚", { fontFamily: "monospace", fontSize: `${px(24)}px`, color: "#887766" })
         .setOrigin(1, 0)
-        .setDepth(150)
+        // Above the pause dim overlay (depth 200) so it can still be tapped to resume.
+        .setDepth(202)
         .setInteractive({ useHandCursor: true })
-        .on("pointerdown", (p: Phaser.Input.Pointer) => {
-          p.event.stopPropagation();
-          if (!this.gameOver) this.pauseMenu.toggle();
+        .on("pointerdown", (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+          event.stopPropagation();
+          if (!this.gameOver && !this.relicSelectActive) this.pauseMenu.toggle();
         });
     }
+
+    // Auto-pause when the tab is hidden.
+    const onHidden = () => {
+      if (this.gameOver || this.pauseMenu.isActive || this.relicSelectActive || this.level?.isComplete) return;
+      this.pauseMenu.open();
+    };
+    this.game.events.on(Phaser.Core.Events.HIDDEN, onHidden);
+    this.events.once("shutdown", () => this.game.events.off(Phaser.Core.Events.HIDDEN, onHidden));
 
     this.input.on("pointerdown", () => {
       if (!this.audioStarted) {
@@ -206,12 +249,14 @@ export class GameScene extends Phaser.Scene {
       this.pauseMenu.cleanup();
       this.relicOverlay?.remove();
       this.relicOverlay = null;
+      this.relicSelectActive = false;
       this.deathAnim?.stop();
       this.deathAnim = null;
       this.deathOverlay = null;
+      this.frozen = false;
+      this.time.paused = false;
     });
 
-    this.waveTimer = 0;
     if (this.level) {
       this.waveText.setText(this.level.levelDef.name.toUpperCase());
       this.level.spawnWave(0);
@@ -246,12 +291,15 @@ export class GameScene extends Phaser.Scene {
 
     if (this.tutorial?.isActive) this.tutorial.update(delta);
 
-    const enemyArr = this.enemies.getChildren() as Enemy[];
-    for (const enemy of enemyArr) enemy.update(delta, ts, this);
+    // Copy: enemies can be destroyed or spawned (splits, decoys, summons) while iterating.
+    const enemyArr = [...this.enemies.getChildren()] as Enemy[];
+    for (const enemy of enemyArr) {
+      if (enemy.active) enemy.update(delta, ts, this);
+    }
 
     for (const a of [...this.asteroids.getChildren()] as Asteroid[]) a.update(delta, ts);
 
-    this.updateBullets(delta, ts, enemyArr);
+    this.updateBullets(delta, ts, [...this.enemies.getChildren()] as Enemy[]);
 
     this.collisions.checkAll();
     this.collectPickups();
@@ -260,7 +308,7 @@ export class GameScene extends Phaser.Scene {
     this.chain.update(delta, ts);
 
     this.waveTimer += delta * ts;
-    if (enemyArr.length === 0 && this.waveTimer > this.waveDelay && !this.level?.isComplete) {
+    if (this.enemies.getLength() === 0 && this.waveTimer > this.waveDelay && !this.level?.isComplete) {
       if (this.level) {
         this.level.advance();
       } else {
@@ -271,10 +319,15 @@ export class GameScene extends Phaser.Scene {
     if (this.audioStarted) this.audioManager.updateTimeScale(ts);
 
     this.fpsTimer += delta;
+    this.fpsFrames++;
     if (this.fpsTimer > 500) {
+      // Measured from scene updates: with fps.limit set, loop.actualFps counts every RAF tick
+      // (TimeStep.stepLimitFPS), so it would show the display rate instead of the capped rate.
+      const fps = (this.fpsFrames * 1000) / this.fpsTimer;
       this.fpsTimer = 0;
+      this.fpsFrames = 0;
       if (options.showFps) {
-        this.fpsText.setText(`FPS: ${Math.round(this.game.loop.actualFps)}`);
+        this.fpsText.setText(`FPS: ${Math.round(fps)}`);
         this.fpsText.setVisible(true);
       } else {
         this.fpsText.setVisible(false);
@@ -465,16 +518,49 @@ export class GameScene extends Phaser.Scene {
   // --- Relics ---
 
   offerRelicChoice() {
+    if (this.relicSelectActive) {
+      // One overlay at a time (e.g. boss + elite killed in the same frame): offer the next
+      // choice after this one is picked instead of stacking overlays.
+      this.pendingRelicOffers++;
+      return;
+    }
     const choices = this.relics.pickChoices(3);
+    // The overlay has no close path, so opening it with nothing to pick would softlock.
     if (choices.length === 0) return;
     this.relicSelectActive = true;
+    this.syncFrozen();
     const overlay = createRelicSelectOverlay(choices, (relic) => {
       this.relicOverlay = null;
       this.relicSelectActive = false;
+      this.syncFrozen();
+      this.ship.suppressFireUntilRelease();
       this.applyRelic(relic);
+      if (this.pendingRelicOffers > 0) {
+        this.pendingRelicOffers--;
+        this.offerRelicChoice();
+      }
     });
     this.relicOverlay = overlay;
     document.body.appendChild(overlay);
+  }
+
+  /** Freezes or resumes scene tweens, timers and arcade physics. */
+  setFrozen(frozen: boolean) {
+    if (this.frozen === frozen) return;
+    this.frozen = frozen;
+    if (frozen) this.tweens.pauseAll();
+    else this.tweens.resumeAll();
+    this.time.paused = frozen;
+    const world = this.physics?.world;
+    if (world) {
+      if (frozen) world.pause();
+      else world.resume();
+    }
+  }
+
+  /** The scene stays frozen while either the pause menu or the relic picker is open. */
+  private syncFrozen() {
+    this.setFrozen(this.pauseMenu.isActive || this.relicSelectActive);
   }
 
   private applyRelic(relic: RelicDef) {
@@ -511,6 +597,7 @@ export class GameScene extends Phaser.Scene {
           recordWeaponUsed(wId);
         }
         addShards(1);
+        addPickup();
         this.particles.burst(p.x, p.y, p.pickupColor, 10, 50, 2);
         p.kill();
         this.shardText.setText(`◆ ${getState().shards}`);
@@ -620,7 +707,7 @@ export class GameScene extends Phaser.Scene {
     updateBestChain(this.chain.bestChain);
     this.processUnlocks();
     this.processAchievements(false, false);
-    this.audioManager.onPlayerDeath();
+    if (this.audioStarted) this.audioManager.onPlayerDeath();
 
     this.deathAnim = new DeathAnimation(this, this.ship.x, this.ship.y, this.ship.shipColor, () => {
       this.showGameOverScreen();
@@ -688,7 +775,7 @@ export class GameScene extends Phaser.Scene {
     if (this.level) {
       this.scene.restart({ mode: "level", levelDef: this.level.levelDef });
     } else {
-      this.scene.restart();
+      this.scene.restart({ mode: "endless" });
     }
   }
 

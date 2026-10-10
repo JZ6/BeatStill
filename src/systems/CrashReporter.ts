@@ -10,6 +10,8 @@ interface CrashReport {
 
 const MAX_REPORTS = 20;
 const reports: CrashReport[] = [];
+/** Every crash this session; `reports` only keeps the latest MAX_REPORTS. */
+let totalCrashes = 0;
 
 let getScene: (() => GameScene | null) | null = null;
 let overlayEl: HTMLDivElement | null = null;
@@ -56,6 +58,17 @@ function snapshotGameState(): Record<string, unknown> | null {
   };
 }
 
+/** The game may be in a broken state while crashing, so a failing snapshot must not lose the report. */
+function safeSnapshotGameState(): Record<string, unknown> | null {
+  try {
+    return snapshotGameState();
+  } catch (err) {
+    return {
+      snapshotError: err instanceof Error ? `${err.message}\n${err.stack ?? ""}`.trim() : String(err),
+    };
+  }
+}
+
 function getEnvironment(): Record<string, unknown> {
   return {
     userAgent: navigator.userAgent,
@@ -97,10 +110,11 @@ function recordCrash(error: string, stack: string) {
     timestamp: new Date().toISOString(),
     error,
     stack,
-    gameState: snapshotGameState(),
+    gameState: safeSnapshotGameState(),
     environment: getEnvironment(),
   };
 
+  totalCrashes++;
   reports.push(report);
   if (reports.length > MAX_REPORTS) reports.shift();
 
@@ -190,8 +204,9 @@ function showOverlay(report: CrashReport) {
 
   (overlayEl.querySelector("#crash-error") as HTMLDivElement).textContent = report.error;
   (overlayEl.querySelector("#crash-details") as HTMLPreElement).textContent = formatReport(report);
+  const kept = totalCrashes > reports.length ? ` (latest ${reports.length} kept)` : "";
   (overlayEl.querySelector("#crash-count") as HTMLDivElement).textContent =
-    `${reports.length} crash${reports.length !== 1 ? "es" : ""} this session`;
+    `${totalCrashes} crash${totalCrashes !== 1 ? "es" : ""} this session${kept}`;
 
   overlayEl.style.display = "flex";
 }
@@ -227,7 +242,15 @@ export function getCrashReports(): CrashReport[] {
   return [...reports];
 }
 
+/** Total crashes this session, including ones no longer kept in getCrashReports(). */
+export function getTotalCrashCount(): number {
+  return totalCrashes;
+}
+
 export function getAllReportsText(): string {
   if (reports.length === 0) return "No crashes recorded this session.";
-  return reports.map((r, i) => `\n--- Report ${i + 1}/${reports.length} ---\n${formatReport(r)}`).join("\n");
+  const header = totalCrashes > reports.length
+    ? `${totalCrashes} crashes this session; showing the latest ${reports.length}.\n`
+    : "";
+  return header + reports.map((r, i) => `\n--- Report ${i + 1}/${reports.length} ---\n${formatReport(r)}`).join("\n");
 }

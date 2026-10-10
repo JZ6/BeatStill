@@ -101,6 +101,8 @@ export class StartScene extends Phaser.Scene {
     const cx = GAME_W / 2;
     const cy = GAME_H / 2;
 
+    this.resetVisitState();
+
     this.bgGraphics = this.add.graphics().setDepth(-1);
     this.fxGraphics = this.add.graphics().setDepth(0);
     this.ekgGraphics = this.add.graphics().setDepth(1);
@@ -112,12 +114,8 @@ export class StartScene extends Phaser.Scene {
 
     const titleY = cy - px(120);
     this.titleBaseY = titleY;
-    this.titleDriftAngle = 0;
-    this.timeScale = 0.1;
     this.lastPointerX = cx;
     this.lastPointerY = cy;
-    this.heartbeatTimer = 0;
-    this.titlePulse = 0;
 
     this.titleGlow = this.add
       .text(cx, titleY, "BEAT STILL", {
@@ -179,18 +177,55 @@ export class StartScene extends Phaser.Scene {
     this.input.once("pointerdown", () => this.ensureAudio());
 
     this.events.once("shutdown", () => {
-      this.optionsOverlay?.remove();
-      this.optionsOverlay = null;
-      this.collectionOverlay?.remove();
-      this.collectionOverlay = null;
-      this.howToOverlay?.remove();
-      this.howToOverlay = null;
-      this.shopOverlay?.remove();
-      this.shopOverlay = null;
-      this.audioManager?.dispose();
-      this.audioManager = null;
-      this.audioStarted = false;
+      this.removeOverlays();
+      this.disposeAudio();
     });
+  }
+
+  /**
+   * Phaser reuses the scene instance across visits, so every piece of
+   * per-visit state must be reset before create() builds the menu again.
+   */
+  private resetVisitState() {
+    this.enemies = [];
+    this.bullets = [];
+    this.pulseRings = [];
+    this.menuButtons = [];
+    this.secondaryTexts = [];
+
+    this.removeOverlays();
+    this.disposeAudio();
+
+    this.titleBaseY = 0;
+    this.titleDriftAngle = 0;
+    this.timeScale = 0.1;
+    this.lastPointerX = 0;
+    this.lastPointerY = 0;
+
+    this.ekgPoints = [];
+    this.ekgTimer = 0;
+    this.ekgAccum = 0;
+    this.ekgPhase = 0;
+
+    this.heartbeatTimer = 0;
+    this.titlePulse = 0;
+  }
+
+  private removeOverlays() {
+    this.optionsOverlay?.remove();
+    this.optionsOverlay = null;
+    this.collectionOverlay?.remove();
+    this.collectionOverlay = null;
+    this.howToOverlay?.remove();
+    this.howToOverlay = null;
+    this.shopOverlay?.remove();
+    this.shopOverlay = null;
+  }
+
+  private disposeAudio() {
+    this.audioManager?.dispose();
+    this.audioManager = null;
+    this.audioStarted = false;
   }
 
   private createMenuButtons() {
@@ -749,18 +784,27 @@ export class StartScene extends Phaser.Scene {
   private ensureAudio() {
     if (this.audioStarted) return;
     this.audioStarted = true;
-    this.audioManager = new AudioManager();
-    this.audioManager.start().then(() => {
-      if (!this.audioManager) return;
-      this.audioManager.loadTheme(theremin);
-      this.audioManager.setVolume((options.masterVolume / 100) * 0.5);
+    const am = new AudioManager();
+    this.audioManager = am;
+    am.start().then(() => {
+      // Ignore a start() that resolves after this visit's manager was disposed/replaced.
+      if (this.audioManager !== am) return;
+      am.loadTheme(theremin);
+      this.applyMasterVolume();
     }).catch(() => {
-      this.audioStarted = false;
+      if (this.audioManager === am) this.audioStarted = false;
     });
   }
 
+  /** Re-applies options.masterVolume to the menu music (called by the volume slider in main.ts). */
+  applyMasterVolume() {
+    this.audioManager?.setVolume((options.masterVolume / 100) * 0.5);
+  }
+
   private startGame() {
-    this.scene.start("GameScene");
+    // Pass data explicitly: Phaser keeps the previous settings.data when start() gets none,
+    // which would relaunch the last level instead of endless mode.
+    this.scene.start("GameScene", { mode: "endless" });
   }
 
   private startCampaign() {

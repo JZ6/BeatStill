@@ -14,6 +14,9 @@ interface Particle {
 
 function maxParticles() { return options.particleQuality; }
 
+/** Velocity kept per 1/60 s of (scaled) game time; tuned so 60fps at timeScale 1 matches the old per-frame 0.97. */
+const DAMPING_PER_60HZ_STEP = 0.97;
+
 export class ParticleSystem {
   private particles: Particle[] = [];
   private graphics: Phaser.GameObjects.Graphics;
@@ -60,6 +63,8 @@ export class ParticleSystem {
   update(delta: number, timeScale: number) {
     if (maxParticles() === 0) { this.graphics.clear(); this.particles.length = 0; return; }
     const dt = (delta / 1000) * timeScale;
+    // Decay by elapsed scaled time, not per frame, so slow-mo and high refresh rates look the same.
+    const damping = Math.pow(DAMPING_PER_60HZ_STEP, dt * 60);
     this.graphics.clear();
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -72,8 +77,8 @@ export class ParticleSystem {
 
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= 0.97;
-      p.vy *= 0.97;
+      p.vx *= damping;
+      p.vy *= damping;
 
       const alpha = (p.life / p.maxLife) * 0.8;
       this.graphics.fillStyle(p.color, alpha);

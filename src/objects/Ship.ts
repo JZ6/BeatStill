@@ -27,6 +27,7 @@ export class Ship extends Phaser.GameObjects.Container {
   damageMultiplier = 1;
   private inputMag = 0;
   private lastAimAngle = 0;
+  private pointerFireSuppressed = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -123,11 +124,23 @@ export class Ship extends Phaser.GameObjects.Container {
     return this.inputMag;
   }
 
+  /**
+   * Ignore pointer-held firing until the pointer is released. Used after closing the pause menu
+   * or relic overlay, where the click that dismissed it is usually still held down.
+   */
+  suppressFireUntilRelease() {
+    this.pointerFireSuppressed = true;
+  }
+
   update(delta: number, timeScale: number, gameScene: GameScene) {
     let vx = 0;
     let vy = 0;
     let aimAngle = this.rotation - Math.PI / 2;
     let firing = false;
+
+    const pointer = this.scene.input.activePointer;
+    if (this.pointerFireSuppressed && !pointer.isDown) this.pointerFireSuppressed = false;
+    const pointerDown = pointer.isDown && !this.pointerFireSuppressed;
 
     const tc = this.touchControls;
     if (tc && (tc.aimActive || tc.moveActive)) {
@@ -152,10 +165,9 @@ export class Ship extends Phaser.GameObjects.Container {
       const mag = Math.sqrt(vx * vx + vy * vy);
       if (mag > 0) { vx /= mag; vy /= mag; }
 
-      const pointer = this.scene.input.activePointer;
       const mouseDx = Math.abs(pointer.velocity.x) + Math.abs(pointer.velocity.y);
       const mouseMag = Math.min(mouseDx / 500, 1);
-      const shootMag = pointer.isDown ? 0.6 : 0;
+      const shootMag = pointerDown ? 0.6 : 0;
       let aimDelta = Math.abs(aimAngle - this.lastAimAngle);
       if (aimDelta > Math.PI) aimDelta = Math.PI * 2 - aimDelta;
       const spinMag = Math.min(aimDelta * 3, 0.4);
@@ -165,7 +177,7 @@ export class Ship extends Phaser.GameObjects.Container {
         this.x, this.y,
         pointer.worldX, pointer.worldY,
       );
-      firing = pointer.isDown;
+      firing = pointerDown;
     }
 
     this.lastAimAngle = aimAngle;

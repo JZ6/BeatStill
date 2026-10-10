@@ -93,10 +93,14 @@ export function createOptionsOverlay(onClose: () => void): HTMLDivElement {
     options.masterVolume,
     (v) => {
       options.masterVolume = v;
-      saveOptions(options);
-      const slider = document.getElementById("volume-slider") as HTMLInputElement;
-      if (slider) slider.value = String(v);
+      const slider = document.getElementById("volume-slider") as HTMLInputElement | null;
+      if (slider) {
+        slider.value = String(v);
+        // Setting .value doesn't fire listeners; main.ts applies the volume to audio on "input".
+        slider.dispatchEvent(new Event("input"));
+      }
     },
+    () => saveOptions(options),
   ));
 
   const resRow = makeSegmentRow(
@@ -199,6 +203,7 @@ function makeSliderRow(
   label: string,
   initial: number,
   onChange: (v: number) => void,
+  onCommit?: (v: number) => void,
 ): HTMLDivElement {
   const row = document.createElement("div");
   row.className = "options-row";
@@ -229,6 +234,12 @@ function makeSliderRow(
     const v = parseInt(input.value);
     val.textContent = String(v);
     onChange(v);
+  });
+
+  // "change" fires once the drag ends (or per keyboard step), so expensive work like saving goes here.
+  input.addEventListener("change", (e) => {
+    e.stopPropagation();
+    onCommit?.(parseInt(input.value));
   });
 
   right.appendChild(input);

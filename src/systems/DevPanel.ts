@@ -17,7 +17,7 @@ function makeTab(label: string): { tab: HTMLButtonElement; content: HTMLDivEleme
 function buildGameTab(
   getScene: () => GameScene | null,
   getAudioManager: () => AudioManager | null,
-): { tab: HTMLButtonElement; content: HTMLDivElement } {
+): { tab: HTMLButtonElement; content: HTMLDivElement; refresh: () => void } {
   const { tab, content: gc } = makeTab("Game");
   gc.style.flexDirection = "column";
   gc.style.gap = "8px";
@@ -93,9 +93,12 @@ function buildGameTab(
     const scene = getScene();
     if (!scene) return;
     scene.godMode = !scene.godMode;
-    godModeBtn.textContent = `God Mode: ${scene.godMode ? "ON" : "OFF"}`;
-    godModeBtn.style.borderColor = scene.godMode ? "#0f0" : "#444";
+    syncGodModeBtn(scene.godMode);
   });
+  function syncGodModeBtn(on: boolean) {
+    godModeBtn.textContent = `God Mode: ${on ? "ON" : "OFF"}`;
+    godModeBtn.style.borderColor = on ? "#0f0" : "#444";
+  }
   const resetTutorialBtn = document.createElement("button");
   resetTutorialBtn.className = "dp-game-btn";
   resetTutorialBtn.textContent = "Reset Tutorial";
@@ -137,13 +140,16 @@ function buildGameTab(
   weaponBtns[0].style.borderColor = "#ffaa44";
   gc.appendChild(weaponRow);
 
-  setInterval(() => {
-    if (!document.body.contains(gc)) return;
+  // Polled by createDevPanel only while the panel is open. godMode resets on every run restart,
+  // so the button label is re-synced too.
+  function refresh() {
     const scene = getScene();
-    if (scene) waveLabel.textContent = `Wave: ${scene.wave}`;
-  }, 500);
+    if (!scene) return;
+    waveLabel.textContent = `Wave: ${scene.wave}`;
+    syncGodModeBtn(scene.godMode);
+  }
 
-  return { tab, content: gc };
+  return { tab, content: gc, refresh };
 }
 
 function buildAudioTab(
@@ -295,10 +301,16 @@ function buildCrashTab(): { tab: HTMLButtonElement; content: HTMLDivElement } {
   return { tab, content: cc };
 }
 
+let devPanelCreated = false;
+
 export function createDevPanel(
   getScene: () => GameScene | null,
   getAudioManager: () => AudioManager | null,
 ) {
+  // Double-init would add a second panel and a second global keydown toggle.
+  if (devPanelCreated || document.getElementById("dev-panel")) return;
+  devPanelCreated = true;
+
   const panel = document.createElement("div");
   panel.id = "dev-panel";
   panel.style.display = "none";
@@ -316,9 +328,10 @@ export function createDevPanel(
   const tabContainer = document.createElement("div");
   panel.appendChild(tabContainer);
 
+  const gameTab = buildGameTab(getScene, getAudioManager);
   const audioTab = buildAudioTab(getAudioManager);
   const tabs = [
-    buildGameTab(getScene, getAudioManager),
+    gameTab,
     audioTab,
     buildCrashTab(),
   ];
@@ -340,15 +353,25 @@ export function createDevPanel(
   tabs[0].tab.classList.add("dp-tab-active");
   tabs[0].content.style.display = "flex";
 
+  // Live refresh only runs while the panel is visible.
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
+  const setOpen = (open: boolean) => {
+    panel.style.display = open ? "flex" : "none";
+    if (open) {
+      gameTab.refresh();
+      if (refreshTimer === null) refreshTimer = setInterval(gameTab.refresh, 500);
+      if (audioTab.tab.classList.contains("dp-tab-active")) audioTab.syncState();
+    } else if (refreshTimer !== null) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+  };
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "`") {
       e.preventDefault();
       e.stopPropagation();
-      const opening = panel.style.display === "none";
-      panel.style.display = opening ? "flex" : "none";
-      if (opening && audioTab.tab.classList.contains("dp-tab-active")) {
-        audioTab.syncState();
-      }
+      setOpen(panel.style.display === "none");
     }
   }, true);
 
